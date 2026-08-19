@@ -7,6 +7,10 @@ Minimap tròn bám theo cửa sổ game · bản đồ lớn với POI, tên đ�
 vết đường đi · xem chỉ số khủng long của bạn từ panel IslePilot · giao diện
 song ngữ Việt/Anh · cài một lần, tự cập nhật.
 
+![Minimap và chỉ số khủng long đè lên game](docs/screenshot-ingame.jpg)
+
+![Bản đồ lớn với tên địa danh và các lớp POI](docs/screenshot-fullmap.png)
+
 ## Tính năng
 
 - **Minimap tròn** bám góc cửa sổ game, chuột bấm xuyên qua, không cản trở lúc chơi.

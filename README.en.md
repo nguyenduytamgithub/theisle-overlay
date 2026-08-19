@@ -7,6 +7,10 @@ game window · full map with POIs, place names, waypoints and travel trails ·
 your dino's stats from the server's IslePilot panel · bilingual VI/EN
 interface · one-click install with auto-update.
 
+![Minimap and dino stats over the running game](docs/screenshot-ingame.jpg)
+
+![Full map with place names and POI layers](docs/screenshot-fullmap.png)
+
 ## Features
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
