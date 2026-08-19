@@ -1,14 +1,12 @@
 # TheIsle Overlay v2
 
+**Tiếng Việt** · [English](README.en.md)
+
 Bản đồ hiện đè lên màn hình khi chơi **The Isle: Evrima** (map Gateway).
-Song ngữ Việt/Anh · minimap tròn bám theo cửa sổ game · bản đồ lớn với POI,
-waypoint, vết đường đi · cài một lần, tự cập nhật.
+Minimap tròn bám theo cửa sổ game · bản đồ lớn với POI, waypoint, vết đường đi
+· giao diện song ngữ Việt/Anh · cài một lần, tự cập nhật.
 
-Map overlay for **The Isle: Evrima** (Gateway). Bilingual VI/EN · circular
-minimap pinned to the game window · full map with POIs, waypoints and travel
-trails · one-click install with auto-update.
-
-## Cài đặt / Install
+## Cài đặt
 
 Tải file `TheIsle Overlay_x.x.x_x64-setup.exe` từ
 [Releases](https://github.com/toantranct/theisle-overlay/releases) và chạy.
@@ -17,7 +15,7 @@ Lần đầu mở app sẽ tải dữ liệu bản đồ (~3 MB) về máy.
 > Windows có thể hiện cảnh báo SmartScreen vì installer chưa ký số.
 > Bấm **More info → Run anyway**.
 
-## An toàn với anti-cheat / Anti-cheat safety
+## An toàn với anti-cheat
 
 Game chạy Easy Anti-Cheat cấp kernel. App này an toàn vì **không bao giờ đụng
 vào tiến trình game**:
@@ -32,7 +30,7 @@ vào tiến trình game**:
 CI có bước grep chặn mọi call site API cấm (`scripts/check-forbidden-apis.ps1`).
 Danh sách API được phép nằm ở đầu `src-tauri/src/win/mod.rs`.
 
-## Phát triển / Development
+## Phát triển
 
 Yêu cầu: Node 22+, Rust stable (MSVC), WebView2.
 
@@ -56,7 +54,7 @@ cargo test -p theisle-overlay --lib -- --ignored parse_real_cache
 
 Lưu ý: `.cargo/config.toml` đặt `target-dir` ra ngoài thư mục OneDrive.
 
-## Phát hành / Release
+## Phát hành
 
 1. Thêm secrets vào GitHub repo: `TAURI_SIGNING_PRIVATE_KEY` (nội dung
    `~/.tauri/theisle-overlay.key`) và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
@@ -69,7 +67,7 @@ Lưu ý: `.cargo/config.toml` đặt `target-dir` ra ngoài thư mục OneDrive.
 Nếu đổi tên repo/chủ sở hữu, sửa `plugins.updater.endpoints` trong
 `src-tauri/tauri.conf.json`.
 
-## Kiến trúc / Architecture
+## Kiến trúc
 
 - `src-tauri/crates/overlay-core` — logic thuần (parse tọa độ, transform
   world↔pixel, tracker) + toàn bộ test suite port từ bản Python. Frontend
@@ -85,11 +83,11 @@ Dữ liệu bản đồ **tải khi chạy lần đầu, không đóng gói** �
 VulnonaMAP (phái sinh từ tài sản game của Afterthought LLC); bản sao cá nhân
 trên máy người dùng khác với việc app tái phân phối dữ liệu đó.
 
-## Nguồn dữ liệu / Credits
+## Nguồn dữ liệu
 
 - Basemap: [VulnonaMAP](https://vulnona.com/game/map/) (Coco.N) — ghép từ ảnh
   chụp trong game. Bản quyền hình ảnh: Afterthought LLC (The Isle).
 - POI: [myislemap.com](https://myislemap.com/), VulnonaMAP, hướng dẫn Steam
   của wiredredman.
 
-Không liên kết với Afterthought LLC. / Unaffiliated with Afterthought LLC.
+Không liên kết với Afterthought LLC.
