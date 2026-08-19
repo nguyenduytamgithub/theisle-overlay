@@ -176,6 +176,14 @@ export const en: Record<MsgKey, string> = {
   "update.installing": "Downloading update…",
   "update.later": "Later",
 
+  "footer.developed_by": "Developed by",
+  "footer.donate": "Donate",
+  "donate.title": "Support the author",
+  "donate.hint": "Scan the VietQR code with your banking app, or transfer manually:",
+  "donate.copy_stk": "Copy account number",
+  "donate.copied": "Copied!",
+  "donate.thanks": "Thank you for your support! ❤",
+
   "credits.title": "Data sources",
   "credits.body":
     "Basemap: VulnonaMAP (Coco.N) — stitched from in-game captures. " +

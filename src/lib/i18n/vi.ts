@@ -188,6 +188,15 @@ export const vi = {
   "update.installing": "Đang tải bản cập nhật…",
   "update.later": "Để sau",
 
+  // --- footer + donate ---
+  "footer.developed_by": "Được phát triển bởi",
+  "footer.donate": "Ủng hộ",
+  "donate.title": "Ủng hộ tác giả",
+  "donate.hint": "Quét mã VietQR bằng app ngân hàng, hoặc chuyển khoản thủ công:",
+  "donate.copy_stk": "Copy số tài khoản",
+  "donate.copied": "Đã copy!",
+  "donate.thanks": "Cảm ơn bạn đã ủng hộ! ❤",
+
   // --- ghi công ---
   "credits.title": "Nguồn dữ liệu",
   "credits.body":

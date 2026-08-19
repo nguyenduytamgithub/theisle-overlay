@@ -15,6 +15,7 @@
   } from "$lib/api";
   import { locale, t, type Locale } from "$lib/i18n";
   import FullMap from "./fullmap/FullMap.svelte";
+  import Footer from "./Footer.svelte";
   import DinoTab from "./dino/DinoTab.svelte";
   import Settings from "./settings/Settings.svelte";
   import Guide from "./guide/Guide.svelte";
@@ -220,4 +221,6 @@
       <div class="h-full overflow-y-auto"><Guide /></div>
     {/if}
   </main>
+
+  <Footer />
 </div>
