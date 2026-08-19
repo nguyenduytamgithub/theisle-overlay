@@ -207,13 +207,19 @@ fn dispatch(app: &AppHandle, action: &str) {
         "toggle_click_through" => toggle_setting(app, "click_through"),
         "toggle_fullmap" => match app.get_webview_window("main") {
             Some(window) => {
-                if window.is_visible().unwrap_or(false) {
+                // A minimized window reports is_visible() == true, but the
+                // user cannot see it — for them the hotkey means "bring it
+                // up", so only a window actually on screen gets hidden.
+                let on_screen = window.is_visible().unwrap_or(false)
+                    && !window.is_minimized().unwrap_or(false);
+                if on_screen {
                     let _ = window.hide();
                     // Freeze the hidden webview so its renderer memory is
                     // actually released while playing.
                     crate::webview_mem::suspend(&window);
                 } else {
                     crate::webview_mem::resume(&window);
+                    let _ = window.unminimize();
                     let _ = window.show();
                     let _ = window.set_focus();
                     // It missed every event while hidden/suspended.
