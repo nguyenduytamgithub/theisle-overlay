@@ -138,3 +138,18 @@ cá nhân trên máy bạn, không phải bản phát hành lại.
   của wiredredman.
 
 Không liên kết với Afterthought LLC.
+
+## Liên hệ & Ủng hộ
+
+Được phát triển bởi **Trần Quốc Toản**.
+
+- 📧 Email: toantranct1@gmail.com
+- 💬 Facebook: https://www.facebook.com/satann247/
+- 🐛 Báo lỗi / góp ý: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
+
+App miễn phí và mã nguồn mở. Nếu thấy hữu ích, bạn có thể mời tác giả một ly
+cà phê:
+
+<img src="docs/qr_donate.png" alt="VietQR — Techcombank 8866886767 TRAN QUOC TOAN" width="280">
+
+**Techcombank · 8866886767 · TRAN QUOC TOAN**

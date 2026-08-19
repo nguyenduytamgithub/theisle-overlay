@@ -141,3 +141,18 @@ your machine, not a redistribution.
   Steam guide.
 
 Unaffiliated with Afterthought LLC.
+
+## Contact & Support
+
+Developed by **Trần Quốc Toản**.
+
+- 📧 Email: toantranct1@gmail.com
+- 💬 Facebook: https://www.facebook.com/satann247/
+- 🐛 Bugs / suggestions: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
+
+The app is free and open source. If you find it useful, you can buy the
+author a coffee:
+
+<img src="docs/qr_donate.png" alt="VietQR — Techcombank 8866886767 TRAN QUOC TOAN" width="280">
+
+**Techcombank · 8866886767 · TRAN QUOC TOAN**
