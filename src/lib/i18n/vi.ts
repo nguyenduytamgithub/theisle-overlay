@@ -38,7 +38,11 @@ export const vi = {
   "layer.saltlick": "Mỏ muối",
   "layer.mudwallow": "Vũng bùn",
   "layer.food": "Khu vực thức ăn",
+  "layer.patrol": "Vùng tuần tra AI",
+  "layer.region": "Tên vùng",
+  "layer.landmark": "Địa điểm",
   "layers.title": "Lớp bản đồ",
+  "layers.zone_labels": "Tên vùng khoanh",
 
   // --- waypoint ---
   "wp.title": "Điểm đánh dấu",

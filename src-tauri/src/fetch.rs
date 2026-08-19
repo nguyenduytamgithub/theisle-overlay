@@ -79,9 +79,16 @@ static RE_CIRCLE: LazyLock<Regex> = LazyLock::new(|| {
 static RE_POLYGON: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"\{\s*type:\s*"polygon",\s*points:\s*"([^"]+)",\s*label:\s*"([^"]*)""#).unwrap()
 });
+// Vulnona text records, all three kinds share one shape:
+//   line 1: text<TAB>kind<TAB>name[<TAB>size-hints]
+//   line 2: x,y,displaytext,           (thousand-cm units)
+// The CLEAN name is column 3 of line 1 (the display text on line 2 carries
+// <br>/<s> markup). Names starting with ':' are upstream comments — skipped.
 static RE_VULNONA_REC: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)^text\twater\t(?P<name>[^\t\n]+)[^\n]*\n(?P<x>-?[\d.]+),(?P<y>-?[\d.]+),")
-        .unwrap()
+    Regex::new(
+        r"(?m)^text\t(?P<kind>water|area|land)\t(?P<name>[^\t\n]+)[^\n]*\n(?P<x>-?[\d.]+),(?P<y>-?[\d.]+),",
+    )
+    .unwrap()
 });
 
 /// Point POIs (salt licks, mud wallows...) from map-data.js.
@@ -202,13 +209,19 @@ fn parse_ai_zones(js: &str) -> Result<Vec<Value>, String> {
     Ok(zones)
 }
 
-/// Named water sources from Vulnona's data_1.txt (thousand-cm units).
-fn parse_water(txt: &str) -> Vec<Value> {
+/// Named records of one kind ("water" | "area" | "land") from Vulnona's
+/// data_1.txt.
+fn parse_vulnona_text(txt: &str, kind: &str) -> Vec<Value> {
     RE_VULNONA_REC
         .captures_iter(txt)
+        .filter(|m| &m["kind"] == kind)
         .filter_map(|m| {
+            let name = m["name"].trim();
+            if name.starts_with(':') {
+                return None; // upstream comment record
+            }
             Some(json!({
-                "label": m["name"].trim(),
+                "label": name,
                 "x": m["x"].parse::<f64>().ok()? * 1000.0,
                 "y": m["y"].parse::<f64>().ok()? * 1000.0,
             }))
@@ -363,7 +376,7 @@ pub fn run(app: &AppHandle, force: bool) -> FetchFinished {
     }
 
     // Convert whatever made it to disk.
-    let pois_ok = scrape_sources_ok && convert(app).is_ok();
+    let pois_ok = scrape_sources_ok && convert().is_ok();
 
     let finished = FetchFinished {
         ok: basemap_ok && pois_ok,
@@ -375,7 +388,36 @@ pub fn run(app: &AppHandle, force: bool) -> FetchFinished {
     finished
 }
 
-fn convert(_app: &AppHandle) -> Result<(), String> {
+/// Bump when convert() emits new layers/fields — ensure_pois_current()
+/// re-converts old on-disk data (offline, from the cache) on upgrade.
+pub const POIS_VERSION: u64 = 2;
+
+/// Re-run the cache -> pois_gateway.json conversion when the on-disk file
+/// predates the current POIS_VERSION and the cached sources are still
+/// present. Existing users get the new layers on first launch after an app
+/// update, with no network involved.
+pub fn ensure_pois_current() {
+    let on_disk_version = std::fs::read_to_string(settings::pois_path())
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.get("version").and_then(|x| x.as_u64()))
+        .unwrap_or(0);
+    if on_disk_version >= POIS_VERSION {
+        return;
+    }
+    let cache_ok = ["map-data.js", "map-ai-spawn-zones.js", "data_1.txt"]
+        .iter()
+        .all(|name| settings::cache_dir().join(name).exists());
+    if !cache_ok {
+        return; // first-run / re-download flows will produce current data
+    }
+    match convert() {
+        Ok(()) => log::info!("pois upgraded to version {POIS_VERSION} from cache"),
+        Err(e) => log::warn!("pois upgrade failed: {e}"),
+    }
+}
+
+fn convert() -> Result<(), String> {
     let read = |name: &str| {
         std::fs::read_to_string(settings::cache_dir().join(name)).map_err(|e| e.to_string())
     };
@@ -384,12 +426,14 @@ fn convert(_app: &AppHandle) -> Result<(), String> {
     let water_txt = read("data_1.txt")?;
 
     let points = parse_point_pois(&map_data, &["saltrock", "mudwallow"]);
-    let zones = parse_zones(&map_data, &["sanctuary", "migration"]);
+    let zones = parse_zones(&map_data, &["sanctuary", "migration", "patrol"]);
     let ai_zones = parse_ai_zones(&ai_data).unwrap_or_default();
-    let water = parse_water(&water_txt);
+    let water = parse_vulnona_text(&water_txt, "water");
+    let regions = parse_vulnona_text(&water_txt, "area");
+    let landmarks = parse_vulnona_text(&water_txt, "land");
 
     let pois = json!({
-        "version": 1,
+        "version": POIS_VERSION,
         "map": MAP_VERSION,
         "units": "ue_cm",
         "_axis": "x = Lat (truc doc), y = Long (truc ngang)",
@@ -399,7 +443,10 @@ fn convert(_app: &AppHandle) -> Result<(), String> {
             "mudwallow": { "kind": "point", "items": points.get("mudwallow").cloned().unwrap_or_default() },
             "sanctuary": { "kind": "zone", "items": zones.get("sanctuary").cloned().unwrap_or_default() },
             "migration": { "kind": "zone", "items": zones.get("migration").cloned().unwrap_or_default() },
+            "patrol": { "kind": "zone", "items": zones.get("patrol").cloned().unwrap_or_default() },
             "food": { "kind": "zone", "items": ai_zones },
+            "region": { "kind": "label", "items": regions },
+            "landmark": { "kind": "label", "items": landmarks },
         },
     });
     settings::save_json(&settings::pois_path(), &pois).map_err(|e| e.to_string())?;
@@ -491,24 +538,48 @@ mod tests {
         let water_txt = read("data_1.txt");
 
         let points = parse_point_pois(&map_data, &["saltrock", "mudwallow"]);
-        let zones = parse_zones(&map_data, &["sanctuary", "migration"]);
+        let zones = parse_zones(&map_data, &["sanctuary", "migration", "patrol"]);
         let ai = parse_ai_zones(&ai_data).unwrap();
-        let water = parse_water(&water_txt);
 
-        assert_eq!(water.len(), 27, "water");
+        assert_eq!(parse_vulnona_text(&water_txt, "water").len(), 27, "water");
+        assert_eq!(parse_vulnona_text(&water_txt, "area").len(), 26, "region");
+        assert_eq!(parse_vulnona_text(&water_txt, "land").len(), 48, "landmark");
         assert_eq!(points["saltrock"].len(), 24, "saltlick");
         assert_eq!(points["mudwallow"].len(), 36, "mudwallow");
         assert_eq!(zones["sanctuary"].len(), 7, "sanctuary");
         assert_eq!(zones["migration"].len(), 12, "migration");
+        assert_eq!(zones["patrol"].len(), 61, "patrol");
         assert_eq!(ai.len(), 52, "food");
     }
 
     #[test]
     fn water_parser_scales_thousands_to_cm() {
         let txt = "text\twater\tDam Lake\textra\n-267.0,79.0,\nother line\n";
-        let water = parse_water(txt);
+        let water = parse_vulnona_text(txt, "water");
         assert_eq!(water[0]["label"], "Dam Lake");
         assert_eq!(water[0]["x"], -267000.0);
         assert_eq!(water[0]["y"], 79000.0);
+    }
+
+    #[test]
+    fn text_parser_separates_kinds_and_skips_comments() {
+        let txt = concat!(
+            "text\tarea\tDelta\tlarge\n33,177,Delta,\n",
+            "text\tland\tCentral Dome (Hexagon)\tlarge\n104,-43,Central Dome<s>(Hexagon)</s>,\n",
+            "text\tland\t:Central Dome:comment\tcR small\n120,-41,[Now can't enter here],\n",
+            "text\twater\tDam Lake\n-267.0,79.0,\n",
+        );
+        let regions = parse_vulnona_text(txt, "area");
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0]["label"], "Delta");
+        assert_eq!(regions[0]["x"], 33000.0);
+
+        let landmarks = parse_vulnona_text(txt, "land");
+        // The clean name comes from column 3, not the marked-up display text,
+        // and the ':'-prefixed comment record is dropped.
+        assert_eq!(landmarks.len(), 1);
+        assert_eq!(landmarks[0]["label"], "Central Dome (Hexagon)");
+
+        assert_eq!(parse_vulnona_text(txt, "water").len(), 1);
     }
 }

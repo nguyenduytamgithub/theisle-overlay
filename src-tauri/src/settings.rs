@@ -116,6 +116,12 @@ pub fn default_settings() -> Value {
             "saltlick": true,
             "mudwallow": true,
             "food": false,               // densest layer, off by default
+            "patrol": false,             // 61 zones — also off by default
+            "region": true,              // big area-name labels
+            "landmark": true,            // landmark/structure labels
+        },
+        "map": {
+            "zone_labels": true,         // names inside zone outlines
         },
         "trail": {
             "enabled": true,

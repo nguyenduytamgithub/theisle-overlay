@@ -21,10 +21,23 @@ export const LAYER_COLORS: Record<string, string> = {
   sanctuary: "#a855f7",
   migration: "#72d653",
   food: "#e2664a",
+  patrol: "#ef6f6c", // myislemap's original patrol colour
+  region: "#eae6d6",
+  landmark: "#cfc9b3",
 };
 
-// Draw order: big zones first, small dots last so nothing is buried.
-export const LAYER_ORDER = ["migration", "sanctuary", "food", "water", "mudwallow", "saltlick"];
+// Draw order: big zones first, small dots after, text labels on top.
+export const LAYER_ORDER = [
+  "patrol",
+  "migration",
+  "sanctuary",
+  "food",
+  "water",
+  "mudwallow",
+  "saltlick",
+  "landmark",
+  "region",
+];
 
 export const ZONE_FILL_OPACITY = 60 / 255;
 export const ZONE_STROKE_OPACITY = 190 / 255;

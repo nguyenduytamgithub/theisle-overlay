@@ -34,7 +34,11 @@ export const en: Record<MsgKey, string> = {
   "layer.saltlick": "Salt licks",
   "layer.mudwallow": "Mud wallows",
   "layer.food": "Food zones",
+  "layer.patrol": "AI patrol zones",
+  "layer.region": "Region names",
+  "layer.landmark": "Landmarks",
   "layers.title": "Map layers",
+  "layers.zone_labels": "Zone name labels",
 
   "wp.title": "Waypoints",
   "wp.new": "New waypoint",

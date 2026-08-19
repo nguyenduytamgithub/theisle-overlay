@@ -80,6 +80,9 @@ pub fn run(replay_file: Option<PathBuf>) {
     builder
         .setup(move |app| {
             settings::ensure_dirs()?;
+            // Upgrade pois_gateway.json in place (offline, from cache) when
+            // an app update added new layers.
+            fetch::ensure_pois_current();
             minimap::create(app.handle())?;
             clipboard::spawn(app.handle().clone());
             {

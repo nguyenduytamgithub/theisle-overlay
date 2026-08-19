@@ -3,6 +3,7 @@ name = "theisle-overlay"
 version = "2.0.0"
 description = "Map overlay for The Isle: Evrima (Gateway)"
 edition = "2021"
+default-run = "theisle-overlay"
 
 [workspace]
 members = ["crates/overlay-core"]

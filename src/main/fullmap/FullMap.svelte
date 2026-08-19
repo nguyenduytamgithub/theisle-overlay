@@ -55,6 +55,9 @@
   let mapEl: HTMLDivElement;
   let map: L.Map | undefined;
   let layerGroups: Record<string, L.LayerGroup> = {};
+  // Zone name labels live in their own groups so the "zone names" toggle can
+  // hide the text while the outlines stay.
+  let zoneLabelGroups: Record<string, L.LayerGroup> = {};
   let waypointGroup: L.LayerGroup | undefined;
   let currentTrail: L.LayerGroup | undefined;
   let previousTrail: L.LayerGroup | undefined;
@@ -69,6 +72,9 @@
 
   const unlisteners: Array<() => void> = [];
 
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
   function buildPoiLayers(pois: PoiLayer[]) {
     if (!map) return;
     const byKey = new Map(pois.map((l) => [l.key, l]));
@@ -77,7 +83,41 @@
       if (!layer) continue;
       const color = LAYER_COLORS[key] ?? COLORS.accent;
       const group = L.layerGroup();
+      const labelGroup = layer.kind === "zone" ? L.layerGroup() : undefined;
       for (const item of layer.items) {
+        if (layer.kind === "label") {
+          // Pure text label (region/landmark names) — no shape.
+          L.marker(toLatLng(item.px, item.py), {
+            icon: L.divIcon({
+              className: `map-label map-label--${key}`,
+              html: escapeHtml(item.label),
+              iconSize: undefined,
+            }),
+            interactive: false,
+            keyboard: false,
+          }).addTo(group);
+          continue;
+        }
+        if (
+          labelGroup &&
+          item.label &&
+          item.labelPx !== undefined &&
+          item.labelPy !== undefined
+        ) {
+          // Permanent name at the zone's centre, colour-matched to its layer.
+          L.tooltip({
+            permanent: true,
+            direction: "center",
+            className: "zone-label",
+            opacity: 1,
+            interactive: false,
+          })
+            .setContent(
+              `<span style="color: ${color}">${escapeHtml(item.label)}</span>`,
+            )
+            .setLatLng(toLatLng(item.labelPx, item.labelPy))
+            .addTo(labelGroup);
+        }
         if (item.pointsPx) {
           L.polygon(item.pointsPx.map(([px, py]) => toLatLng(px, py)), {
             color,
@@ -115,6 +155,12 @@
       }
       layerGroups[key] = group;
       if (settings?.layers?.[key] ?? true) group.addTo(map);
+      if (labelGroup) {
+        zoneLabelGroups[key] = labelGroup;
+        if ((settings?.layers?.[key] ?? true) && (settings?.map?.zone_labels ?? true)) {
+          labelGroup.addTo(map);
+        }
+      }
     }
     availableLayers = LAYER_ORDER.filter((k) => byKey.has(k));
   }
@@ -154,20 +200,32 @@
     nearest = await getNearestWaypoint();
   }
 
-  function applyLayerVisibility(layers: Record<string, boolean>) {
+  function applyLayerVisibility(layers: Record<string, boolean>, zoneLabels: boolean) {
     if (!map) return;
+    const setVisible = (group: L.LayerGroup, visible: boolean) => {
+      if (visible && !map!.hasLayer(group)) group.addTo(map!);
+      if (!visible && map!.hasLayer(group)) map!.removeLayer(group);
+    };
     for (const [key, group] of Object.entries(layerGroups)) {
-      const visible = layers[key] ?? true;
-      if (visible && !map.hasLayer(group)) group.addTo(map);
-      if (!visible && map.hasLayer(group)) map.removeLayer(group);
+      setVisible(group, layers[key] ?? true);
+    }
+    for (const [key, group] of Object.entries(zoneLabelGroups)) {
+      setVisible(group, (layers[key] ?? true) && zoneLabels);
     }
   }
+
+  const zoneLabelsOn = (s: Settings | null) => s?.map?.zone_labels ?? true;
 
   async function onToggleLayer(key: string, visible: boolean) {
     // Persisted (bug fix 1) — settings://changed loops back to every window,
     // including the minimap's POI filter.
     settings = await patchSettings({ layers: { [key]: visible } });
-    applyLayerVisibility(settings.layers);
+    applyLayerVisibility(settings.layers, zoneLabelsOn(settings));
+  }
+
+  async function onToggleZoneLabels(visible: boolean) {
+    settings = await patchSettings({ map: { zone_labels: visible } });
+    applyLayerVisibility(settings.layers, zoneLabelsOn(settings));
   }
 
   async function confirmPrompt(name: string) {
@@ -271,7 +329,7 @@
       unlisteners.push(
         await onSettingsChanged((s) => {
           settings = s;
-          applyLayerVisibility(s.layers);
+          applyLayerVisibility(s.layers, zoneLabelsOn(s));
         }),
       );
       // Hotkey "mark here" adds waypoints from Rust — refresh on its signal.
@@ -292,10 +350,12 @@
   <LayerPanel
     available={availableLayers}
     layers={settings?.layers ?? {}}
+    zoneLabels={zoneLabelsOn(settings)}
     {position}
     {nearest}
     waypoints={waypointsPx}
     ontoggle={onToggleLayer}
+    ontogglezonelabels={onToggleZoneLabels}
     onrename={onRename}
     ondelete={onDelete}
     onfocus={focusWaypoint}
@@ -336,5 +396,61 @@
   }
   :global(.leaflet-bar a:hover) {
     background: var(--color-bg);
+  }
+
+  /* Text-label layers (region/landmark names). The dark 1px shadow makes
+     text readable over bright terrain without any outline box — same trick
+     as the minimap compass letters. */
+  :global(.map-label) {
+    width: max-content !important;
+    height: auto !important;
+    margin: 0 !important;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow:
+      1px 1px 2px rgba(0, 0, 0, 0.9),
+      -1px -1px 2px rgba(0, 0, 0, 0.7);
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  :global(.map-label--region) {
+    color: #eae6d6;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  :global(.map-label--landmark) {
+    color: #cfc9b3;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  :global(.map-label--landmark)::before {
+    content: "";
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-right: 4px;
+    margin-bottom: 1px;
+    border-radius: 50%;
+    background: #cfc9b3;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  }
+
+  /* Zone name labels: plain colour-matched text, no tooltip bubble. */
+  :global(.leaflet-tooltip.zone-label) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-shadow:
+      1px 1px 2px rgba(0, 0, 0, 0.9),
+      -1px -1px 2px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+  }
+  :global(.leaflet-tooltip.zone-label)::before {
+    display: none;
   }
 </style>

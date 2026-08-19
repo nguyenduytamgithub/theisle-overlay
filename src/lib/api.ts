@@ -34,6 +34,7 @@ export type Settings = Record<string, unknown> & {
   };
   hotkeys: Record<string, string>;
   layers: Record<string, boolean>;
+  map: { zone_labels: boolean };
   trail: {
     enabled: boolean;
     break_after_minutes: number;
@@ -146,11 +147,14 @@ export interface PoiItem {
   yCm: number;
   radiusPx?: number;
   pointsPx?: [number, number][];
+  /** Zones: name-label anchor (polygon centroid / circle centre). */
+  labelPx?: number;
+  labelPy?: number;
 }
 
 export interface PoiLayer {
   key: string;
-  kind: "point" | "zone";
+  kind: "point" | "zone" | "label";
   items: PoiItem[];
 }
 

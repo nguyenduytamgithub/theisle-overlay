@@ -234,6 +234,12 @@ pub struct PoiItem {
     /// Polygon zones: vertices in basemap pixels.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub points_px: Option<Vec<(f64, f64)>>,
+    /// Zones: where to place the name label (polygon centroid, circle
+    /// centre) — computed here so the frontend never does geometry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label_px: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label_py: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -296,6 +302,21 @@ pub fn get_pois_render() -> Result<Vec<PoiLayer>, String> {
                         .collect::<Vec<_>>()
                 })
                 .filter(|pts: &Vec<_>| pts.len() >= 3);
+            let (label_px, label_py) = if kind == "zone" {
+                match &points_px {
+                    // Vertex centroid is plenty for name placement.
+                    Some(pts) => {
+                        let n = pts.len() as f64;
+                        (
+                            Some(pts.iter().map(|p| p.0).sum::<f64>() / n),
+                            Some(pts.iter().map(|p| p.1).sum::<f64>() / n),
+                        )
+                    }
+                    None => (Some(px), Some(py)),
+                }
+            } else {
+                (None, None)
+            };
             items.push(PoiItem {
                 label: item
                     .get("label")
@@ -308,6 +329,8 @@ pub fn get_pois_render() -> Result<Vec<PoiLayer>, String> {
                 y_cm: y,
                 radius_px,
                 points_px,
+                label_px,
+                label_py,
             });
         }
         out.push(PoiLayer {

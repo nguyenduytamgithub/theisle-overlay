@@ -8,20 +8,24 @@
   let {
     available,
     layers,
+    zoneLabels,
     position,
     nearest,
     waypoints,
     ontoggle,
+    ontogglezonelabels,
     onrename,
     ondelete,
     onfocus,
   }: {
     available: string[];
     layers: Record<string, boolean>;
+    zoneLabels: boolean;
     position: PositionUpdate | null;
     nearest: NearestWaypoint | null;
     waypoints: WaypointPx[];
     ontoggle: (key: string, visible: boolean) => void;
+    ontogglezonelabels: (visible: boolean) => void;
     onrename: (id: string, name: string) => void;
     ondelete: (wp: Waypoint) => void;
     onfocus: (wp: Waypoint) => void;
@@ -72,6 +76,18 @@
         </label>
       {/if}
     {/each}
+    <label
+      class="mt-1 flex cursor-pointer items-center gap-2 border-t pt-1.5 text-sm"
+      style="border-color: var(--color-border)"
+    >
+      <input
+        type="checkbox"
+        class="size-3.5"
+        checked={zoneLabels}
+        onchange={(e) => ontogglezonelabels(e.currentTarget.checked)}
+      />
+      {$t("layers.zone_labels")}
+    </label>
   </section>
 
   <section class="text-sm" style="color: var(--color-muted)">
