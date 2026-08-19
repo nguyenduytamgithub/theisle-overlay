@@ -205,16 +205,37 @@ fn dispatch(app: &AppHandle, action: &str) {
     match action {
         "toggle_minimap" => toggle_setting(app, "visible"),
         "toggle_click_through" => toggle_setting(app, "click_through"),
-        "toggle_fullmap" => {
-            if let Some(window) = app.get_webview_window("main") {
+        "toggle_fullmap" => match app.get_webview_window("main") {
+            Some(window) => {
                 if window.is_visible().unwrap_or(false) {
                     let _ = window.hide();
+                    // Freeze the hidden webview so its renderer memory is
+                    // actually released while playing.
+                    crate::webview_mem::suspend(&window);
                 } else {
+                    crate::webview_mem::resume(&window);
                     let _ = window.show();
                     let _ = window.set_focus();
+                    // It missed every event while hidden/suspended.
+                    crate::pipeline::resync(app);
                 }
             }
-        }
+            None => {
+                // The user closed it with the X button — recreate it from
+                // the same config it was born with.
+                if let Some(config) = app.config().app.windows.first().cloned() {
+                    match tauri::WebviewWindowBuilder::from_config(app, &config) {
+                        Ok(builder) => match builder.build() {
+                            Ok(window) => {
+                                let _ = window.set_focus();
+                            }
+                            Err(e) => log::warn!("recreating main window failed: {e}"),
+                        },
+                        Err(e) => log::warn!("main window config invalid: {e}"),
+                    }
+                }
+            }
+        },
         "mark_here" => mark_here(app),
         "opacity_up" => adjust_opacity(app, OPACITY_STEP),
         "opacity_down" => adjust_opacity(app, -OPACITY_STEP),
@@ -277,7 +298,7 @@ fn mark_here(app: &AppHandle) {
             log::warn!("saving waypoints failed: {e}");
         }
     }
-    let _ = app.emit("waypoints://changed", ());
+    crate::events::emit_to_visible(app, "waypoints://changed", ());
 }
 
 #[cfg(test)]

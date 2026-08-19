@@ -165,11 +165,15 @@ fn spawn_supervisor(app: AppHandle) {
 
             if cur.visible != prev.visible {
                 if cur.visible {
+                    crate::webview_mem::resume(&window);
                     let _ = window.show();
+                    // Catch up on everything it missed while suspended.
+                    crate::pipeline::resync(&app);
                     last_rect = None; // re-anchor right away
                     since_rect = u64::MAX / 2;
                 } else {
                     let _ = window.hide();
+                    crate::webview_mem::suspend(&window);
                 }
             }
             if cur.click_through != prev.click_through {

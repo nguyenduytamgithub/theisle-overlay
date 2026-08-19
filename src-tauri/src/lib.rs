@@ -16,6 +16,7 @@ pub mod replay;
 pub mod settings;
 pub mod state;
 pub mod store;
+pub mod webview_mem;
 pub mod win;
 
 use std::path::PathBuf;

@@ -6,7 +6,7 @@ use overlay_core::{
 };
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::events::{TrailPayload, SETTINGS_CHANGED};
 use crate::pipeline;
@@ -30,9 +30,9 @@ pub fn apply_settings_patch(app: &AppHandle, patch: Value) -> Value {
         s.clone()
     };
     state.request_settings_save();
-    if let Err(e) = app.emit(SETTINGS_CHANGED, merged.clone()) {
-        log::warn!("emit settings failed: {e}");
-    }
+    // Visible windows only — a broadcast would wake suspended hidden webviews
+    // (see webview_mem.rs); resync covers them when they reappear.
+    crate::events::emit_to_visible(app, SETTINGS_CHANGED, merged.clone());
     merged
 }
 

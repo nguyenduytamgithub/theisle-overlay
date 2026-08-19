@@ -1,4 +1,4 @@
-# TheIsle Overlay v2
+# TheIsle Overlay
 
 **Tiếng Việt** · [English](README.en.md)
 
@@ -36,7 +36,7 @@ nếu thiếu, installer tự tải về).
 ## Nhẹ cỡ nào?
 
 Số đo thật trên máy: **Intel Core i5-14400F (10 nhân/16 luồng), 32 GB RAM,
-RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản release v2.1.0:
+RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản release v1.0.0:
 
 | Hạng mục | Dung lượng |
 |---|---|
@@ -45,19 +45,12 @@ RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản rel
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 | **Tổng chiếm ổ cứng** | **~21 MB** |
 
-| Lúc chạy | Số đo |
-|---|---|
-| RAM (mở cả bản đồ lớn + minimap) | ~528 MB trên 8 tiến trình |
-| RAM riêng tiến trình app | 50 MB |
-| CPU lúc rảnh (không thao tác) | **0,3%** (≈5% của một luồng trong 16 luồng) |
+| Lúc chạy | RAM (working set) | CPU lúc rảnh |
+|---|---|---|
+| Mở cả bản đồ lớn + minimap | **522 MB** (8 tiến trình) | 0,18% |
+| Ẩn bản đồ lớn bằng `Ctrl+Alt+F` (kịch bản khi đang chơi) | **448 MB** | 0,08% |
 
-Vì sao RAM như vậy: giao diện chạy trên WebView2 (Edge) nên có nhiều tiến trình
-phụ, và ảnh bản đồ 3900×3908 px khi giải nén chiếm sẵn ~60 MB. Con số trên là
-**trường hợp nặng nhất** — lúc chơi game bạn thường ẩn bản đồ lớn (`Ctrl+Alt+F`)
-và chỉ để minimap, khi đó Windows thu hồi bớt bộ nhớ của cửa sổ đã ẩn.
-
-App **không có vòng lặp vẽ lại**: chỉ vẽ khi có dữ liệu mới, nên gần như không
-tốn CPU khi bạn đang chơi.
+**CPU gần như bằng 0** vì app không có vòng lặp vẽ lại — chỉ vẽ khi có dữ liệu mới.
 
 ## Lưu ý cần biết
 
@@ -72,18 +65,21 @@ tốn CPU khi bạn đang chơi.
    thì hướng hết hạn để tránh chỉ sai.
 4. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
-5. **Phím tắt bị ứng dụng khác chiếm**: app báo ngay khi khởi động, đổi lại trong
+5. **Máy ít RAM**: chỉ cần ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự
+   đóng băng cửa sổ ẩn và trả lại ~75 MB. Đóng bằng nút X cũng được (app vẫn chạy
+   với minimap, `Ctrl+Alt+F` mở lại).
+6. **Phím tắt bị ứng dụng khác chiếm**: app báo ngay khi khởi động, đổi lại trong
    tab Cài đặt.
-6. **Tính năng "Khủng long của bạn"** chỉ hỗ trợ server dùng nền tảng IslePilot
+7. **Tính năng "Khủng long của bạn"** chỉ hỗ trợ server dùng nền tảng IslePilot
    (`xxx.islepilot.eu`). Nó đọc dữ liệu bằng cách phân tích HTML trang web của
    server (không có API chính thức), nên **có thể hỏng khi IslePilot đổi giao diện**
    — app sẽ báo khi phát hiện server vừa cập nhật. Nếu phần này lỗi, các tính năng
    bản đồ **không bị ảnh hưởng**.
-7. **Nên hỏi admin server** trước khi dùng thường xuyên — một số server có luật
+8. **Nên hỏi admin server** trước khi dùng thường xuyên — một số server có luật
    riêng về công cụ bên thứ ba. Tùy chọn lấy vị trí tự động từ live map mặc định TẮT.
-8. **Cookie đăng nhập panel** được mã hóa bằng Windows DPAPI, chỉ giải được bằng
+9. **Cookie đăng nhập panel** được mã hóa bằng Windows DPAPI, chỉ giải được bằng
    tài khoản Windows của bạn trên chính máy đó.
-9. **SmartScreen** sẽ cảnh báo ở lần cài đầu vì installer chưa ký số (chứng chỉ ký
+10. **SmartScreen** sẽ cảnh báo ở lần cài đầu vì installer chưa ký số (chứng chỉ ký
    số tốn phí hằng năm). Bản cập nhật tự động về sau không bị hỏi lại.
 
 ## An toàn với anti-cheat
@@ -127,38 +123,10 @@ cargo test -p theisle-overlay --lib -- --ignored parse_real_cache
 
 Lưu ý: `.cargo/config.toml` đặt `target-dir` ra ngoài thư mục OneDrive.
 
-## Phát hành
-
-1. Thêm secrets vào GitHub repo: `TAURI_SIGNING_PRIVATE_KEY` (nội dung
-   `~/.tauri/theisle-overlay.key`) và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-   (mật khẩu của khóa đó — giữ ngoài repo).
-2. Tăng `version` trong `src-tauri/tauri.conf.json` và `package.json`.
-3. `git tag v2.x.x && git push --tags` — workflow `release.yml` build NSIS,
-   ký update artifact, sinh `latest.json` và tạo GitHub Release.
-4. App đang chạy sẽ tự thấy bản mới và mời cập nhật.
-
-Nếu đổi tên repo/chủ sở hữu, sửa `plugins.updater.endpoints` trong
-`src-tauri/tauri.conf.json`.
-
-## Kiến trúc
-
-- `src-tauri/crates/overlay-core` — logic thuần (parse tọa độ, transform
-  world↔pixel, tracker) + toàn bộ test suite port từ bản Python. Frontend
-  **không bao giờ** tự tính transform; mọi payload mang sẵn cả cm lẫn pixel.
-- `src-tauri/src` — Win32 (ranh giới an toàn trong `win/`), clipboard watcher,
-  hotkeys, settings/store (giữ nguyên đường dẫn + format của bản Python cũ —
-  người dùng cũ không mất dữ liệu), fetch dữ liệu, quản lý cửa sổ minimap.
-- `src-tauri/src/islepilot` — tích hợp panel IslePilot (đọc `/me` + `/map`,
-  cookie mã hóa DPAPI); chạy thread riêng, lỗi ở đây không ảnh hưởng bản đồ.
-- `src/main` — cửa sổ chính (Svelte 5 + Tailwind + Leaflet CRS.Simple).
-- `src/minimap` — entry riêng, canvas thuần, không framework: webview chạy
-  cạnh game hàng giờ phải tối giản, chỉ vẽ khi có sự kiện (0% CPU idle).
-
-Dữ liệu bản đồ **tải khi chạy lần đầu, không đóng gói** — basemap thuộc
-VulnonaMAP (phái sinh từ tài sản game của Afterthought LLC); bản sao cá nhân
-trên máy người dùng khác với việc app tái phân phối dữ liệu đó.
-
 ## Nguồn dữ liệu
+
+Dữ liệu bản đồ **tải khi chạy lần đầu, không đóng gói sẵn** — đây là bản sao
+cá nhân trên máy bạn, không phải bản phát hành lại.
 
 - Basemap: [VulnonaMAP](https://vulnona.com/game/map/) (Coco.N) — ghép từ ảnh
   chụp trong game. Bản quyền hình ảnh: Afterthought LLC (The Isle).

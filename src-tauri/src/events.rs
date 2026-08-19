@@ -3,6 +3,7 @@
 //! webview.
 
 use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager};
 
 pub const POSITION_UPDATE: &str = "position://update";
 pub const TRAIL_CHANGED: &str = "trail://changed";
@@ -29,4 +30,21 @@ pub struct PositionUpdate {
 pub struct TrailPayload {
     pub segments_cm: Vec<Vec<(f64, f64)>>,
     pub segments_px: Vec<Vec<(f64, f64)>>,
+}
+
+/// Emit ONLY to windows that are currently visible.
+///
+/// Never broadcast UI data app-wide: hidden windows have their webview
+/// suspended (see webview_mem.rs), and any script evaluation — which a
+/// broadcast emit performs — silently auto-resumes them and brings their
+/// renderer memory back. Windows re-shown later catch up via
+/// `pipeline::resync`.
+pub fn emit_to_visible<S: Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+    for (label, window) in app.webview_windows() {
+        if window.is_visible().unwrap_or(false) {
+            if let Err(e) = app.emit_to(label.as_str(), event, payload.clone()) {
+                log::warn!("emit {event} to {label} failed: {e}");
+            }
+        }
+    }
 }

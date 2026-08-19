@@ -2,9 +2,12 @@
 //! windows. Port of the sample-handling wiring from the original `main.py`.
 
 use overlay_core::{bearing_to_compass_key, world_to_pixel, Calibration};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
-use crate::events::{PositionUpdate, TrailPayload, POSITION_UPDATE, TRAIL_CHANGED};
+use crate::events::{
+    emit_to_visible, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED,
+    TRAIL_CHANGED,
+};
 use crate::state::AppState;
 
 /// Feed one accepted coordinate sample through the tracker and notify the UI.
@@ -45,14 +48,51 @@ pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
         compass_key: heading.map(bearing_to_compass_key),
         in_bounds: overlay_core::is_in_bounds(px, py, cal),
     };
-    if let Err(e) = app.emit(POSITION_UPDATE, payload) {
-        log::warn!("emit position failed: {e}");
-    }
+    emit_to_visible(app, POSITION_UPDATE, payload);
     if let Some(trail) = trail {
-        if let Err(e) = app.emit(TRAIL_CHANGED, trail) {
-            log::warn!("emit trail failed: {e}");
-        }
+        emit_to_visible(app, TRAIL_CHANGED, trail);
     }
+}
+
+/// Bring a window that was hidden (and therefore skipped by
+/// `emit_to_visible`) back up to date. Called right after showing it.
+pub fn resync(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let now_s = state.now_s();
+    let cal = Calibration::gateway();
+
+    let (current, heading, trail) = {
+        let tracker = state.tracker.lock().unwrap();
+        (
+            tracker.current,
+            tracker.heading(now_s),
+            trail_payload(&tracker.segments, cal),
+        )
+    };
+    if let Some(cur) = current {
+        let (px, py) = world_to_pixel(cur.x, cur.y, cal);
+        emit_to_visible(
+            app,
+            POSITION_UPDATE,
+            PositionUpdate {
+                x_cm: cur.x,
+                y_cm: cur.y,
+                z_cm: cur.z,
+                px,
+                py,
+                heading_deg: heading,
+                compass_key: heading.map(bearing_to_compass_key),
+                in_bounds: overlay_core::is_in_bounds(px, py, cal),
+            },
+        );
+    }
+    emit_to_visible(app, TRAIL_CHANGED, trail);
+    {
+        let settings = state.settings.lock().unwrap().clone();
+        emit_to_visible(app, SETTINGS_CHANGED, settings);
+    }
+    emit_to_visible(app, "waypoints://changed", ());
+    crate::islepilot::emit_last(app);
 }
 
 pub fn trail_payload(segments_cm: &[Vec<(f64, f64)>], cal: &Calibration) -> TrailPayload {

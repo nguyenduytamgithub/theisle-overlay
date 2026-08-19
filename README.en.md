@@ -1,4 +1,4 @@
-# TheIsle Overlay v2
+# TheIsle Overlay
 
 [Tiếng Việt](README.md) · **English**
 
@@ -37,7 +37,7 @@ installs; the installer fetches it if missing.
 
 Measured on a real machine: **Intel Core i5-14400F (10 cores / 16 threads), 32 GB
 RAM, RTX 3060 Ti, Windows 11 Pro build 26200, 100% display scaling** — release
-build v2.1.0:
+build v1.0.0:
 
 | Item | Size |
 |---|---|
@@ -46,20 +46,13 @@ build v2.1.0:
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 | **Total disk footprint** | **~21 MB** |
 
-| At runtime | Measurement |
-|---|---|
-| RAM (full map **and** minimap open) | ~528 MB across 8 processes |
-| RAM of the app process alone | 50 MB |
-| Idle CPU (no interaction) | **0.3%** (≈5% of one thread out of 16) |
+| At runtime | RAM (working set) | Idle CPU |
+|---|---|---|
+| Full map **and** minimap open | **522 MB** (8 processes) | 0.18% |
+| Full map hidden with `Ctrl+Alt+F` (the while-playing scenario) | **448 MB** | 0.08% |
 
-Why the RAM figure looks like that: the UI runs on WebView2 (Edge), which spawns
-several helper processes, and the 3900×3908 px basemap occupies ~60 MB once
-decoded. This is the **worst case** — while gaming you normally hide the full map
-(`Ctrl+Alt+F`) and keep only the minimap, and Windows then trims the hidden
-window's memory.
-
-The app has **no repaint loop**: it draws only when new data arrives, so it costs
-practically no CPU while you play.
+**CPU is essentially zero** because the app has no repaint loop — it draws only
+when new data arrives.
 
 ## Things to know
 
@@ -73,17 +66,20 @@ practically no CPU while you play.
    10 minutes expire so the arrow never points the wrong way.
 4. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
-5. **Hotkeys taken by another app** are reported at startup; rebind them in Settings.
-6. **The "Your dino" feature** only supports IslePilot-based servers
+5. **Low-RAM machines**: just hide the full map with `Ctrl+Alt+F` while playing —
+   the app freezes the hidden window and returns ~75 MB. Closing it with the X
+   button also works (the app keeps running with the minimap; `Ctrl+Alt+F` reopens).
+6. **Hotkeys taken by another app** are reported at startup; rebind them in Settings.
+7. **The "Your dino" feature** only supports IslePilot-based servers
    (`xxx.islepilot.eu`). It reads data by parsing the server's web pages (there is
    no official API), so it **can break whenever IslePilot changes their markup** —
    the app flags it when it detects a new deployment. If this part fails, the map
    features are **unaffected**.
-7. **Ask your server admins** before using it routinely — some servers have their
+8. **Ask your server admins** before using it routinely — some servers have their
    own rules about third-party tools. Auto-position from the live map is OFF by default.
-8. **Your panel session cookie** is encrypted with Windows DPAPI and can only be
+9. **Your panel session cookie** is encrypted with Windows DPAPI and can only be
    decrypted by your Windows account on that machine.
-9. **SmartScreen** warns on first install because the installer is not code-signed
+10. **SmartScreen** warns on first install because the installer is not code-signed
    (certificates cost a yearly fee). Later auto-updates are not prompted again.
 
 ## Anti-cheat safety
@@ -130,44 +126,10 @@ cargo test -p theisle-overlay --lib -- --ignored parse_real_cache
 Note: `.cargo/config.toml` moves the `target-dir` outside the OneDrive-synced
 folder.
 
-## Releasing
-
-1. Add repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (content of
-   `~/.tauri/theisle-overlay.key`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-   (that key's password — kept out of the repo).
-2. Bump `version` in `src-tauri/tauri.conf.json` and `package.json`.
-3. `git tag v2.x.x && git push --tags` — the `release.yml` workflow builds the
-   NSIS installer, signs the update artifact, generates `latest.json` and
-   creates the GitHub Release.
-4. Running apps see the new version and offer to update.
-
-If the repo name/owner changes, edit `plugins.updater.endpoints` in
-`src-tauri/tauri.conf.json`.
-
-## Architecture
-
-- `src-tauri/crates/overlay-core` — pure logic (coordinate parsing,
-  world↔pixel transform, tracker) plus the complete test suite ported from
-  the Python app. The frontend **never** computes a transform of its own;
-  every payload carries both raw cm and pixels.
-- `src-tauri/src` — Win32 (the safety boundary lives in `win/`), clipboard
-  watcher, hotkeys, settings/store (identical paths and formats to the old
-  Python app — existing users keep all their data), data fetch, minimap
-  window management.
-- `src-tauri/src/islepilot` — IslePilot panel integration (reads `/me` + `/map`,
-  DPAPI-encrypted cookie); runs on its own thread so a failure there cannot take
-  the map down.
-- `src/main` — main window (Svelte 5 + Tailwind + Leaflet CRS.Simple).
-- `src/minimap` — separate entry, plain canvas, no framework: a webview that
-  runs beside the game for hours must stay minimal and only draws on events
-  (0% idle CPU).
-
-Map data is **fetched on first run, never bundled** — the basemap belongs to
-VulnonaMAP (derived from Afterthought LLC game assets); a personal copy on
-the user's machine is a different thing from the app redistributing that
-data.
-
 ## Credits
+
+Map data is **fetched on first run, never bundled** — it is a personal copy on
+your machine, not a redistribution.
 
 - Basemap: [VulnonaMAP](https://vulnona.com/game/map/) (Coco.N) — stitched
   from in-game captures. Imagery copyright Afterthought LLC (The Isle).
