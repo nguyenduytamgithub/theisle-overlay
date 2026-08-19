@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* Survival-HUD palette carried over from the original theme.py:
+   dark ground, amber accent, hot-pink player marker. */
+:root {
+  --color-bg: #11150e;
+  --color-panel: #191f14;
+  --color-border: #333c26;
+  --color-text: #eae6d6;
+  --color-muted: #a3aa8c;
+  --color-accent: #e8a33d;
+  --color-player: #ff3b8b;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}

@@ -1,0 +1,59 @@
+[package]
+name = "theisle-overlay"
+version = "2.0.0"
+description = "Map overlay for The Isle: Evrima (Gateway)"
+edition = "2021"
+
+[workspace]
+members = ["crates/overlay-core"]
+
+[lib]
+name = "theisle_overlay_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Dev-only tools (verify_data). Not part of the shipped app.
+devtools = ["dep:image"]
+
+[[bin]]
+name = "verify_data"
+path = "src/bin/verify_data.rs"
+required-features = ["devtools"]
+
+[[bin]]
+name = "theisle-overlay"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+overlay-core = { path = "crates/overlay-core" }
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-log = "2"
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.12", features = ["blocking"] }
+regex = "1"
+image = { version = "0.25", optional = true, default-features = false, features = ["webp"] }
+serde_json = "1"
+log = "0.4"
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+
+[dependencies.windows]
+version = "0.62"
+features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_DataExchange",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Memory",
+  "Win32_System_Threading",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+]

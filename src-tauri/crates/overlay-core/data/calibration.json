@@ -1,0 +1,38 @@
+{
+  "map": "Gateway_v0.21.7",
+  "_source": "https://vulnona.com/game/map/map/Gateway_v0.21.7/data_1.txt (#cfg block)",
+  "_verified_against": "vulnona.com/game/map/js/map.js $map.calc.game2map + myislemap.com/app.js gameToMap",
+
+  "min_X": -607,
+  "max_X": 509,
+  "min_Y": -505,
+  "max_Y": 607,
+  "axis_X": "H",
+  "scale": 2.5,
+  "_note_scale": "scale cancels out of the pixel transform entirely; recorded for provenance only, never used",
+
+  "image_width_px": 7800,
+  "image_height_px": 7817,
+
+  "_axis_note": "axis_X='H' means game X is drawn along the image HEIGHT. game X <-> [min_X,max_X] span 1116 -> vertical. game Y <-> [min_Y,max_Y] span 1112 -> horizontal.",
+
+  "north_offset_deg": 0.0,
+  "_north_note": "DA XAC MINH: gameX tang = di ve NAM, gameY tang = di ve DONG; dinh anh la huong Bac. Bang chung la dia danh trong game: 'Highland Lake - north' co gameX nho hon 'Highland Lake - south', va 'Swamp East' co gameY lon hon 'Swamp West'. KHONG phai '+X = Bac' nhu quy uoc UE thong thuong. Xem bearing_deg() trong app/coords.py. Truong nay chi de tinh chinh neu con lech nho; de 0 la dung.",
+
+  "selftest_tolerance_px": 1.0,
+  "_anchor_note": "Cac moc nay kiem tra SO HOC cua phep chuyen, khong kiem tra du lieu con moi hay khong. Gia tri pixel duoc suy doc lap tu ma nguon VulnonaMAP; dung sua theo cam tinh. Moc 1/3/4 con duoc doi chieu voi du lieu mo muoi hien tai (lech 6.8 m / 46.5 m / 3.3 m). Moc 2 va 5 lay tu huong dan Steam nam 2023 (Evrima ~0.19) va KHONG con duoc du lieu 2026 xac nhan -- 'Vein Island' roi xuong bien vi vung do khong con POI nao. Chung van hop le lam test so hoc. Muon kiem tra du lieu khop anh nen thi chay tools/verify_data.py.",
+  "selftest_anchors": [
+    { "name": "Water Access Salt Lick", "raw": [-231654.353,  52099.673], "px": 3907.71, "py": 2629.10 },
+    { "name": "Falls Pond Salt Lick",   "raw": [-159923.370, 293325.380], "px": 5599.76, "py": 3131.54 },
+    { "name": "Highlands Salt Lick",    "raw": [  41151.966, -88576.924], "px": 2920.95, "py": 4539.97 },
+    { "name": "Delta Salt Lick",        "raw": [ -51899.767, 158669.822], "px": 4655.24, "py": 3888.19 },
+    { "name": "Vein Island",            "raw": [ 404868.089, 436554.633], "px": 6604.43, "py": 7087.61 }
+  ],
+  "selftest_out_of_bounds": {
+    "name": "Hell's Mouth",
+    "raw": [608519.832, -178543.339],
+    "px": 2289.89,
+    "py": 8514.09,
+    "assert": "py > image_height_px; must NOT be clamped"
+  }
+}
