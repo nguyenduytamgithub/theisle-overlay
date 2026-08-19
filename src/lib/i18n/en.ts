@@ -9,6 +9,7 @@ export const en: Record<MsgKey, string> = {
   "app.fullmap_title": "Gateway Map",
 
   "tab.map": "Map",
+  "tab.dino": "Your Dino",
   "tab.settings": "Settings",
   "tab.guide": "Guide",
 
@@ -117,6 +118,58 @@ export const en: Record<MsgKey, string> = {
   "firstrun.failed": "Download failed. Check your connection and try again.",
   "firstrun.retry": "Retry",
   "firstrun.continue": "Continue with the map",
+
+  "dino.title": "Your dino",
+  "dino.explain":
+    "Reads your OWN dino's info from the server's IslePilot panel (growth, health, hunger, " +
+    "thirst, Prime progress). It is just an HTTPS connection to the server's website — " +
+    "nothing touches the game, anti-cheat safe.",
+  "dino.server": "Server",
+  "dino.login": "Sign in with Steam",
+  "dino.login_wait": "Waiting for you to sign in in the window that just opened…",
+  "dino.login_failed": "Sign-in did not complete. Try again.",
+  "dino.logged_in": "Signed in",
+  "dino.logout": "Sign out",
+  "dino.auth_expired": "Your session expired — please sign in again.",
+  "dino.supported_servers":
+    "Only xxx.islepilot.eu servers are supported right now (e.g. mixi, sdvn2…).",
+  "dino.manual_cookie": "Paste your session cookie",
+  "dino.manual_cookie_hint":
+    "Open the server page in your browser and sign in with Steam. Press F12 → " +
+    "Application tab (Chrome) or Storage (Firefox) → Cookies → pick the server domain → " +
+    "find the cookie named islepilot_player and paste its Value here. Keep this string " +
+    "secret like a password.",
+  "dino.cancel_login": "Cancel sign-in",
+  "dino.manual_cookie_save": "Verify & save cookie",
+  "dino.manual_cookie_checking": "Checking cookie…",
+  "dino.manual_cookie_bad":
+    "Cookie invalid or session not signed in — double-check the pasted string.",
+  "dino.enabled": "Track dino info",
+  "dino.interval": "Update frequency",
+  "dino.overlay_panel": "Show stats strip under the minimap",
+  "dino.use_map_position":
+    "Auto position from the server's live map (instead of manual coordinate copying)",
+  "dino.rules_note":
+    "⚠ Ask the server admins before using this routinely — some servers have their own " +
+    "rules about third-party tools. Everything shown is your own data, served by the " +
+    "server's own panel.",
+  "dino.growth": "Growth",
+  "dino.health": "Health",
+  "dino.hunger": "Hunger",
+  "dino.thirst": "Thirst",
+  "dino.prime": "Prime progress",
+  "dino.online": "Online",
+  "dino.offline": "Offline",
+  "dino.updated": "Updated {time}",
+  "dino.no_data": "No data yet — enable tracking and wait for the first update.",
+  "dino.fetch_error": "Panel connection error:",
+  "dino.layout_changed":
+    "IslePilot just deployed a new version — if numbers look wrong, their markup may have " +
+    "changed and the app needs an update.",
+  "dino.map_disabled": "The live map is disabled on this server.",
+  "dino.crashed":
+    "The Your Dino section hit an error and was isolated — the map and other features are unaffected.",
+  "btn.retry": "Retry",
 
   "update.available": "Update {version} available",
   "update.install": "Update now",

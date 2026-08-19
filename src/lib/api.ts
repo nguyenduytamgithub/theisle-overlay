@@ -43,6 +43,13 @@ export type Settings = Record<string, unknown> & {
   };
   number_format: "auto" | "us" | "eu";
   language: "vi" | "en";
+  islepilot: {
+    enabled: boolean;
+    domain: string;
+    poll_interval_s: number;
+    use_map_position: boolean;
+    show_overlay_panel: boolean;
+  };
 };
 
 export const onPositionUpdate = (
@@ -186,6 +193,74 @@ export async function getBasemapUrls(): Promise<{ minimap: string; fullmap: stri
     fullmap: convertFileSrc(paths.fullmap),
   };
 }
+
+// ----------------------------------------------------- "your dino" (IslePilot) ---
+
+export interface DinoStatBar {
+  raw: string;
+  current: number | null;
+  max: number | null;
+}
+
+export interface DinoQuest {
+  text: string;
+  completed: boolean;
+}
+
+export interface DinoPlayer {
+  dinoName: string | null;
+  online: boolean | null;
+  growth: string | null;
+  growthPct: number | null;
+  health: DinoStatBar | null;
+  hunger: DinoStatBar | null;
+  thirst: DinoStatBar | null;
+  primeQuests: DinoQuest[];
+}
+
+export interface DinoMap {
+  mapDisabled: boolean;
+  x: number | null;
+  y: number | null;
+  headingDeg: number | null;
+  viewBox: [number, number, number, number] | null;
+  pctX: number | null;
+  pctY: number | null;
+}
+
+export interface DinoUpdate {
+  domain: string;
+  fetchedAtMs: number;
+  player: DinoPlayer | null;
+  map: DinoMap | null;
+  layoutChanged: boolean;
+  error: string | null;
+}
+
+export interface IslepilotState {
+  loggedIn: boolean;
+  lastUpdate: DinoUpdate | null;
+}
+
+export const islepilotLogin = (domain: string) =>
+  invoke("islepilot_login", { domain });
+/** Manual fallback: validate + store a pasted Cookie header. */
+export const islepilotSetCookie = (domain: string, cookie: string) =>
+  invoke("islepilot_set_cookie", { domain, cookie });
+export const islepilotCancelLogin = () => invoke("islepilot_cancel_login");
+export const islepilotLogout = () => invoke("islepilot_logout");
+export const islepilotApply = () => invoke("islepilot_apply");
+export const islepilotState = () => invoke<IslepilotState>("islepilot_state");
+
+export const onDinoUpdate = (cb: (u: DinoUpdate) => void): Promise<UnlistenFn> =>
+  listen<DinoUpdate>("dino://update", (e) => cb(e.payload));
+export const onDinoAuthExpired = (cb: () => void): Promise<UnlistenFn> =>
+  listen("dino://auth-expired", () => cb());
+export const onDinoLoginOk = (cb: () => void): Promise<UnlistenFn> =>
+  listen("dino://login-ok", () => cb());
+export const onDinoLoginFailed = (
+  cb: (reason: string) => void,
+): Promise<UnlistenFn> => listen<string>("dino://login-failed", (e) => cb(e.payload));
 
 /** Dev builds only. */
 export const simulatePosition = (x: number, y: number, z: number) =>

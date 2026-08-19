@@ -1,6 +1,6 @@
 [package]
 name = "theisle-overlay"
-version = "2.0.0"
+version = "2.1.0"
 description = "Map overlay for The Isle: Evrima (Gateway)"
 edition = "2021"
 default-run = "theisle-overlay"
@@ -38,8 +38,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-log = "2"
 serde = { version = "1", features = ["derive"] }
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking", "gzip"] }
 regex = "1"
+scraper = "0.20"
 image = { version = "0.25", optional = true, default-features = false, features = ["webp"] }
 serde_json = "1"
 log = "0.4"
@@ -51,6 +52,7 @@ version = "0.62"
 features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
+  "Win32_Security_Cryptography",
   "Win32_System_DataExchange",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_Memory",

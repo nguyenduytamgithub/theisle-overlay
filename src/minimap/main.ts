@@ -4,7 +4,7 @@
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { render, type MinimapState, type PoiDot } from "./render";
+import { PANEL_H, render, type DinoBars, type MinimapState, type PoiDot } from "./render";
 
 // Local minimal types — this bundle stays free of the main window's modules.
 interface PositionUpdate {
@@ -69,6 +69,8 @@ const state: MinimapState = {
   sizePx: 260,
   radiusM: 600,
   opacity: 0.85,
+  panelH: 0,
+  dino: null,
   compassLetters: STRINGS.vi.letters,
   hintText: STRINGS.vi.hint,
   headingLabel: "",
@@ -84,6 +86,8 @@ function applySettings(s: Settings) {
   state.sizePx = Number(mm.size_px ?? 260);
   state.radiusM = Number(mm.radius_m ?? 600);
   state.opacity = Number(mm.opacity ?? 0.85);
+  const ip = s.islepilot ?? {};
+  state.panelH = ip.enabled && (ip.show_overlay_panel ?? true) ? PANEL_H : 0;
   const lang = (s.language === "en" ? "en" : "vi") as keyof typeof STRINGS;
   state.compassLetters = STRINGS[lang].letters;
   state.hintText = STRINGS[lang].hint;
@@ -156,6 +160,39 @@ async function init() {
     applySettings(e.payload);
     draw();
   });
+
+  // "Your dino" stats for the strip under the disc.
+  interface DinoStatBar {
+    current: number | null;
+    max: number | null;
+  }
+  interface DinoUpdatePayload {
+    player: {
+      growthPct: number | null;
+      health: DinoStatBar | null;
+      hunger: DinoStatBar | null;
+      thirst: DinoStatBar | null;
+    } | null;
+  }
+  const toBars = (u: DinoUpdatePayload): DinoBars | null =>
+    u.player
+      ? {
+          hp: u.player.health ?? { current: null, max: null },
+          hunger: u.player.hunger ?? { current: null, max: null },
+          thirst: u.player.thirst ?? { current: null, max: null },
+          growthPct: u.player.growthPct,
+        }
+      : null;
+  await listen<DinoUpdatePayload>("dino://update", (e) => {
+    state.dino = toBars(e.payload) ?? state.dino;
+    draw();
+  });
+  try {
+    const st = await invoke<{ lastUpdate: DinoUpdatePayload | null }>("islepilot_state");
+    if (st.lastUpdate) state.dino = toBars(st.lastUpdate);
+  } catch {
+    // feature off — strip just shows "…" until data arrives
+  }
 
   // First paint before the window is shown (Rust shows it on this signal).
   draw();

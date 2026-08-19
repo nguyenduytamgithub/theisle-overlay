@@ -9,6 +9,7 @@ pub mod commands;
 pub mod events;
 pub mod fetch;
 pub mod hotkeys;
+pub mod islepilot;
 pub mod minimap;
 pub mod pipeline;
 pub mod replay;
@@ -73,6 +74,12 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::apply_hotkeys,
             commands::open_trails_folder,
             commands::fetch_data,
+            commands::islepilot_login,
+            commands::islepilot_set_cookie,
+            commands::islepilot_cancel_login,
+            commands::islepilot_logout,
+            commands::islepilot_apply,
+            commands::islepilot_state,
             #[cfg(debug_assertions)]
             commands::simulate_position,
         ]);
@@ -89,6 +96,7 @@ pub fn run(replay_file: Option<PathBuf>) {
                 let state = app.state::<AppState>();
                 state.hotkeys.restart(app.handle().clone());
             }
+            islepilot::restart_poller(app.handle());
             if let Some(path) = replay_file {
                 replay::spawn(app.handle().clone(), path);
             }

@@ -14,12 +14,13 @@
   } from "$lib/api";
   import { locale, t, type Locale } from "$lib/i18n";
   import FullMap from "./fullmap/FullMap.svelte";
+  import DinoTab from "./dino/DinoTab.svelte";
   import Settings from "./settings/Settings.svelte";
   import Guide from "./guide/Guide.svelte";
   import FirstRun from "./firstrun/FirstRun.svelte";
 
-  type Tab = "map" | "settings" | "guide";
-  const initialTab = ["map", "settings", "guide"].includes(location.hash.slice(1))
+  type Tab = "map" | "dino" | "settings" | "guide";
+  const initialTab = ["map", "dino", "settings", "guide"].includes(location.hash.slice(1))
     ? (location.hash.slice(1) as Tab)
     : "map";
   let tab = $state<Tab>(initialTab);
@@ -98,7 +99,7 @@
     <span class="mr-3 font-semibold" style="color: var(--color-accent)">
       {$t("app.title")}
     </span>
-    {#each [["map", $t("tab.map")], ["settings", $t("tab.settings")], ["guide", $t("tab.guide")]] as [key, label] (key)}
+    {#each [["map", $t("tab.map")], ["dino", $t("tab.dino")], ["settings", $t("tab.settings")], ["guide", $t("tab.guide")]] as [key, label] (key)}
       <button
         class="cursor-pointer rounded px-3 py-1 text-sm"
         style={tab === key
@@ -183,6 +184,26 @@
       <FirstRun oncomplete={() => void getDataStatus().then((d) => (dataStatus = d))} />
     {:else if tab === "map"}
       <FullMap />
+    {:else if tab === "dino"}
+      <!-- Error-isolated: a failure in the IslePilot integration must never
+           take down the map or any other feature. -->
+      <div class="h-full overflow-y-auto">
+        <svelte:boundary>
+          <DinoTab />
+          {#snippet failed(_error, reset)}
+            <div class="mx-auto max-w-lg p-8">
+              <p class="mb-3 text-sm" style="color: #ff8a80">{$t("dino.crashed")}</p>
+              <button
+                class="cursor-pointer rounded border px-3 py-1 text-sm"
+                style="border-color: var(--color-border)"
+                onclick={reset}
+              >
+                {$t("btn.retry")}
+              </button>
+            </div>
+          {/snippet}
+        </svelte:boundary>
+      </div>
     {:else if tab === "settings"}
       <div class="h-full overflow-y-auto"><Settings /></div>
     {:else}

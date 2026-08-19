@@ -131,6 +131,14 @@ pub fn default_settings() -> Value {
         },
         "number_format": "auto",         // auto | us | eu
         "language": "vi",                // vi | en
+        // "Your dino" — IslePilot server-panel integration.
+        "islepilot": {
+            "enabled": false,
+            "domain": "https://mixi.islepilot.eu",
+            "poll_interval_s": 10,
+            "use_map_position": false,   // opt-in per user; check server rules
+            "show_overlay_panel": true,  // compact stats under the minimap
+        },
         "poll": {
             "clipboard_ms": 400,
             "game_rect_ms": 1000,

@@ -426,6 +426,51 @@ pub fn open_trails_folder(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Open the IslePilot login window; completion arrives as dino:// events.
+/// MUST be async: building a webview window inside a synchronous command is
+/// a documented deadlock/blank-window hazard on Windows.
+#[tauri::command]
+pub async fn islepilot_login(app: AppHandle, domain: String) -> Result<(), String> {
+    crate::islepilot::start_login(&app, domain)
+}
+
+#[tauri::command]
+pub fn islepilot_cancel_login(app: AppHandle) {
+    crate::islepilot::cancel_login(&app);
+}
+
+/// Manual fallback: validate + store a pasted Cookie header.
+#[tauri::command]
+pub async fn islepilot_set_cookie(
+    app: AppHandle,
+    domain: String,
+    cookie: String,
+) -> Result<(), String> {
+    // Blocking HTTP validation happens off the async runtime's core threads.
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::islepilot::manual_cookie(&app, domain, cookie)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn islepilot_logout(app: AppHandle) -> Result<(), String> {
+    crate::islepilot::logout(&app)
+}
+
+/// Re-read islepilot settings and (re)start/stop the poller accordingly —
+/// the Dino tab calls this after toggling enabled/interval/map-position.
+#[tauri::command]
+pub fn islepilot_apply(app: AppHandle) {
+    crate::islepilot::restart_poller(&app);
+}
+
+#[tauri::command]
+pub fn islepilot_state(app: AppHandle) -> crate::islepilot::IslepilotState {
+    crate::islepilot::current_state(&app)
+}
+
 /// Dev-only: feed a fake sample through the real pipeline.
 #[cfg(debug_assertions)]
 #[tauri::command]

@@ -13,6 +13,16 @@ export interface PoiDot {
   color: string;
 }
 
+export interface DinoBars {
+  hp: { current: number | null; max: number | null };
+  hunger: { current: number | null; max: number | null };
+  thirst: { current: number | null; max: number | null };
+  growthPct: number | null;
+}
+
+/** Must match DINO_PANEL_H in src-tauri/src/minimap.rs. */
+export const PANEL_H = 76;
+
 export interface MinimapState {
   /** Player position (cm + basemap px) and heading, or null before first sample. */
   position: { xCm: number; yCm: number; px: number; py: number; headingDeg: number | null } | null;
@@ -28,6 +38,9 @@ export interface MinimapState {
   sizePx: number;
   radiusM: number;
   opacity: number;
+  /** Extra height for the dino-stats strip; 0 = strip off. */
+  panelH: number;
+  dino: DinoBars | null;
   /** Localised strings: compass letters clockwise from north, hint, unknown. */
   compassLetters: [string, string, string, string];
   hintText: string;
@@ -50,17 +63,25 @@ const COLORS = {
 
 export function render(canvas: HTMLCanvasElement, state: MinimapState): void {
   const size = state.sizePx;
+  const totalH = size + state.panelH;
   const dpr = window.devicePixelRatio || 1;
-  if (canvas.width !== Math.round(size * dpr) || canvas.height !== Math.round(size * dpr)) {
+  if (
+    canvas.width !== Math.round(size * dpr) ||
+    canvas.height !== Math.round(totalH * dpr)
+  ) {
     canvas.width = Math.round(size * dpr);
-    canvas.height = Math.round(size * dpr);
+    canvas.height = Math.round(totalH * dpr);
     canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
+    canvas.style.height = `${totalH}px`;
   }
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, size, size);
+  ctx.clearRect(0, 0, size, totalH);
+
+  if (state.panelH > 0) {
+    drawDinoPanel(ctx, state, size);
+  }
 
   const c = size / 2;
   const radius = size / 2 - LABEL_MARGIN;
@@ -248,6 +269,98 @@ function drawHeadingPill(
   ctx.textBaseline = "middle";
   ctx.fillText(text, c, y + h / 2 + 0.5);
   ctx.globalAlpha = 1;
+}
+
+/// Compact "your dino" strip below the disc: HP / hunger / thirst bars plus
+/// growth. Drawn with the same opacity as the map so the whole widget reads
+/// as one block; text keeps a dark shadow for readability.
+function drawDinoPanel(ctx: CanvasRenderingContext2D, state: MinimapState, size: number): void {
+  const top = size + 2;
+  const h = state.panelH - 4;
+  ctx.save();
+  ctx.globalAlpha = Math.max(state.opacity, 0.55);
+
+  // Backing card.
+  ctx.beginPath();
+  ctx.roundRect(4, top, size - 8, h, 8);
+  ctx.fillStyle = "rgba(10, 13, 9, 0.78)";
+  ctx.fill();
+
+  const dino = state.dino;
+  const rows: Array<{ label: string; cur: number | null; max: number | null; color: string }> =
+    dino
+      ? [
+          {
+            label: "HP",
+            cur: dino.hp.current,
+            max: dino.hp.max,
+            color:
+              dino.hp.current !== null && dino.hp.max
+                ? dino.hp.current / dino.hp.max > 0.5
+                  ? "#72d653"
+                  : dino.hp.current / dino.hp.max > 0.25
+                    ? "#e8a33d"
+                    : "#e2664a"
+                : "#72d653",
+          },
+          { label: "\u{1F356}", cur: dino.hunger.current, max: dino.hunger.max, color: "#e8a33d" },
+          { label: "\u{1F4A7}", cur: dino.thirst.current, max: dino.thirst.max, color: "#4aa8d8" },
+        ]
+      : [];
+
+  ctx.font = "600 10px 'Segoe UI', sans-serif";
+  ctx.textBaseline = "middle";
+
+  if (!dino) {
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.textAlign = "center";
+    ctx.fillText("…", size / 2, top + h / 2);
+    ctx.restore();
+    return;
+  }
+
+  const rowH = 16;
+  const barX = 30;
+  const barW = size - 8 - barX - 44;
+  rows.forEach((row, i) => {
+    const y = top + 6 + i * rowH + rowH / 2;
+    ctx.textAlign = "left";
+    ctx.fillStyle = COLORS.text;
+    ctx.fillText(row.label, 10, y);
+
+    ctx.beginPath();
+    ctx.roundRect(barX, y - 3.5, barW, 7, 3.5);
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fill();
+    if (row.cur !== null && row.max) {
+      const frac = Math.max(0, Math.min(1, row.cur / row.max));
+      if (frac > 0) {
+        ctx.beginPath();
+        ctx.roundRect(barX, y - 3.5, Math.max(barW * frac, 3), 7, 3.5);
+        ctx.fillStyle = row.color;
+        ctx.fill();
+      }
+    }
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = COLORS.text;
+    ctx.fillText(
+      row.cur !== null && row.max !== null ? `${Math.round(row.cur)}/${Math.round(row.max)}` : "—",
+      size - 12,
+      y,
+    );
+  });
+
+  // Growth line.
+  const gy = top + 6 + rows.length * rowH + 6;
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLORS.accent;
+  ctx.fillText(
+    dino.growthPct !== null ? `Growth ${Math.round(dino.growthPct)}%` : "Growth —",
+    10,
+    gy,
+  );
+  ctx.restore();
 }
 
 function drawHint(

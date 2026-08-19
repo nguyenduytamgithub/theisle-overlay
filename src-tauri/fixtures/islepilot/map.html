@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<body>
+<main>
+  <h1>Live map</h1>
+  <div class="relative aspect-square touch-none overflow-hidden rounded-lg border bg-muted w-full" style="max-width:1000px">
+    <div class="absolute inset-0" style="transform:translate(0px, 0px) scale(1);transform-origin:0 0">
+      <svg viewBox="0 0 1000 1000">
+        <g>
+          <circle cx="770" cy="330" r="4" class="fill-sky-400"></circle>
+          <text x="770" y="322">North Plains</text>
+        </g>
+        <g>
+          <polyline points="270,850 275,845 281,861" class="stroke-amber-400/60" fill="none" stroke-width="1.5"></polyline>
+          <polygon points="11,0 -7.699999999999999,-7.699999999999999 -7.699999999999999,7.699999999999999"
+                   transform="translate(281.798441134796 861.3377839914125) rotate(171.69935784885607)"
+                   class="fill-amber-400" stroke="#000" stroke-width="1.5" stroke-linejoin="round"></polygon>
+          <text x="281.798441134796" y="848.3377839914125" style="paint-order:stroke;stroke:#000;stroke-width:4">You</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</main>
+</body>
+</html>

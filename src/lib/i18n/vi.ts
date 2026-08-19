@@ -10,6 +10,7 @@ export const vi = {
 
   // --- tab ---
   "tab.map": "Bản đồ",
+  "tab.dino": "Khủng long",
   "tab.settings": "Cài đặt",
   "tab.guide": "Hướng dẫn",
 
@@ -129,6 +130,57 @@ export const vi = {
   "firstrun.failed": "Tải thất bại. Kiểm tra kết nối mạng rồi thử lại.",
   "firstrun.retry": "Thử lại",
   "firstrun.continue": "Tiếp tục với bản đồ",
+
+  // --- khủng long của bạn (IslePilot) ---
+  "dino.title": "Khủng long của bạn",
+  "dino.explain":
+    "Đọc thông tin khủng long của chính bạn từ trang quản lý IslePilot của server " +
+    "(growth, máu, đói, khát, Prime progress). Chỉ là kết nối HTTPS tới website của server " +
+    "— không đụng gì tới game, an toàn với anti-cheat.",
+  "dino.server": "Server",
+  "dino.login": "Đăng nhập Steam",
+  "dino.login_wait": "Đang chờ bạn đăng nhập trong cửa sổ vừa mở…",
+  "dino.login_failed": "Đăng nhập không thành công. Thử lại.",
+  "dino.logged_in": "Đã đăng nhập",
+  "dino.logout": "Đăng xuất",
+  "dino.auth_expired": "Phiên đăng nhập đã hết hạn — hãy đăng nhập lại.",
+  "dino.supported_servers":
+    "Hiện tại chỉ hỗ trợ server thuộc xxx.islepilot.eu (ví dụ mixi, sdvn2…).",
+  "dino.manual_cookie": "Dán cookie đăng nhập",
+  "dino.manual_cookie_hint":
+    "Mở trang server trong trình duyệt và đăng nhập Steam. Bấm F12 → tab Application " +
+    "(Chrome) hoặc Storage (Firefox) → Cookies → chọn domain server → tìm cookie tên " +
+    "islepilot_player rồi copy phần Value dán vào đây. Giữ bí mật chuỗi này như mật khẩu.",
+  "dino.cancel_login": "Hủy đăng nhập",
+  "dino.manual_cookie_save": "Kiểm tra & lưu cookie",
+  "dino.manual_cookie_checking": "Đang kiểm tra cookie…",
+  "dino.manual_cookie_bad":
+    "Cookie không hợp lệ hoặc phiên chưa đăng nhập — kiểm tra lại chuỗi đã dán.",
+  "dino.enabled": "Theo dõi thông tin khủng long",
+  "dino.interval": "Tần suất cập nhật",
+  "dino.overlay_panel": "Hiện thanh chỉ số dưới bản đồ nhỏ",
+  "dino.use_map_position":
+    "Lấy vị trí tự động từ live map của server (thay cho copy tọa độ thủ công)",
+  "dino.rules_note":
+    "⚠ Nên hỏi admin server trước khi dùng thường xuyên — một số server có luật riêng về " +
+    "công cụ bên thứ ba. Dữ liệu hiển thị chỉ là của chính bạn, do panel của server cung cấp.",
+  "dino.growth": "Trưởng thành",
+  "dino.health": "Máu",
+  "dino.hunger": "Đói",
+  "dino.thirst": "Khát",
+  "dino.prime": "Prime progress",
+  "dino.online": "Online",
+  "dino.offline": "Offline",
+  "dino.updated": "Cập nhật lúc {time}",
+  "dino.no_data": "Chưa có dữ liệu — bật theo dõi và chờ lần cập nhật đầu.",
+  "dino.fetch_error": "Lỗi kết nối tới panel:",
+  "dino.layout_changed":
+    "IslePilot vừa cập nhật phiên bản mới — nếu số liệu trông sai, giao diện của họ có thể " +
+    "đã đổi và app cần cập nhật theo.",
+  "dino.map_disabled": "Server này tắt live map.",
+  "dino.crashed":
+    "Phần Khủng long gặp lỗi và đã được cách ly — bản đồ và các tính năng khác không bị ảnh hưởng.",
+  "btn.retry": "Thử lại",
 
   // --- cập nhật ---
   "update.available": "Có bản cập nhật {version}",

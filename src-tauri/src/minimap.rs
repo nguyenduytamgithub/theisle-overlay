@@ -26,15 +26,13 @@ use crate::win::{game_window, overlay};
 static MINIMAP_HWND: AtomicIsize = AtomicIsize::new(0);
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let size = {
-        let state = app.state::<AppState>();
-        let s = state.settings.lock().unwrap();
-        settings::get_f64(&s, &["minimap", "size_px"], 260.0)
-    };
+    // Include the dino strip in the initial size, not just on later changes.
+    let snap = snapshot(app);
+    let (size, height) = (snap.size_px, snap.window_h());
 
     let window = WebviewWindowBuilder::new(app, "minimap", WebviewUrl::App("minimap.html".into()))
         .title("minimap")
-        .inner_size(size, size)
+        .inner_size(size, height)
         .transparent(true)
         .decorations(false)
         .shadow(false)
@@ -87,6 +85,10 @@ fn on_ready(app: &AppHandle) {
 
 /// Snapshot of the minimap-relevant settings, compared tick-to-tick so work
 /// only happens on change.
+/// Height of the dino-stats strip under the map disc, logical px. Must match
+/// PANEL_H in src/minimap/render.ts.
+const DINO_PANEL_H: f64 = 76.0;
+
 #[derive(PartialEq, Clone, Copy)]
 struct Snapshot {
     visible: bool,
@@ -96,6 +98,14 @@ struct Snapshot {
     corner: Corner,
     game_rect_ms: u64,
     topmost_ms: u64,
+    /// Extra height for the "your dino" stats panel.
+    panel_h: f64,
+}
+
+impl Snapshot {
+    fn window_h(&self) -> f64 {
+        self.size_px + self.panel_h
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -128,6 +138,13 @@ fn snapshot(app: &AppHandle) -> Snapshot {
         corner: Corner::parse(settings::get_str(&s, &["minimap", "corner"], "top-left")),
         game_rect_ms: settings::get_f64(&s, &["poll", "game_rect_ms"], 1000.0) as u64,
         topmost_ms: settings::get_f64(&s, &["poll", "topmost_ms"], 2000.0) as u64,
+        panel_h: if settings::get_bool(&s, &["islepilot", "enabled"], false)
+            && settings::get_bool(&s, &["islepilot", "show_overlay_panel"], true)
+        {
+            DINO_PANEL_H
+        } else {
+            0.0
+        },
     }
 }
 
@@ -158,8 +175,8 @@ fn spawn_supervisor(app: AppHandle) {
             if cur.click_through != prev.click_through {
                 let _ = window.set_ignore_cursor_events(cur.click_through);
             }
-            if cur.size_px != prev.size_px {
-                let _ = window.set_size(LogicalSize::new(cur.size_px, cur.size_px));
+            if cur.size_px != prev.size_px || cur.panel_h != prev.panel_h {
+                let _ = window.set_size(LogicalSize::new(cur.size_px, cur.window_h()));
                 last_rect = None;
             }
             if cur.corner != prev.corner || cur.margin_px != prev.margin_px {
@@ -205,6 +222,7 @@ fn spawn_supervisor(app: AppHandle) {
 fn anchor(window: &tauri::WebviewWindow, rect: (i32, i32, i32, i32), snap: &Snapshot) {
     let scale = window.scale_factor().unwrap_or(1.0);
     let size = (snap.size_px * scale).round() as i32;
+    let height = (snap.window_h() * scale).round() as i32;
     let margin = (snap.margin_px * scale).round() as i32;
     let (gx, gy, gw, gh) = rect;
 
@@ -214,7 +232,7 @@ fn anchor(window: &tauri::WebviewWindow, rect: (i32, i32, i32, i32), snap: &Snap
     };
     let y = match snap.corner {
         Corner::TopLeft | Corner::TopRight => gy + margin,
-        Corner::BottomLeft | Corner::BottomRight => gy + gh - size - margin,
+        Corner::BottomLeft | Corner::BottomRight => gy + gh - height - margin,
     };
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }
