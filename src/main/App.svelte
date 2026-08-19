@@ -6,6 +6,7 @@
     getDataStatus,
     getFullscreenMode,
     getSettings,
+    onFetchFinished,
     onHotkeyFailed,
     onSettingsChanged,
     simulatePosition,
@@ -77,6 +78,11 @@
         await onSettingsChanged((s) => locale.set((s.language as Locale) ?? "vi")),
       );
       unlisteners.push(await onHotkeyFailed((failed) => (failedHotkeys = failed)));
+      // The download can finish while the user is on another tab (FirstRun
+      // unmounted) — the App itself must notice and unlock the map tab.
+      unlisteners.push(
+        await onFetchFinished(() => void getDataStatus().then((d) => (dataStatus = d))),
+      );
       ready = true;
       void checkForUpdate();
     })();
@@ -180,10 +186,14 @@
   <main class="min-h-0 flex-1">
     {#if !ready}
       <div class="p-6" style="color: var(--color-muted)">…</div>
-    {:else if !dataOk}
-      <FirstRun oncomplete={() => void getDataStatus().then((d) => (dataStatus = d))} />
     {:else if tab === "map"}
-      <FullMap />
+      <!-- Only the map needs the downloaded data; the other tabs must stay
+           usable during (and before) the first-run download. -->
+      {#if !dataOk}
+        <FirstRun oncomplete={() => void getDataStatus().then((d) => (dataStatus = d))} />
+      {:else}
+        <FullMap />
+      {/if}
     {:else if tab === "dino"}
       <!-- Error-isolated: a failure in the IslePilot integration must never
            take down the map or any other feature. -->

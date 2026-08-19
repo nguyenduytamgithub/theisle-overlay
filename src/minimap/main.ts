@@ -130,19 +130,38 @@ function flattenPois() {
 
 const draw = () => render(canvas, state);
 
-async function init() {
-  settings = await invoke<Settings>("get_settings");
-  applySettings(settings);
+let imageWidthPx = 7800;
 
-  const info = await invoke<{ imageWidthPx: number; pxPerMX: number }>("get_map_info");
-  state.pxPerM = info.pxPerMX;
-
+/// (Re)load basemap + POIs. Called at init AND whenever the first-run /
+/// re-download fetch finishes — the data may not exist yet when this webview
+/// first starts, and it must pick it up without an app restart.
+async function loadData() {
   try {
     poiLayers = await invoke<PoiLayer[]>("get_pois_render");
     flattenPois();
   } catch {
     // POI data missing (first run): map still works without dots.
   }
+  try {
+    const paths = await invoke<{ minimap: string }>("get_basemap_paths");
+    const resp = await fetch(convertFileSrc(paths.minimap));
+    if (resp.ok) {
+      state.basemap = await createImageBitmap(await resp.blob());
+      state.miniScale = state.basemap.width / imageWidthPx;
+    }
+  } catch {
+    // Missing basemap: the disc just stays unfilled until data arrives.
+  }
+  draw();
+}
+
+async function init() {
+  settings = await invoke<Settings>("get_settings");
+  applySettings(settings);
+
+  const info = await invoke<{ imageWidthPx: number; pxPerMX: number }>("get_map_info");
+  state.pxPerM = info.pxPerMX;
+  imageWidthPx = info.imageWidthPx;
 
   await listen<PositionUpdate>("position://update", (e) => {
     const p = e.payload;
@@ -194,23 +213,15 @@ async function init() {
     // feature off — strip just shows "…" until data arrives
   }
 
+  // First-run / re-download completed: pick up the new data live.
+  await listen("fetch://finished", () => void loadData());
+
   // First paint before the window is shown (Rust shows it on this signal).
   draw();
   await emit("minimap://ready", {});
 
-  // Basemap decode can lag behind the first paint; draw again when ready.
-  try {
-    const paths = await invoke<{ minimap: string }>("get_basemap_paths");
-    const resp = await fetch(convertFileSrc(paths.minimap));
-    if (resp.ok) {
-      state.basemap = await createImageBitmap(await resp.blob());
-      const infoFull = await invoke<{ imageWidthPx: number }>("get_map_info");
-      state.miniScale = state.basemap.width / infoFull.imageWidthPx;
-      draw();
-    }
-  } catch {
-    // Missing basemap: the disc just stays unfilled.
-  }
+  // Data load can lag behind the first paint; draws again when ready.
+  void loadData();
 }
 
 void init();
