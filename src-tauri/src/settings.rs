@@ -109,6 +109,7 @@ pub fn default_settings() -> Value {
             "opacity_down": "Ctrl+Alt+Down",
             "zoom_in": "Ctrl+Alt+Right",
             "zoom_out": "Ctrl+Alt+Left",
+            "reload_ui": "Ctrl+Alt+R",   // rescue: works even when clicks are dead
         },
         "layers": {
             "water": true,

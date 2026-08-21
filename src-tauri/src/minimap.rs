@@ -230,7 +230,15 @@ fn spawn_supervisor(app: AppHandle) {
             // overlay within one tick, not one poll interval.
             let game_present = presence.hwnd().is_some_and(|h| !game_window::is_iconic(h));
 
-            let effective = cur.user_visible && (!cur.require_game || game_present);
+            // While the full map is on screen the minimap is redundant — and
+            // being TOPMOST it would float over the app itself, eating every
+            // click in its disc when click-through is off (a field-reported
+            // "cannot click the tabs"). It returns when the full map hides.
+            let main_on_screen = vis::is_visible("main") == Some(true)
+                && vis::is_minimized("main") != Some(true);
+
+            let effective =
+                cur.user_visible && (!cur.require_game || game_present) && !main_on_screen;
             if effective != effective_prev {
                 if effective {
                     log::info!("minimap: show (game_present={game_present})");
@@ -249,7 +257,10 @@ fn spawn_supervisor(app: AppHandle) {
                         last_rect = None; // re-anchor right away
                     }
                 } else if window.hide().is_ok() {
-                    log::info!("minimap: hide (user={}, game={game_present})", cur.user_visible);
+                    log::info!(
+                        "minimap: hide (user={}, game={game_present}, fullmap={main_on_screen})",
+                        cur.user_visible
+                    );
                     effective_prev = false;
                     crate::webview_mem::suspend(&window);
                 }

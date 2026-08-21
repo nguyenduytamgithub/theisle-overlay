@@ -22,6 +22,7 @@
     "opacity_down",
     "zoom_in",
     "zoom_out",
+    "reload_ui",
   ] as const;
 
   let capturing = $state<string | null>(null);

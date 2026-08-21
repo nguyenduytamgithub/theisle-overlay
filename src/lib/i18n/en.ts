@@ -74,6 +74,7 @@ export const en: Record<MsgKey, string> = {
   "hotkey.opacity_up": "Minimap more opaque",
   "hotkey.opacity_down": "Minimap more transparent",
   "hotkey.zoom_in": "Zoom view in",
+  "hotkey.reload_ui": "Reload the UI (if it freezes)",
   "hotkey.zoom_out": "Zoom view out",
 
   "settings.language": "Ngôn ngữ · Language",
@@ -184,7 +185,7 @@ export const en: Record<MsgKey, string> = {
 
   "footer.developed_by": "Developed by",
   "footer.donate": "Donate",
-  "footer.reload_hint": "If the app breaks, press F5 to reload",
+  "footer.reload_hint": "If the app breaks, press F5 or Ctrl+Alt+R to reload",
   "donate.title": "Support the author",
   "donate.hint": "Scan the VietQR code with your banking app, or transfer manually:",
   "donate.copy_stk": "Copy account number",

@@ -85,6 +85,7 @@ export const vi = {
   "hotkey.opacity_down": "Bản đồ nhỏ nhạt hơn",
   "hotkey.zoom_in": "Thu gần vùng nhìn",
   "hotkey.zoom_out": "Nhìn xa hơn",
+  "hotkey.reload_ui": "Tải lại giao diện (khi bị đơ)",
 
   // --- cài đặt ---
   "settings.language": "Ngôn ngữ · Language",
@@ -197,7 +198,7 @@ export const vi = {
   // --- footer + donate ---
   "footer.developed_by": "Được phát triển bởi",
   "footer.donate": "Ủng hộ",
-  "footer.reload_hint": "Nếu ứng dụng bị lỗi, nhấn F5 để tải lại",
+  "footer.reload_hint": "Nếu ứng dụng bị lỗi, nhấn F5 hoặc Ctrl+Alt+R để tải lại",
   "donate.title": "Ủng hộ tác giả",
   "donate.hint": "Quét mã VietQR bằng app ngân hàng, hoặc chuyển khoản thủ công:",
   "donate.copy_stk": "Copy số tài khoản",

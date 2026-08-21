@@ -26,6 +26,7 @@
     "opacity_down",
     "zoom_in",
     "zoom_out",
+    "reload_ui",
   ] as const;
 </script>
 

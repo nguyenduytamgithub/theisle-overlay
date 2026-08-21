@@ -291,6 +291,18 @@ fn dispatch(app: &AppHandle, action: &str) {
             }
         },
         "mark_here" => mark_here(app),
+        // Rescue for any webview whose input died: a global hotkey needs no
+        // clicks, and a reload rebuilds the page (state comes back through
+        // get_current_position/resync). eval auto-resumes a suspended view.
+        "reload_ui" => {
+            for label in ["main", "minimap"] {
+                if let Some(window) = app.get_webview_window(label) {
+                    crate::webview_mem::resume(&window);
+                    let _ = window.eval("location.reload()");
+                }
+            }
+            log::info!("UI reloaded by hotkey");
+        }
         "opacity_up" => adjust_opacity(app, OPACITY_STEP),
         "opacity_down" => adjust_opacity(app, -OPACITY_STEP),
         "zoom_in" => adjust_radius(app, 1.0 / RADIUS_STEP),
