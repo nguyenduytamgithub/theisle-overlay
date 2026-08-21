@@ -16,6 +16,7 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 - **Tab Khủng long**: khu cài đặt server + cookie tự thu gọn sau khi đăng nhập (nút ⚙ để mở lại — hết cảnh phải cuộn mới thấy chỉ số). App tự dò server có live map hay không: có thì mặc định bật "lấy vị trí tự động" (vẫn tắt được, và lựa chọn tay của bạn luôn được tôn trọng), không có thì tự tắt và khóa ô tích, kèm dòng trạng thái ngay dưới. (`990dae9`)
 - Lệnh `get_current_position`: mở lại cửa sổ hoặc F5 là vị trí + trail hiện ngay, không phải chờ lần copy tọa độ kế tiếp. (`ccdb70c`, `518992d`)
 - Ghi log lỗi giao diện toàn cục vào file log (`%LOCALAPPDATA%\TheIsleOverlay\logs`) và log mọi lần ẩn/hiện cửa sổ — báo lỗi thực địa giờ tự chỉ đích danh nguyên nhân. (`518992d`, `462c67a`)
+- Hướng dẫn kết nối tab Khủng long từng bước (Steam login / dán cookie, kèm ảnh minh họa) trong tab Hướng dẫn của app và cả hai README, cùng danh sách server IslePilot tham khảo. (`5e40555`)
 
 ### Sửa
 
@@ -26,6 +27,11 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 - Mở app từ icon khay từng hiện trang cũ do thiếu bước đồng bộ. (`462c67a`)
 - Chuyển tab nhanh làm rò rỉ listener sự kiện; F5 giờ giữ nguyên tab đang mở; lỗi Leaflet được cách ly khỏi thanh tab (có nút Thử lại). (`518992d`)
 - Sample tọa độ đầu tiên sau khi khởi động từng bị mất; minimap giờ luôn được giám sát kể cả khi webview khởi tạo lỗi (fallback 5 giây). (`ccdb70c`)
+- Cookie hợp lệ nhưng **chưa có dino trên server** từng bị từ chối oan là "cookie
+  không hợp lệ" (trang /me chỉ ghi "No dino" nên không có chỉ số để parse) — cả 3
+  đường dán cookie / đăng nhập Steam / cảnh báo hết-phiên của poller giờ xác thực
+  bằng dấu hiệu phiên đăng nhập thật của panel, không phụ thuộc chỉ số dino. Link
+  server thừa dấu `/` cuối cũng được chuẩn hóa. (`16c26a1`)
 - Sửa lỗi biên dịch CI: trùng module test, chữ ký `IsSuspended`. (`bf7e5e2`)
 
 ### Thay đổi
