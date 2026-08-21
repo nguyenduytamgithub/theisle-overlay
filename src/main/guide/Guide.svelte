@@ -5,6 +5,9 @@
   import { onMount } from "svelte";
   import { getSettings, listenerBag, onSettingsChanged, type Settings } from "$lib/api";
   import { locale, t } from "$lib/i18n";
+  import guideDino1 from "../../assets/guide-dino-1.jpg";
+  import guideDino2 from "../../assets/guide-dino-2.jpg";
+  import guideDino3 from "../../assets/guide-dino-3.jpg";
 
   let settings = $state<Settings | null>(null);
 
@@ -115,6 +118,9 @@
         <strong>islepilot_player</strong> → copy toàn bộ <strong>Value</strong> → dán vào ô
         trong app → <strong>Kiểm tra &amp; lưu cookie</strong>. Giữ bí mật chuỗi này như mật
         khẩu.
+        <img src={guideDino1} alt="Chuột phải → Inspect hoặc F12, chọn tab Application" loading="lazy" />
+        <img src={guideDino2} alt="Cookies → islepilot_player → copy toàn bộ Value" loading="lazy" />
+        <img src={guideDino3} alt="Nhập link server, dán cookie vào app và lưu" loading="lazy" />
       </li>
     </ol>
     <p>
@@ -218,6 +224,9 @@
         domain → click the <strong>islepilot_player</strong> cookie → copy the whole
         <strong>Value</strong> → paste it into the app →
         <strong>Verify &amp; save cookie</strong>. Treat this string like a password.
+        <img src={guideDino1} alt="Right-click → Inspect or F12, open the Application tab" loading="lazy" />
+        <img src={guideDino2} alt="Cookies → islepilot_player → copy the whole Value" loading="lazy" />
+        <img src={guideDino3} alt="Enter the server link, paste the cookie and save" loading="lazy" />
       </li>
     </ol>
     <p>
@@ -283,5 +292,12 @@
   }
   .guide :global(ul) {
     list-style: disc;
+  }
+  .guide :global(img) {
+    max-width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    margin: 0.5rem 0;
+    display: block;
   }
 </style>
