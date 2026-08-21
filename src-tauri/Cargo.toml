@@ -1,6 +1,6 @@
 [package]
 name = "theisle-overlay"
-version = "1.0.1"
+version = "1.1.0"
 description = "Map overlay for The Isle: Evrima (Gateway)"
 edition = "2021"
 default-run = "theisle-overlay"
