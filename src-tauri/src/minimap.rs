@@ -233,6 +233,7 @@ fn spawn_supervisor(app: AppHandle) {
             let effective = cur.user_visible && (!cur.require_game || game_present);
             if effective != effective_prev {
                 if effective {
+                    log::info!("minimap: show (game_present={game_present})");
                     crate::webview_mem::resume(&window);
                     if window.show().is_ok() {
                         effective_prev = true;
@@ -248,6 +249,7 @@ fn spawn_supervisor(app: AppHandle) {
                         last_rect = None; // re-anchor right away
                     }
                 } else if window.hide().is_ok() {
+                    log::info!("minimap: hide (user={}, game={game_present})", cur.user_visible);
                     effective_prev = false;
                     crate::webview_mem::suspend(&window);
                 }

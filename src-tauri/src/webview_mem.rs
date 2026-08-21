@@ -35,6 +35,23 @@ use crate::state::LockExt;
 /// window to stay hidden for this long first, and cancel on any resume.
 const SETTLE_MS: u64 = 1500;
 
+/// The main window is where the user clicks, and a suspend/resume race there
+/// was still seen in the field (input dead, IsSuspended false — invisible to
+/// the watchdog) even with the settle + resume follow-up. The race only
+/// exists around an in-flight TrySuspend, so give the main window a settle
+/// long enough that toggling during play never reaches TrySuspend at all;
+/// the quick memory-target drop below still reclaims cache in the meantime,
+/// and a window parked in the tray still gets fully suspended.
+const MAIN_SETTLE_MS: u64 = 30_000;
+
+fn settle_ms(label: &str) -> u64 {
+    if label == "main" {
+        MAIN_SETTLE_MS
+    } else {
+        SETTLE_MS
+    }
+}
+
 /// Per-window-label cancellation token: bumped by resume() and by every new
 /// suspend request, so only the latest pending suspension can fire.
 static SUSPEND_GEN: LazyLock<Mutex<HashMap<String, u64>>> =
@@ -57,9 +74,26 @@ fn current_gen(label: &str) -> u64 {
 pub fn suspend(window: &WebviewWindow) {
     let label = window.label().to_string();
     let generation = bump_gen(&label);
+    // Quick step: trim the memory target once the hide has settled. Safe to
+    // race a re-show — resume() always restores NORMAL.
+    {
+        let window = window.clone();
+        let label = label.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(SETTLE_MS));
+            if current_gen(&label) != generation {
+                return;
+            }
+            if crate::win::vis::is_visible(&label).unwrap_or(true) {
+                return;
+            }
+            reduce_memory(&window);
+        });
+    }
+    // Slow step: the actual TrySuspend, per-window settle (see MAIN_SETTLE_MS).
     let window = window.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(SETTLE_MS));
+        std::thread::sleep(Duration::from_millis(settle_ms(&label)));
         if current_gen(&label) != generation {
             return; // shown again (or re-hidden) meanwhile — stand down
         }
@@ -70,6 +104,21 @@ pub fn suspend(window: &WebviewWindow) {
         }
         suspend_now(&window);
     });
+}
+
+fn reduce_memory(window: &WebviewWindow) {
+    let result = window.with_webview(|webview| unsafe {
+        let controller = webview.controller();
+        let Ok(core) = controller.CoreWebView2() else {
+            return;
+        };
+        if let Ok(wv19) = core.cast::<ICoreWebView2_19>() {
+            let _ = wv19.SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW);
+        }
+    });
+    if let Err(e) = result {
+        log::warn!("memory target failed: {e}");
+    }
 }
 
 fn suspend_now(window: &WebviewWindow) {
@@ -143,6 +192,17 @@ pub fn spawn_watchdog(app: tauri::AppHandle) {
             let owned = label.to_string();
             let _ = window.with_webview(move |webview| unsafe {
                 let controller = webview.controller();
+                // Heal 1: window on screen but the CONTROLLER hidden — the
+                // webview paints nothing and eats no input while IsSuspended
+                // stays false, so only this check catches it.
+                let mut ctrl_visible = windows_core::BOOL::default();
+                if controller.IsVisible(&mut ctrl_visible).is_ok() && !ctrl_visible.as_bool() {
+                    log::warn!("webview '{owned}' visible but controller hidden — self-healing");
+                    bump_gen(&owned);
+                    let _ = controller.SetIsVisible(true);
+                    let _ = controller.NotifyParentWindowPositionChanged();
+                }
+                // Heal 2: a TrySuspend that landed after the final resume.
                 let Ok(core) = controller.CoreWebView2() else {
                     return;
                 };
@@ -161,6 +221,7 @@ pub fn spawn_watchdog(app: tauri::AppHandle) {
                 }
                 let _ = wv3.Resume();
                 let _ = controller.SetIsVisible(true);
+                let _ = controller.NotifyParentWindowPositionChanged();
             });
         }
     });
@@ -180,6 +241,10 @@ fn resume_now(window: &WebviewWindow) {
             let _ = wv19.SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL);
         }
         let _ = controller.SetIsVisible(true);
+        // After visibility/suspend cycling, WebView2 can leave the render
+        // widget painting fine but accepting no clicks; this nudge re-syncs
+        // its input routing (the documented cure for stale-input states).
+        let _ = controller.NotifyParentWindowPositionChanged();
     });
     if let Err(e) = result {
         log::warn!("resume webview failed: {e}");

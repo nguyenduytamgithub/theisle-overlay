@@ -60,6 +60,7 @@ pub fn run(replay_file: Option<PathBuf>) {
                 if window.label() == "main" && !tray::is_quitting() =>
             {
                 api.prevent_close();
+                log::info!("main window: hide (X to tray)");
                 let _ = window.hide();
                 if let Some(webview) = window.app_handle().get_webview_window("main") {
                     webview_mem::suspend(&webview);

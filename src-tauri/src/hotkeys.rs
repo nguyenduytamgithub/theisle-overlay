@@ -262,6 +262,7 @@ fn dispatch(app: &AppHandle, action: &str) {
                 let on_screen = crate::win::vis::is_visible("main").unwrap_or(false)
                     && !crate::win::vis::is_minimized("main").unwrap_or(false);
                 if on_screen {
+                    log::info!("main window: hide (hotkey)");
                     let _ = window.hide();
                     // Freeze the hidden webview so its renderer memory is
                     // actually released while playing.

@@ -78,14 +78,20 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 /// resync the events it missed — a bare show() would present a stale page.
 pub fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        log::info!("main window: show");
         crate::webview_mem::resume(&window);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        // show() is posted to the event loop; wait for it to land or the
-        // resync's visibility gate skips the very window it is for.
-        vis::wait_visible("main", 200);
-        crate::pipeline::resync(app);
+        // Wait-then-resync on a fresh thread: show() is posted to the event
+        // loop, and this function ALSO runs on that loop (tray click,
+        // single-instance) — waiting inline there would stall the loop and
+        // the visibility-gated resync would skip the very window it is for.
+        let app = app.clone();
+        std::thread::spawn(move || {
+            vis::wait_visible("main", 400);
+            crate::pipeline::resync(&app);
+        });
     }
 }
 
