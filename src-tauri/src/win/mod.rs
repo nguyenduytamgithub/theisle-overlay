@@ -2,11 +2,12 @@
 //!
 //! EVERY FUNCTION IN THIS MODULE IS ON THE ALLOWED LIST:
 //!   - Read-only: EnumWindows, GetWindowRect, GetClientRect, ClientToScreen,
-//!     GetWindowThreadProcessId, the Toolhelp32 process snapshot, and
-//!     GetClipboardSequenceNumber / clipboard READS (in clipboard.rs).
+//!     GetWindowThreadProcessId, IsWindowVisible, IsIconic, the Toolhelp32
+//!     process snapshot, and GetClipboardSequenceNumber / clipboard READS
+//!     (in clipboard.rs).
 //!   - Writes: ONLY to this app's own windows (SetWindowLongPtr, SetWindowPos).
-//!   - RegisterHotKey (in hotkeys.rs) — a documented, cooperative OS API, not
-//!     a keyboard hook.
+//!   - RegisterHotKey and PeekMessageW on our own hotkey thread (in
+//!     hotkeys.rs) — documented, cooperative OS APIs, not keyboard hooks.
 //!
 //! The game runs kernel-level Easy Anti-Cheat. This app is safe only because
 //! it never touches the game process. ABSOLUTELY NEVER add: OpenProcess /
@@ -17,3 +18,4 @@
 
 pub mod game_window;
 pub mod overlay;
+pub mod vis;

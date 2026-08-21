@@ -12,20 +12,22 @@
 //! A dedicated thread holds the GetMessageW loop and idles at 0% CPU.
 
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
+use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
     MOD_SHIFT, MOD_WIN,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetMessageW, PostThreadMessageW, MSG, WM_HOTKEY, WM_QUIT,
+    GetMessageW, PeekMessageW, PostThreadMessageW, MSG, PM_NOREMOVE, WM_HOTKEY, WM_QUIT, WM_USER,
 };
 
 use crate::commands::apply_settings_patch;
 use crate::settings;
-use crate::state::AppState;
+use crate::state::{AppState, LockExt};
 use crate::store;
 
 const OPACITY_MIN: f64 = 0.25;
@@ -94,7 +96,15 @@ pub struct FailedHotkey {
 
 /// Restartable so the Settings screen can rebind live.
 pub struct HotkeyManager {
-    thread_id: Mutex<Option<u32>>,
+    thread: Mutex<Option<HotkeyThread>>,
+}
+
+/// The join handle matters as much as the id: `stop()` must WAIT for the old
+/// thread to unregister its keys, or the next `restart()` races it and every
+/// RegisterHotKey fails with "already registered".
+struct HotkeyThread {
+    thread_id: u32,
+    handle: std::thread::JoinHandle<()>,
 }
 
 impl Default for HotkeyManager {
@@ -106,7 +116,7 @@ impl Default for HotkeyManager {
 impl HotkeyManager {
     pub fn new() -> Self {
         Self {
-            thread_id: Mutex::new(None),
+            thread: Mutex::new(None),
         }
     }
 
@@ -117,7 +127,7 @@ impl HotkeyManager {
         self.stop();
         let bindings: Vec<(String, String)> = {
             let state = app.state::<AppState>();
-            let s = state.settings.lock().unwrap();
+            let s = state.settings.lock_safe();
             s.get("hotkeys")
                 .and_then(|h| h.as_object())
                 .map(|h| {
@@ -130,7 +140,15 @@ impl HotkeyManager {
 
         let (ready_tx, ready_rx) = std::sync::mpsc::channel::<u32>();
         let thread_app = app.clone();
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
+            // Force-create this thread's message queue BEFORE announcing the
+            // thread id: a WM_QUIT posted to a queueless thread is silently
+            // LOST, which used to orphan the thread together with every
+            // hotkey it had registered — hotkeys dead until the process died.
+            let mut msg = MSG::default();
+            unsafe {
+                let _ = PeekMessageW(&mut msg, None, WM_USER, WM_USER, PM_NOREMOVE);
+            }
             let thread_id = unsafe { GetCurrentThreadId() };
             let _ = ready_tx.send(thread_id);
 
@@ -140,7 +158,14 @@ impl HotkeyManager {
                 let id = index as i32 + 1;
                 match parse_hotkey(spec) {
                     Some((mods, vk)) => unsafe {
-                        if RegisterHotKey(None, id, HOT_KEY_MODIFIERS(mods), vk).is_ok() {
+                        // One retry: right after a rebind the OS may not have
+                        // finished releasing the previous registration.
+                        let mut ok = RegisterHotKey(None, id, HOT_KEY_MODIFIERS(mods), vk).is_ok();
+                        if !ok {
+                            std::thread::sleep(Duration::from_millis(100));
+                            ok = RegisterHotKey(None, id, HOT_KEY_MODIFIERS(mods), vk).is_ok();
+                        }
+                        if ok {
                             registered.push((id, action.clone()));
                         } else {
                             // Usually another app holds this combination.
@@ -160,7 +185,18 @@ impl HotkeyManager {
                 let _ = thread_app.emit("hotkey://failed", failed);
             }
 
-            let mut msg = MSG::default();
+            // Actions run on a worker thread: dispatch can block (tauri
+            // window calls), and a blocked pump would stop processing
+            // WM_HOTKEY *and* WM_QUIT — the "every hotkey dead" state. The
+            // worker exits when the pump drops the sender.
+            let (work_tx, work_rx) = std::sync::mpsc::channel::<String>();
+            let worker_app = thread_app.clone();
+            std::thread::spawn(move || {
+                while let Ok(action) = work_rx.recv() {
+                    dispatch(&worker_app, &action);
+                }
+            });
+
             unsafe {
                 while GetMessageW(&mut msg, None, 0, 0).as_bool() {
                     if msg.message == WM_HOTKEY {
@@ -168,7 +204,7 @@ impl HotkeyManager {
                         if let Some((_, action)) =
                             registered.iter().find(|(rid, _)| *rid == id)
                         {
-                            dispatch(&thread_app, action);
+                            let _ = work_tx.send(action.clone());
                         }
                     }
                 }
@@ -178,21 +214,33 @@ impl HotkeyManager {
             }
         });
 
-        if let Ok(thread_id) = ready_rx.recv_timeout(std::time::Duration::from_secs(2)) {
-            *self.thread_id.lock().unwrap() = Some(thread_id);
+        match ready_rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(thread_id) => {
+                *self.thread.lock_safe() = Some(HotkeyThread { thread_id, handle });
+            }
+            // Queue-then-send ordering makes this practically unreachable; a
+            // thread we cannot signal must not be tracked as the live one.
+            Err(_) => log::error!("hotkey thread did not report ready"),
         }
     }
 
     pub fn stop(&self) {
-        if let Some(thread_id) = self.thread_id.lock().unwrap().take() {
-            unsafe {
-                let _ = PostThreadMessageW(
-                    thread_id,
-                    WM_QUIT,
-                    windows::Win32::Foundation::WPARAM(0),
-                    windows::Win32::Foundation::LPARAM(0),
-                );
-            }
+        let Some(t) = self.thread.lock_safe().take() else {
+            return;
+        };
+        unsafe {
+            let _ = PostThreadMessageW(t.thread_id, WM_QUIT, WPARAM(0), LPARAM(0));
+        }
+        // Wait for the old thread to unregister its keys — registering the
+        // new bindings while it still holds them fails every one of them.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !t.handle.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if t.handle.is_finished() {
+            let _ = t.handle.join();
+        } else {
+            log::error!("hotkey thread did not exit within 2s; its keys may stay held");
         }
     }
 }
@@ -207,23 +255,19 @@ fn dispatch(app: &AppHandle, action: &str) {
         "toggle_click_through" => toggle_setting(app, "click_through"),
         "toggle_fullmap" => match app.get_webview_window("main") {
             Some(window) => {
-                // A minimized window reports is_visible() == true, but the
-                // user cannot see it — for them the hotkey means "bring it
-                // up", so only a window actually on screen gets hidden.
-                let on_screen = window.is_visible().unwrap_or(false)
-                    && !window.is_minimized().unwrap_or(false);
+                // A minimized window reports visible == true, but the user
+                // cannot see it — for them the hotkey means "bring it up",
+                // so only a window actually on screen gets hidden. Registry
+                // reads, never the blocking tauri getters, on this thread.
+                let on_screen = crate::win::vis::is_visible("main").unwrap_or(false)
+                    && !crate::win::vis::is_minimized("main").unwrap_or(false);
                 if on_screen {
                     let _ = window.hide();
                     // Freeze the hidden webview so its renderer memory is
                     // actually released while playing.
                     crate::webview_mem::suspend(&window);
                 } else {
-                    crate::webview_mem::resume(&window);
-                    let _ = window.unminimize();
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    // It missed every event while hidden/suspended.
-                    crate::pipeline::resync(app);
+                    crate::tray::show_main(app);
                 }
             }
             None => {
@@ -233,6 +277,9 @@ fn dispatch(app: &AppHandle, action: &str) {
                     match tauri::WebviewWindowBuilder::from_config(app, &config) {
                         Ok(builder) => match builder.build() {
                             Ok(window) => {
+                                if let Ok(hwnd) = window.hwnd() {
+                                    crate::win::vis::register("main", hwnd.0 as isize);
+                                }
                                 let _ = window.set_focus();
                             }
                             Err(e) => log::warn!("recreating main window failed: {e}"),
@@ -254,7 +301,7 @@ fn dispatch(app: &AppHandle, action: &str) {
 fn toggle_setting(app: &AppHandle, key: &str) {
     let current = {
         let state = app.state::<AppState>();
-        let s = state.settings.lock().unwrap();
+        let s = state.settings.lock_safe();
         settings::get_bool(&s, &["minimap", key], true)
     };
     apply_settings_patch(app, serde_json::json!({ "minimap": { key: !current } }));
@@ -263,7 +310,7 @@ fn toggle_setting(app: &AppHandle, key: &str) {
 fn adjust_opacity(app: &AppHandle, delta: f64) {
     let current = {
         let state = app.state::<AppState>();
-        let s = state.settings.lock().unwrap();
+        let s = state.settings.lock_safe();
         settings::get_f64(&s, &["minimap", "opacity"], 0.85)
     };
     let next = ((current + delta).clamp(OPACITY_MIN, OPACITY_MAX) * 100.0).round() / 100.0;
@@ -273,7 +320,7 @@ fn adjust_opacity(app: &AppHandle, delta: f64) {
 fn adjust_radius(app: &AppHandle, factor: f64) {
     let current = {
         let state = app.state::<AppState>();
-        let s = state.settings.lock().unwrap();
+        let s = state.settings.lock_safe();
         settings::get_f64(&s, &["minimap", "radius_m"], 600.0)
     };
     let next = (current * factor).clamp(RADIUS_MIN_M, RADIUS_MAX_M).round();
@@ -285,12 +332,12 @@ fn adjust_radius(app: &AppHandle, factor: f64) {
 fn mark_here(app: &AppHandle) {
     let state = app.state::<AppState>();
     let current = {
-        let tracker = state.tracker.lock().unwrap();
+        let tracker = state.tracker.lock_safe();
         tracker.current
     };
     let Some(current) = current else { return };
     let name = {
-        let s = state.settings.lock().unwrap();
+        let s = state.settings.lock_safe();
         match settings::get_str(&s, &["language"], "vi") {
             "en" => "My position",
             _ => "Vị trí của tôi",
@@ -298,7 +345,7 @@ fn mark_here(app: &AppHandle) {
     };
     let wp = store::new_waypoint(name, current.x, current.y, current.z, None);
     {
-        let mut waypoints = state.waypoints.lock().unwrap();
+        let mut waypoints = state.waypoints.lock_safe();
         waypoints.push(wp);
         if let Err(e) = store::save_waypoints(&waypoints) {
             log::warn!("saving waypoints failed: {e}");

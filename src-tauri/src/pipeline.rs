@@ -8,7 +8,7 @@ use crate::events::{
     emit_to_visible, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED,
     TRAIL_CHANGED,
 };
-use crate::state::AppState;
+use crate::state::{AppState, LockExt};
 
 /// Feed one accepted coordinate sample through the tracker and notify the UI.
 pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
@@ -17,7 +17,7 @@ pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
     let cal = Calibration::gateway();
 
     let (outcome, heading, trail) = {
-        let mut tracker = state.tracker.lock().unwrap();
+        let mut tracker = state.tracker.lock_safe();
         let outcome = tracker.add_sample(x, y, z, now_s);
         let heading = tracker.heading(now_s);
         let trail = outcome
@@ -29,7 +29,7 @@ pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
     // Persist AFTER releasing no locks out of order: trail writes follow the
     // same order the original used — break record first, then the sample.
     if !outcome.refreshed_only {
-        if let Some(writer) = state.trail_writer.lock().unwrap().as_mut() {
+        if let Some(writer) = state.trail_writer.lock_safe().as_mut() {
             if outcome.broke_segment {
                 writer.add_break();
             }
@@ -54,41 +54,47 @@ pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
     }
 }
 
+/// The current tracker state as a PositionUpdate, or None before the first
+/// sample. Shared by `resync` and the `get_current_position` command so a
+/// freshly (re)loaded webview paints at once instead of waiting for the
+/// player's next manual coordinate copy.
+pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
+    let now_s = state.now_s();
+    let cal = Calibration::gateway();
+    let (current, heading) = {
+        let tracker = state.tracker.lock_safe();
+        (tracker.current, tracker.heading(now_s))
+    };
+    let cur = current?;
+    let (px, py) = world_to_pixel(cur.x, cur.y, cal);
+    Some(PositionUpdate {
+        x_cm: cur.x,
+        y_cm: cur.y,
+        z_cm: cur.z,
+        px,
+        py,
+        heading_deg: heading,
+        compass_key: heading.map(bearing_to_compass_key),
+        in_bounds: overlay_core::is_in_bounds(px, py, cal),
+    })
+}
+
 /// Bring a window that was hidden (and therefore skipped by
 /// `emit_to_visible`) back up to date. Called right after showing it.
 pub fn resync(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let now_s = state.now_s();
     let cal = Calibration::gateway();
 
-    let (current, heading, trail) = {
-        let tracker = state.tracker.lock().unwrap();
-        (
-            tracker.current,
-            tracker.heading(now_s),
-            trail_payload(&tracker.segments, cal),
-        )
+    let trail = {
+        let tracker = state.tracker.lock_safe();
+        trail_payload(&tracker.segments, cal)
     };
-    if let Some(cur) = current {
-        let (px, py) = world_to_pixel(cur.x, cur.y, cal);
-        emit_to_visible(
-            app,
-            POSITION_UPDATE,
-            PositionUpdate {
-                x_cm: cur.x,
-                y_cm: cur.y,
-                z_cm: cur.z,
-                px,
-                py,
-                heading_deg: heading,
-                compass_key: heading.map(bearing_to_compass_key),
-                in_bounds: overlay_core::is_in_bounds(px, py, cal),
-            },
-        );
+    if let Some(payload) = current_payload(&state) {
+        emit_to_visible(app, POSITION_UPDATE, payload);
     }
     emit_to_visible(app, TRAIL_CHANGED, trail);
     {
-        let settings = state.settings.lock().unwrap().clone();
+        let settings = state.settings.lock_safe().clone();
         emit_to_visible(app, SETTINGS_CHANGED, settings);
     }
     emit_to_visible(app, "waypoints://changed", ());

@@ -14,7 +14,7 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     TH32CS_SNAPPROCESS,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClientRect, GetWindow, GetWindowRect, GetWindowThreadProcessId,
+    EnumWindows, GetClientRect, GetWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic,
     IsWindowVisible, GW_OWNER,
 };
 use windows::core::BOOL;
@@ -100,6 +100,12 @@ pub fn find_game_window(image_name: &str) -> Option<isize> {
         let _ = EnumWindows(Some(enum_cb), LPARAM(&mut ctx as *mut EnumCtx as isize));
     }
     ctx.found.iter().max().map(|&(_, hwnd)| hwnd)
+}
+
+/// Whether the window is minimized — read-only, no handle into the process.
+/// A minimized game must not leave the overlay floating over the desktop.
+pub fn is_iconic(hwnd: isize) -> bool {
+    unsafe { IsIconic(HWND(hwnd as *mut std::ffi::c_void)).as_bool() }
 }
 
 /// (x, y, width, height) of the game's drawing area in PHYSICAL screen

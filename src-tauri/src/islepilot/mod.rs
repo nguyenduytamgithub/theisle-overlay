@@ -25,7 +25,7 @@ use overlay_core::{pixel_to_world, Calibration};
 
 use crate::pipeline;
 use crate::settings;
-use crate::state::AppState;
+use crate::state::{AppState, LockExt};
 
 use parser::{MapPosition, PlayerStats};
 
@@ -115,7 +115,7 @@ struct PollConfig {
 
 fn read_config(app: &AppHandle) -> PollConfig {
     let state = app.state::<AppState>();
-    let s = state.settings.lock().unwrap();
+    let s = state.settings.lock_safe();
     PollConfig {
         enabled: settings::get_bool(&s, &["islepilot", "enabled"], false),
         domain: settings::get_str(&s, &["islepilot", "domain"], "").to_string(),
@@ -129,12 +129,12 @@ pub fn current_state(app: &AppHandle) -> IslepilotState {
     let config = read_config(app);
     IslepilotState {
         logged_in: !config.domain.is_empty() && cookies::get(&config.domain).is_some(),
-        last_update: LAST_UPDATE.lock().unwrap().clone(),
+        last_update: LAST_UPDATE.lock_safe().clone(),
     }
 }
 
 fn publish(app: &AppHandle, update: DinoUpdate) {
-    *LAST_UPDATE.lock().unwrap() = Some(update.clone());
+    *LAST_UPDATE.lock_safe() = Some(update.clone());
     // Visible windows only — this fires every poll interval, and waking a
     // suspended hidden window each time would defeat webview_mem::suspend.
     crate::events::emit_to_visible(app, DINO_UPDATE, update);
@@ -143,7 +143,7 @@ fn publish(app: &AppHandle, update: DinoUpdate) {
 /// Re-send the latest update to (visible) windows — part of resync when a
 /// hidden window is shown again.
 pub fn emit_last(app: &AppHandle) {
-    if let Some(update) = LAST_UPDATE.lock().unwrap().clone() {
+    if let Some(update) = LAST_UPDATE.lock_safe().clone() {
         crate::events::emit_to_visible(app, DINO_UPDATE, update);
     }
 }
@@ -176,10 +176,25 @@ pub fn restart_poller(app: &AppHandle) {
     };
     let app = app.clone();
     std::thread::spawn(move || {
-        let Ok(client) = http_client() else { return };
+        // A failed client build must not silently kill the poller for the
+        // whole session — retry until superseded.
+        let client = loop {
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            match http_client() {
+                Ok(c) => break c,
+                Err(e) => {
+                    log::warn!("islepilot http client: {e}");
+                    std::thread::sleep(Duration::from_secs(5));
+                }
+            }
+        };
         let initial_build = build_id(&client, &config.domain);
         let mut layout_changed = false;
         let mut last_build_check = std::time::Instant::now();
+        let mut failures: u32 = 0;
+        let mut auth_warned = false;
 
         loop {
             if GENERATION.load(Ordering::SeqCst) != generation {
@@ -203,38 +218,49 @@ pub fn restart_poller(app: &AppHandle) {
                 Ok(html) => {
                     let player = parser::parse_me(&html);
                     if !player.looks_logged_in() {
-                        // Session expired: stop and tell the UI.
-                        let _ = app.emit(DINO_AUTH_EXPIRED, config.domain.clone());
-                        return;
-                    }
-                    let map = if config.use_map_position {
-                        match get_page(&client, &config.domain, "/map", &cookie) {
-                            Ok(map_html) => {
-                                let map = parser::parse_map(&map_html);
-                                ingest_map_position(&app, &map);
-                                Some(map)
-                            }
-                            Err(e) => {
-                                log::warn!("islepilot /map fetch failed: {e}");
-                                None
-                            }
+                        // A logged-out page and a site-markup change look
+                        // identical here (every stat parses to None), and
+                        // killing the thread over it forced an app restart.
+                        // Warn once, keep polling at the backed-off rate — a
+                        // later successful parse or re-login self-heals.
+                        if !auth_warned {
+                            auth_warned = true;
+                            let _ = app.emit(DINO_AUTH_EXPIRED, config.domain.clone());
                         }
+                        failures = failures.saturating_add(1);
                     } else {
-                        None
-                    };
-                    publish(
-                        &app,
-                        DinoUpdate {
-                            domain: config.domain.clone(),
-                            fetched_at_ms: now_ms(),
-                            player: Some(player),
-                            map,
-                            layout_changed,
-                            error: None,
-                        },
-                    );
+                        auth_warned = false;
+                        failures = 0;
+                        let map = if config.use_map_position {
+                            match get_page(&client, &config.domain, "/map", &cookie) {
+                                Ok(map_html) => {
+                                    let map = parser::parse_map(&map_html);
+                                    ingest_map_position(&app, &map);
+                                    Some(map)
+                                }
+                                Err(e) => {
+                                    log::warn!("islepilot /map fetch failed: {e}");
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        publish(
+                            &app,
+                            DinoUpdate {
+                                domain: config.domain.clone(),
+                                fetched_at_ms: now_ms(),
+                                player: Some(player),
+                                map,
+                                layout_changed,
+                                error: None,
+                            },
+                        );
+                    }
                 }
                 Err(e) => {
+                    failures = failures.saturating_add(1);
                     // Network hiccup: report but keep polling.
                     publish(
                         &app,
@@ -251,7 +277,7 @@ pub fn restart_poller(app: &AppHandle) {
             }
 
             // Sleep in short slices so a generation bump stops us promptly.
-            let mut remaining = config.interval_s.max(MIN_INTERVAL_S);
+            let mut remaining = backoff_s(config.interval_s.max(MIN_INTERVAL_S), failures);
             while remaining > 0.0 {
                 if GENERATION.load(Ordering::SeqCst) != generation {
                     return;
@@ -263,9 +289,15 @@ pub fn restart_poller(app: &AppHandle) {
     });
 }
 
+/// Exponential backoff for consecutive poll failures, capped at 5 minutes:
+/// a long outage costs one request per 5 min and recovery stays automatic.
+pub(crate) fn backoff_s(base: f64, failures: u32) -> f64 {
+    (base * 2f64.powi(failures.min(6) as i32)).min(300.0)
+}
+
 pub fn stop_poller() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
-    *LAST_UPDATE.lock().unwrap() = None;
+    *LAST_UPDATE.lock_safe() = None;
 }
 
 /// Open the panel in a login window; once the user finishes Steam sign-in
@@ -478,4 +510,18 @@ pub fn logout(app: &AppHandle) -> Result<(), String> {
         serde_json::json!({ "islepilot": { "enabled": false } }),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::backoff_s;
+
+    #[test]
+    fn backoff_doubles_and_caps() {
+        assert_eq!(backoff_s(10.0, 0), 10.0, "no failures = normal interval");
+        assert_eq!(backoff_s(10.0, 1), 20.0);
+        assert_eq!(backoff_s(10.0, 2), 40.0);
+        assert_eq!(backoff_s(10.0, 5), 300.0, "capped at 5 minutes");
+        assert_eq!(backoff_s(10.0, 60), 300.0, "cap sticks, no overflow");
+    }
 }

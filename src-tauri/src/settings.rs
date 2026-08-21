@@ -92,6 +92,7 @@ pub fn default_settings() -> Value {
     json!({
         "minimap": {
             "visible": true,
+            "require_game": true,        // auto-hide while the game is not running
             "corner": "top-left",        // top-left | top-right | bottom-left | bottom-right
             "size_px": 260,
             "margin_px": 16,
@@ -277,6 +278,7 @@ mod tests {
         assert_eq!(merged["minimap"]["corner"], "bottom-right");
         assert_eq!(merged["minimap"]["opacity"], 0.5);
         assert_eq!(merged["minimap"]["size_px"], 260, "defaults still present");
+        assert_eq!(merged["minimap"]["require_game"], true, "new key gets its default");
         assert_eq!(merged["hotkeys"]["toggle_minimap"], "Ctrl+Shift+M");
         assert_eq!(merged["hotkeys"]["toggle_fullmap"], "Ctrl+Alt+F");
         assert_eq!(merged["layers"]["food"], true);

@@ -8,15 +8,15 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 
-use crate::events::{TrailPayload, SETTINGS_CHANGED};
+use crate::events::{PositionUpdate, TrailPayload, SETTINGS_CHANGED};
 use crate::pipeline;
 use crate::settings;
-use crate::state::AppState;
+use crate::state::{AppState, LockExt};
 use crate::store::{self, Waypoint};
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Value {
-    state.settings.lock().unwrap().clone()
+    state.settings.lock_safe().clone()
 }
 
 /// Deep-merge a partial patch into the settings, persist (debounced), and
@@ -24,12 +24,16 @@ pub fn get_settings(state: State<AppState>) -> Value {
 /// and the hotkey actions so both paths behave identically.
 pub fn apply_settings_patch(app: &AppHandle, patch: Value) -> Value {
     let state = app.state::<AppState>();
-    let merged = {
-        let mut s = state.settings.lock().unwrap();
+    let (old_language, merged) = {
+        let mut s = state.settings.lock_safe();
+        let old_language = settings::get_str(&s, &["language"], "vi").to_string();
         *s = settings::merge(&s, &patch);
-        s.clone()
+        (old_language, s.clone())
     };
     state.request_settings_save();
+    if settings::get_str(&merged, &["language"], "vi") != old_language {
+        crate::tray::rebuild_menu(app);
+    }
     // Visible windows only — a broadcast would wake suspended hidden webviews
     // (see webview_mem.rs); resync covers them when they reappear.
     crate::events::emit_to_visible(app, SETTINGS_CHANGED, merged.clone());
@@ -39,6 +43,13 @@ pub fn apply_settings_patch(app: &AppHandle, patch: Value) -> Value {
 #[tauri::command]
 pub fn patch_settings(app: AppHandle, patch: Value) -> Value {
     apply_settings_patch(&app, patch)
+}
+
+/// The last known position, so a (re)loaded webview paints immediately —
+/// position otherwise only arrives as an event on the NEXT manual copy.
+#[tauri::command]
+pub fn get_current_position(state: State<AppState>) -> Option<PositionUpdate> {
+    pipeline::current_payload(&state)
 }
 
 /// Settings-screen probe: is this key combination valid AND currently free?
@@ -70,7 +81,7 @@ pub fn apply_hotkeys(app: AppHandle, state: State<AppState>) {
 
 #[tauri::command]
 pub fn list_waypoints(state: State<AppState>) -> Vec<Waypoint> {
-    state.waypoints.lock().unwrap().clone()
+    state.waypoints.lock_safe().clone()
 }
 
 #[derive(Serialize)]
@@ -113,7 +124,7 @@ fn persist_waypoints(waypoints: &[Waypoint]) {
 pub fn add_waypoint_at_pixel(state: State<AppState>, px: f64, py: f64, name: String) -> Waypoint {
     let (x, y) = pixel_to_world(px, py, Calibration::gateway());
     let wp = store::new_waypoint(&name, x, y, 0.0, None);
-    let mut waypoints = state.waypoints.lock().unwrap();
+    let mut waypoints = state.waypoints.lock_safe();
     waypoints.push(wp.clone());
     persist_waypoints(&waypoints);
     wp
@@ -122,9 +133,9 @@ pub fn add_waypoint_at_pixel(state: State<AppState>, px: f64, py: f64, name: Str
 /// The "mark here" hotkey action: drop a waypoint at the current position.
 #[tauri::command]
 pub fn add_waypoint_here(state: State<AppState>, name: String) -> Option<Waypoint> {
-    let current = state.tracker.lock().unwrap().current?;
+    let current = state.tracker.lock_safe().current?;
     let wp = store::new_waypoint(&name, current.x, current.y, current.z, None);
-    let mut waypoints = state.waypoints.lock().unwrap();
+    let mut waypoints = state.waypoints.lock_safe();
     waypoints.push(wp.clone());
     persist_waypoints(&waypoints);
     Some(wp)
@@ -132,7 +143,7 @@ pub fn add_waypoint_here(state: State<AppState>, name: String) -> Option<Waypoin
 
 #[tauri::command]
 pub fn rename_waypoint(state: State<AppState>, id: String, name: String) -> bool {
-    let mut waypoints = state.waypoints.lock().unwrap();
+    let mut waypoints = state.waypoints.lock_safe();
     let Some(wp) = waypoints.iter_mut().find(|w| w.id == id) else {
         return false;
     };
@@ -143,7 +154,7 @@ pub fn rename_waypoint(state: State<AppState>, id: String, name: String) -> bool
 
 #[tauri::command]
 pub fn delete_waypoint(state: State<AppState>, id: String) -> bool {
-    let mut waypoints = state.waypoints.lock().unwrap();
+    let mut waypoints = state.waypoints.lock_safe();
     let before = waypoints.len();
     waypoints.retain(|w| w.id != id);
     let removed = waypoints.len() != before;
@@ -168,7 +179,7 @@ pub fn get_previous_trail(state: State<AppState>) -> TrailPayload {
 /// The current session's trail so far — for a window opening mid-session.
 #[tauri::command]
 pub fn get_current_trail(state: State<AppState>) -> TrailPayload {
-    let tracker = state.tracker.lock().unwrap();
+    let tracker = state.tracker.lock_safe();
     pipeline::trail_payload(&tracker.segments, Calibration::gateway())
 }
 
@@ -356,8 +367,8 @@ pub struct NearestWaypoint {
 /// stays in Rust like every other transform.
 #[tauri::command]
 pub fn nearest_waypoint(state: State<AppState>) -> Option<NearestWaypoint> {
-    let tracker = state.tracker.lock().unwrap();
-    let waypoints = state.waypoints.lock().unwrap();
+    let tracker = state.tracker.lock_safe();
+    let waypoints = state.waypoints.lock_safe();
     let mut best: Option<NearestWaypoint> = None;
     for wp in waypoints.iter() {
         let Some((bearing, dist)) = tracker.bearing_to(wp.x, wp.y) else {

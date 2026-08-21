@@ -26,6 +26,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 // windows 0.61, so `cast` comes from that version's Interface trait.
 use windows_core::Interface;
 
+use crate::state::LockExt;
+
 /// TrySuspend is ASYNC: rapid hide→show toggling can land the suspension
 /// AFTER the resume, leaving a VISIBLE but frozen webview — the window shows
 /// its last frame while every click is dead (observed in the field with fast
@@ -39,14 +41,14 @@ static SUSPEND_GEN: LazyLock<Mutex<HashMap<String, u64>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn bump_gen(label: &str) -> u64 {
-    let mut map = SUSPEND_GEN.lock().unwrap();
+    let mut map = SUSPEND_GEN.lock_safe();
     let entry = map.entry(label.to_string()).or_insert(0);
     *entry += 1;
     *entry
 }
 
 fn current_gen(label: &str) -> u64 {
-    *SUSPEND_GEN.lock().unwrap().get(label).unwrap_or(&0)
+    *SUSPEND_GEN.lock_safe().get(label).unwrap_or(&0)
 }
 
 /// Freeze a hidden window's webview once it has stayed hidden for SETTLE_MS.
@@ -61,7 +63,9 @@ pub fn suspend(window: &WebviewWindow) {
         if current_gen(&label) != generation {
             return; // shown again (or re-hidden) meanwhile — stand down
         }
-        if window.is_visible().unwrap_or(true) {
+        // Registry read, not the tauri getter: this sleep-thread must never
+        // block on the main event loop. Unknown label -> treat as visible.
+        if crate::win::vis::is_visible(&label).unwrap_or(true) {
             return; // safety: never suspend something the user can see
         }
         suspend_now(&window);
@@ -110,8 +114,53 @@ pub fn resume(window: &WebviewWindow) {
     let window = window.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(600));
-        if current_gen(&label) == generation && window.is_visible().unwrap_or(false) {
+        if current_gen(&label) == generation
+            && crate::win::vis::is_visible(&label).unwrap_or(false)
+        {
             resume_now(&window);
+        }
+    });
+}
+
+/// Last line of defence against the residual TrySuspend race: a suspension
+/// that lands AFTER the final resume leaves a visible window frozen (last
+/// frame painted, every click dead) with nothing to wake it. Poll the real
+/// suspension state of VISIBLE windows and undo it. Hidden windows are never
+/// touched, so the memory savings stay intact. Reading IsSuspended is the
+/// documented state check and does not itself resume — and even if it did,
+/// resuming a visible window is exactly the intent.
+pub fn spawn_watchdog(app: tauri::AppHandle) {
+    use tauri::Manager;
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(500));
+        for label in ["main", "minimap"] {
+            if crate::win::vis::is_visible(label) != Some(true) {
+                continue;
+            }
+            let Some(window) = app.get_webview_window(label) else {
+                continue;
+            };
+            let owned = label.to_string();
+            let _ = window.with_webview(move |webview| unsafe {
+                let controller = webview.controller();
+                let Ok(core) = controller.CoreWebView2() else {
+                    return;
+                };
+                let Ok(wv3) = core.cast::<ICoreWebView2_3>() else {
+                    return;
+                };
+                if !wv3.IsSuspended().map(|b| b.as_bool()).unwrap_or(false) {
+                    return;
+                }
+                log::warn!("webview '{owned}' visible but suspended — self-healing");
+                bump_gen(&owned); // cancel any pending suspend for this label
+                if let Ok(wv19) = core.cast::<ICoreWebView2_19>() {
+                    let _ = wv19
+                        .SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL);
+                }
+                let _ = wv3.Resume();
+                let _ = controller.SetIsVisible(true);
+            });
         }
     });
 }

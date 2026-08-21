@@ -12,6 +12,21 @@ use crate::hotkeys::HotkeyManager;
 use crate::settings;
 use crate::store::{self, TrailWriter, Waypoint};
 
+/// Poison-tolerant lock. Every mutex in this app guards a plain value with no
+/// cross-field invariant held across a panic point, so recovering the inner
+/// value after a poisoning panic risks at worst one lost sample — while a
+/// propagated poison would brick the clipboard poller, the supervisor, and
+/// the hotkey thread all at once.
+pub trait LockExt<T> {
+    fn lock_safe(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T> LockExt<T> for std::sync::Mutex<T> {
+    fn lock_safe(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
 pub struct AppState {
     pub hotkeys: HotkeyManager,
     pub settings: Mutex<Value>,
@@ -67,7 +82,7 @@ impl AppState {
     /// exit — an overlay running beside a game is more likely to be
     /// force-killed than closed cleanly).
     pub fn request_settings_save(&self) {
-        let snapshot = self.settings.lock().unwrap().clone();
+        let snapshot = self.settings.lock_safe().clone();
         self.save_debouncer.request(snapshot);
     }
 }

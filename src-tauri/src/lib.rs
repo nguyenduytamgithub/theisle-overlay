@@ -16,6 +16,7 @@ pub mod replay;
 pub mod settings;
 pub mod state;
 pub mod store;
+pub mod tray;
 pub mod webview_mem;
 pub mod win;
 
@@ -31,10 +32,9 @@ pub fn run(replay_file: Option<PathBuf>) {
         // second instance would silently lose half its hotkeys. The old app
         // used a named mutex for the same reason.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(main) = app.get_webview_window("main") {
-                let _ = main.show();
-                let _ = main.set_focus();
-            }
+            // Full show path: a bare show() on a suspended webview presents
+            // a stale frozen page.
+            tray::show_main(app);
         }))
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -52,10 +52,27 @@ pub fn run(replay_file: Option<PathBuf>) {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .on_window_event(|window, event| match event {
+            // X hides to the tray, Steam/Discord-style. Quit lives in the
+            // tray menu; app.exit bypasses CloseRequested so it cannot be
+            // trapped here. The login window keeps its own close handling.
+            tauri::WindowEvent::CloseRequested { api, .. }
+                if window.label() == "main" && !tray::is_quitting() =>
+            {
+                api.prevent_close();
+                let _ = window.hide();
+                if let Some(webview) = window.app_handle().get_webview_window("main") {
+                    webview_mem::suspend(&webview);
+                }
+            }
+            tauri::WindowEvent::Destroyed => win::vis::unregister(window.label()),
+            _ => {}
+        })
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::patch_settings,
+            commands::get_current_position,
             commands::list_waypoints,
             commands::list_waypoints_px,
             commands::add_waypoint_at_pixel,
@@ -91,8 +108,15 @@ pub fn run(replay_file: Option<PathBuf>) {
             // Upgrade pois_gateway.json in place (offline, from cache) when
             // an app update added new layers.
             fetch::ensure_pois_current();
+            if let Some(main) = app.get_webview_window("main") {
+                if let Ok(hwnd) = main.hwnd() {
+                    win::vis::register("main", hwnd.0 as isize);
+                }
+            }
             minimap::create(app.handle())?;
+            tray::create(app.handle())?;
             clipboard::spawn(app.handle().clone());
+            webview_mem::spawn_watchdog(app.handle().clone());
             {
                 let state = app.state::<AppState>();
                 state.hotkeys.restart(app.handle().clone());

@@ -41,7 +41,15 @@ pub struct TrailPayload {
 /// `pipeline::resync`.
 pub fn emit_to_visible<S: Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
     for (label, window) in app.webview_windows() {
-        if window.is_visible().unwrap_or(false) {
+        // The registry read never blocks; the tauri getter round-trips into
+        // the main event loop, which must not happen on the emitting threads
+        // (clipboard, poller, supervisor). Unregistered labels (the login
+        // window) fall back to the blocking getter.
+        let visible = match crate::win::vis::is_visible(&label) {
+            Some(v) => v,
+            None => window.is_visible().unwrap_or(false),
+        };
+        if visible {
             if let Err(e) = app.emit_to(label.as_str(), event, payload.clone()) {
                 log::warn!("emit {event} to {label} failed: {e}");
             }

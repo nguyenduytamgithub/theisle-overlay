@@ -29,7 +29,7 @@ use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
 
 use crate::pipeline;
 use crate::settings;
-use crate::state::AppState;
+use crate::state::{AppState, LockExt};
 
 const CF_UNICODETEXT: u32 = 13;
 
@@ -68,7 +68,7 @@ pub fn spawn(app: AppHandle) {
         loop {
             let (interval_ms, number_format) = {
                 let state = app.state::<AppState>();
-                let s = state.settings.lock().unwrap();
+                let s = state.settings.lock_safe();
                 (
                     settings::get_f64(&s, &["poll", "clipboard_ms"], 400.0) as u64,
                     NumberFormat::from_setting(settings::get_str(&s, &["number_format"], "auto")),
