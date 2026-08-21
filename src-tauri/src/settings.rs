@@ -92,7 +92,7 @@ pub fn default_settings() -> Value {
     json!({
         "minimap": {
             "visible": true,
-            "require_game": true,        // auto-hide while the game is not running
+            "require_game": true,        // auto-hide unless the game is running AND focused
             "corner": "top-left",        // top-left | top-right | bottom-left | bottom-right
             "size_px": 260,
             "margin_px": 16,

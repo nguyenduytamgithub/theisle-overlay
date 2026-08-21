@@ -14,8 +14,8 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     TH32CS_SNAPPROCESS,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClientRect, GetWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic,
-    IsWindowVisible, GW_OWNER,
+    EnumWindows, GetClientRect, GetForegroundWindow, GetWindow, GetWindowRect,
+    GetWindowThreadProcessId, IsIconic, IsWindowVisible, GW_OWNER,
 };
 use windows::core::BOOL;
 use windows::Win32::Foundation::POINT;
@@ -106,6 +106,14 @@ pub fn find_game_window(image_name: &str) -> Option<isize> {
 /// A minimized game must not leave the overlay floating over the desktop.
 pub fn is_iconic(hwnd: isize) -> bool {
     unsafe { IsIconic(HWND(hwnd as *mut std::ffi::c_void)).as_bool() }
+}
+
+/// Whether the window is the one the user is currently in — read-only.
+/// An Alt-Tabbed-away game must not leave the overlay floating over other
+/// apps (a borderless-fullscreen game stays visible and un-minimized behind
+/// them, so presence alone cannot tell).
+pub fn is_foreground(hwnd: isize) -> bool {
+    unsafe { GetForegroundWindow() == HWND(hwnd as *mut std::ffi::c_void) }
 }
 
 /// (x, y, width, height) of the game's drawing area in PHYSICAL screen

@@ -84,7 +84,8 @@
 
     <h2>Bản đồ nhỏ</h2>
     <p>
-      Hình tròn, bám theo một góc cửa sổ game và <strong>chỉ hiện khi game đang chạy</strong>.
+      Hình tròn, bám theo một góc cửa sổ game và <strong>chỉ hiện khi bạn đang trong game</strong>
+      (Alt-Tab ra ngoài là tự ẩn, quay lại là hiện ngay).
       <strong>B</strong> (màu vàng) = Bắc · <strong>Đ</strong> = Đông · <strong>N</strong> = Nam ·
       <strong>T</strong> = Tây. Bản đồ <strong>không xoay</strong> — hướng Bắc luôn ở trên.
       Tam giác/đĩa <strong>màu vàng viền đen-trắng</strong> là bạn, luôn giữ nguyên độ đậm dù
@@ -188,7 +189,8 @@
     <h2>Minimap</h2>
     <p>
       Circular, pinned to a corner of the game window and
-      <strong>only shown while the game is running</strong>. <strong>N</strong> (amber) =
+      <strong>only shown while you are in the game</strong> (it hides when you Alt-Tab away
+      and returns the moment the game is focused again). <strong>N</strong> (amber) =
       North · <strong>E</strong> · <strong>S</strong> · <strong>W</strong>. The map
       <strong>never rotates</strong> — north stays up. The
       <strong>yellow dart/disc</strong> with the dark-and-white outline is you, always fully

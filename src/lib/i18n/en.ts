@@ -80,7 +80,7 @@ export const en: Record<MsgKey, string> = {
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Minimap",
   "settings.visible": "Show minimap",
-  "settings.require_game": "Only show while the game is running",
+  "settings.require_game": "Only show while you are in the game (hides on Alt-Tab)",
   "settings.click_through": "Click-through (never blocks gameplay)",
   "settings.corner": "Anchor corner on the game window",
   "corner.top-left": "Top left",

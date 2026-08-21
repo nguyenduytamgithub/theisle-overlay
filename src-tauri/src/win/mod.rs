@@ -2,9 +2,9 @@
 //!
 //! EVERY FUNCTION IN THIS MODULE IS ON THE ALLOWED LIST:
 //!   - Read-only: EnumWindows, GetWindowRect, GetClientRect, ClientToScreen,
-//!     GetWindowThreadProcessId, IsWindowVisible, IsIconic, the Toolhelp32
-//!     process snapshot, and GetClipboardSequenceNumber / clipboard READS
-//!     (in clipboard.rs).
+//!     GetWindowThreadProcessId, IsWindowVisible, IsIconic,
+//!     GetForegroundWindow, the Toolhelp32 process snapshot, and
+//!     GetClipboardSequenceNumber / clipboard READS (in clipboard.rs).
 //!   - Writes: ONLY to this app's own windows (SetWindowLongPtr, SetWindowPos).
 //!   - RegisterHotKey and PeekMessageW on our own hotkey thread (in
 //!     hotkeys.rs) — documented, cooperative OS APIs, not keyboard hooks.

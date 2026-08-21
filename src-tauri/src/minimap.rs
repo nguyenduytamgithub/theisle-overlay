@@ -8,10 +8,11 @@
 //!
 //! One supervisor thread replaces Qt's three timers. It ticks at 250 ms and
 //! owns the ONLY show/hide path: what the user sees is
-//! `user_visible && (!require_game || game running)` — the `visible` setting
-//! stays pure user intent, and game presence (polled every game_rect_ms even
-//! while hidden) gates it. Anchoring and topmost run only while shown. There
-//! are still no repaint timers anywhere — the webview draws only on events.
+//! `user_visible && (!require_game || game running AND focused) && !fullmap`
+//! — the `visible` setting stays pure user intent; game presence (polled
+//! every game_rect_ms even while hidden) plus a debounced foreground check
+//! gate it. Anchoring and topmost run only while shown. There are still no
+//! repaint timers anywhere — the webview draws only on events.
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -205,6 +206,7 @@ fn spawn_supervisor(app: AppHandle) {
         const TICK_MS: u64 = 250;
         let mut prev = snapshot(&app);
         let mut presence = GamePresence::new();
+        let mut unfocused_ticks: u8 = 0;
         // The window was created hidden; the first tick decides the show.
         let mut effective_prev = false;
         let mut last_rect: Option<(i32, i32, i32, i32)> = None;
@@ -230,6 +232,18 @@ fn spawn_supervisor(app: AppHandle) {
             // overlay within one tick, not one poll interval.
             let game_present = presence.hwnd().is_some_and(|h| !game_window::is_iconic(h));
 
+            // Focus check every tick: an Alt-Tabbed-away borderless game
+            // stays visible and un-minimized BEHIND other apps, so presence
+            // alone left the overlay floating over them (field report). Two
+            // consecutive unfocused ticks (~500 ms) absorb transient focus
+            // blips; refocusing the game shows the overlay again instantly.
+            if game_present && presence.hwnd().is_some_and(game_window::is_foreground) {
+                unfocused_ticks = 0;
+            } else {
+                unfocused_ticks = unfocused_ticks.saturating_add(1);
+            }
+            let game_active = game_present && unfocused_ticks < 2;
+
             // While the full map is on screen the minimap is redundant — and
             // being TOPMOST it would float over the app itself, eating every
             // click in its disc when click-through is off (a field-reported
@@ -238,10 +252,10 @@ fn spawn_supervisor(app: AppHandle) {
                 && vis::is_minimized("main") != Some(true);
 
             let effective =
-                cur.user_visible && (!cur.require_game || game_present) && !main_on_screen;
+                cur.user_visible && (!cur.require_game || game_active) && !main_on_screen;
             if effective != effective_prev {
                 if effective {
-                    log::info!("minimap: show (game_present={game_present})");
+                    log::info!("minimap: show (game_active={game_active})");
                     crate::webview_mem::on_shown(&window);
                     if window.show().is_ok() {
                         effective_prev = true;
@@ -254,7 +268,7 @@ fn spawn_supervisor(app: AppHandle) {
                     }
                 } else if window.hide().is_ok() {
                     log::info!(
-                        "minimap: hide (user={}, game={game_present}, fullmap={main_on_screen})",
+                        "minimap: hide (user={}, game={game_active}, fullmap={main_on_screen})",
                         cur.user_visible
                     );
                     effective_prev = false;

@@ -91,7 +91,7 @@ export const vi = {
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Bản đồ nhỏ",
   "settings.visible": "Hiện bản đồ nhỏ",
-  "settings.require_game": "Chỉ hiện khi game đang chạy",
+  "settings.require_game": "Chỉ hiện khi đang trong game (Alt-Tab ra là tự ẩn)",
   "settings.click_through": "Chuột bấm xuyên qua (không cản trở lúc chơi)",
   "settings.corner": "Góc neo theo cửa sổ game",
   "corner.top-left": "Trên trái",
