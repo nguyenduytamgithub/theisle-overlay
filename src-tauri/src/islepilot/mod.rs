@@ -253,12 +253,13 @@ pub fn restart_poller(app: &AppHandle) {
             match get_page(&client, &config.domain, "/me", &cookie) {
                 Ok(html) => {
                     let player = parser::parse_me(&html);
-                    if !player.looks_logged_in() {
-                        // A logged-out page and a site-markup change look
-                        // identical here (every stat parses to None), and
-                        // killing the thread over it forced an app restart.
-                        // Warn once, keep polling at the backed-off rate — a
-                        // later successful parse or re-login self-heals.
+                    // Missing stats alone is NOT auth loss: a logged-in
+                    // player with no living dino parses to all-None too.
+                    // Only a page without the session markers counts — and
+                    // even then (it could be a site-markup change) warn
+                    // once and keep polling at the backed-off rate; a later
+                    // good parse or re-login self-heals.
+                    if !player.looks_logged_in() && !parser::looks_authenticated(&html) {
                         if !auth_warned {
                             auth_warned = true;
                             let _ = app.emit(DINO_AUTH_EXPIRED, config.domain.clone());
@@ -353,6 +354,9 @@ pub fn stop_poller() {
 /// there, grab the session cookies from the webview, verify them against
 /// /me, store them (DPAPI) and start polling.
 pub fn start_login(app: &AppHandle, domain: String) -> Result<(), String> {
+    // Same normalization as manual_cookie: the domain string is the cookie
+    // store's key, so a trailing slash must not create a second identity.
+    let domain = domain.trim().trim_end_matches('/').to_string();
     let url: tauri::Url = domain.parse().map_err(|e| format!("URL không hợp lệ: {e}"))?;
     if url.scheme() != "https" {
         return Err("Domain phải bắt đầu bằng https://".into());
@@ -413,7 +417,9 @@ pub fn start_login(app: &AppHandle, domain: String) -> Result<(), String> {
             let Ok(html) = get_page(&client, &domain, "/me", &header) else {
                 continue;
             };
-            if parser::parse_me(&html).looks_logged_in() {
+            // Session check, not a stats check — a fresh account with no
+            // dino must still be able to log in.
+            if parser::looks_authenticated(&html) {
                 if let Err(e) = cookies::set(&domain, &header) {
                     log::warn!("saving islepilot cookie failed: {e}");
                 }
@@ -515,6 +521,9 @@ pub fn cancel_login(app: &AppHandle) {
 /// browser devtools (the prototype's original flow). Validated against /me
 /// before being stored, so a bad paste is rejected with a clear error.
 pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<(), String> {
+    // Normalize: a trailing slash would silently split the cookie-store key
+    // from a later slash-less entry of the same server.
+    let domain = domain.trim().trim_end_matches('/').to_string();
     let url: tauri::Url = domain.parse().map_err(|e| format!("URL: {e}"))?;
     if url.scheme() != "https" {
         return Err("invalid-url".into());
@@ -544,7 +553,10 @@ pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<
     };
     let client = http_client()?;
     let html = get_page(&client, &domain, "/me", &cookie)?;
-    if !parser::parse_me(&html).looks_logged_in() {
+    // Session check, NOT a stats check: a player with no dino on this
+    // server is still logged in (field case: valid cookie rejected because
+    // /me said "No dino" and no stat parsed).
+    if !parser::looks_authenticated(&html) {
         return Err("invalid-cookie".into());
     }
     cookies::set(&domain, &cookie)?;

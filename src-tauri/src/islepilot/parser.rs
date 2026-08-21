@@ -61,14 +61,24 @@ pub struct PlayerStats {
 }
 
 impl PlayerStats {
-    /// A page that yields NONE of the stats is how we detect a logged-out /
-    /// redirected response (the session cookie expired).
+    /// Whether any dino stats parsed. NOT a session check: a logged-in
+    /// player with no living dino yields none of these (the page says
+    /// "No dino") — use `looks_authenticated` on the raw HTML for that.
     pub fn looks_logged_in(&self) -> bool {
         self.growth.is_some()
             || self.health.is_some()
             || self.hunger.is_some()
             || self.thirst.is_some()
     }
+}
+
+/// Session check that does not depend on having a dino: the header account
+/// chip and its logout link are rendered only for an authenticated session
+/// (verified against a live panel: present with a valid cookie — even with
+/// "No dino" — absent on the signed-out shell, in both the visible markup
+/// and the RSC payload).
+pub fn looks_authenticated(html: &str) -> bool {
+    html.contains("/api/player/logout") || html.contains("personaName")
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -284,6 +294,24 @@ mod tests {
     fn empty_page_is_not_logged_in() {
         let stats = parse_me("<html><body><h1>Sign in</h1></body></html>");
         assert!(!stats.looks_logged_in());
+    }
+
+    /// Field case: a valid session on a server where the player has no dino
+    /// — /me renders the account chip + "No dino" and zero stats. That must
+    /// count as authenticated, while the signed-out shell must not.
+    #[test]
+    fn no_dino_page_is_authenticated_but_not_logged_in() {
+        let html = r#"<html><body>
+            <header><span class="font-medium">Survivor</span>
+            <a href="/api/player/logout?redirect=%2Fme">Logout</a></header>
+            <main><section>No dino</section></main>
+        </body></html>"#;
+        assert!(looks_authenticated(html), "logout link proves the session");
+        assert!(!parse_me(html).looks_logged_in(), "and yet no stats parse");
+        assert!(
+            !looks_authenticated("<html><body><h1>Sign in through Steam</h1></body></html>"),
+            "the signed-out shell has neither marker"
+        );
     }
 
     #[test]
