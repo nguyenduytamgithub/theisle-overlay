@@ -7,6 +7,10 @@ game window · full map with POIs, place names, waypoints and travel trails ·
 your dino's stats from the server's IslePilot panel · bilingual VI/EN
 interface · one-click install with auto-update.
 
+▶️ **Install & usage video guide** (Vietnamese):
+
+[![TheIsle Overlay video guide](https://img.youtube.com/vi/R2IzwqHapuw/hqdefault.jpg)](https://y2u.be/R2IzwqHapuw)
+
 ![Minimap and dino stats over the running game](docs/screenshot-ingame.jpg)
 
 ![Full map with place names and POI layers](docs/screenshot-fullmap.png)
