@@ -149,7 +149,8 @@ pub fn spawn_watchdog(app: tauri::AppHandle) {
                 let Ok(wv3) = core.cast::<ICoreWebView2_3>() else {
                     return;
                 };
-                if !wv3.IsSuspended().map(|b| b.as_bool()).unwrap_or(false) {
+                let mut suspended = windows_core::BOOL::default();
+                if wv3.IsSuspended(&mut suspended).is_err() || !suspended.as_bool() {
                     return;
                 }
                 log::warn!("webview '{owned}' visible but suspended — self-healing");

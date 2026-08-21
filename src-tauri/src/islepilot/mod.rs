@@ -397,6 +397,15 @@ pub fn start_login(app: &AppHandle, domain: String) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn backoff_doubles_and_caps() {
+        assert_eq!(backoff_s(10.0, 0), 10.0, "no failures = normal interval");
+        assert_eq!(backoff_s(10.0, 1), 20.0);
+        assert_eq!(backoff_s(10.0, 2), 40.0);
+        assert_eq!(backoff_s(10.0, 5), 300.0, "capped at 5 minutes");
+        assert_eq!(backoff_s(10.0, 60), 300.0, "cap sticks, no overflow");
+    }
+
     /// Live end-to-end check of the exact HTTP path the app uses (our client,
     /// our UA, a real cookie) — the thing fixtures cannot prove:
     ///   THEISLE_TEST_DOMAIN=https://mixi.islepilot.eu \
@@ -510,18 +519,4 @@ pub fn logout(app: &AppHandle) -> Result<(), String> {
         serde_json::json!({ "islepilot": { "enabled": false } }),
     );
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::backoff_s;
-
-    #[test]
-    fn backoff_doubles_and_caps() {
-        assert_eq!(backoff_s(10.0, 0), 10.0, "no failures = normal interval");
-        assert_eq!(backoff_s(10.0, 1), 20.0);
-        assert_eq!(backoff_s(10.0, 2), 40.0);
-        assert_eq!(backoff_s(10.0, 5), 300.0, "capped at 5 minutes");
-        assert_eq!(backoff_s(10.0, 60), 300.0, "cap sticks, no overflow");
-    }
 }
