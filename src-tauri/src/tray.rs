@@ -10,7 +10,6 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager};
 
 use crate::state::{AppState, LockExt};
-use crate::win::vis;
 
 /// Set before app.exit so an in-flight CloseRequested cannot re-hide the
 /// window mid-quit. app.exit itself bypasses CloseRequested; this flag is
@@ -73,25 +72,17 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// The ONE way to bring the main window up, from any thread: resume the
-/// webview first (it is suspended while hidden), then show/focus, then
-/// resync the events it missed — a bare show() would present a stale page.
+/// The ONE way to bring the main window up, from any thread: restore the
+/// webview (memory target, input nudge), show/focus, then a belt-and-braces
+/// resync — broadcasts kept it current while hidden.
 pub fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         log::info!("main window: show");
-        crate::webview_mem::resume(&window);
+        crate::webview_mem::on_shown(&window);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        // Wait-then-resync on a fresh thread: show() is posted to the event
-        // loop, and this function ALSO runs on that loop (tray click,
-        // single-instance) — waiting inline there would stall the loop and
-        // the visibility-gated resync would skip the very window it is for.
-        let app = app.clone();
-        std::thread::spawn(move || {
-            vis::wait_visible("main", 400);
-            crate::pipeline::resync(&app);
-        });
+        crate::pipeline::resync(app);
     }
 }
 

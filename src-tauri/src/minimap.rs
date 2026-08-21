@@ -242,17 +242,13 @@ fn spawn_supervisor(app: AppHandle) {
             if effective != effective_prev {
                 if effective {
                     log::info!("minimap: show (game_present={game_present})");
-                    crate::webview_mem::resume(&window);
+                    crate::webview_mem::on_shown(&window);
                     if window.show().is_ok() {
                         effective_prev = true;
-                        // No 2 s topmost gap on an auto-show...
+                        // No 2 s topmost gap on an auto-show.
                         if let Some(h) = vis::hwnd("minimap") {
                             overlay::ensure_topmost(h);
                         }
-                        // ...and catch up on everything missed while hidden.
-                        // show() is posted to the event loop; wait for it to
-                        // land or the resync's visibility gate skips us.
-                        vis::wait_visible("minimap", 200);
                         crate::pipeline::resync(&app);
                         last_rect = None; // re-anchor right away
                     }
@@ -262,14 +258,14 @@ fn spawn_supervisor(app: AppHandle) {
                         cur.user_visible
                     );
                     effective_prev = false;
-                    crate::webview_mem::suspend(&window);
+                    crate::webview_mem::on_hidden(&window);
                 }
                 // A failed show/hide leaves effective_prev unchanged, so the
                 // transition is retried next tick instead of swallowed.
             } else if effective && vis::is_visible("minimap") == Some(false) {
                 // The OS hid us (or a show was lost) while we believe we are
                 // on screen — re-apply idempotently, no resync spam.
-                crate::webview_mem::resume(&window);
+                crate::webview_mem::on_shown(&window);
                 let _ = window.show();
             }
 

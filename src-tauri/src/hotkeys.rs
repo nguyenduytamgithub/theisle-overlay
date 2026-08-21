@@ -264,9 +264,7 @@ fn dispatch(app: &AppHandle, action: &str) {
                 if on_screen {
                     log::info!("main window: hide (hotkey)");
                     let _ = window.hide();
-                    // Freeze the hidden webview so its renderer memory is
-                    // actually released while playing.
-                    crate::webview_mem::suspend(&window);
+                    crate::webview_mem::on_hidden(&window);
                 } else {
                     crate::tray::show_main(app);
                 }
@@ -293,11 +291,11 @@ fn dispatch(app: &AppHandle, action: &str) {
         "mark_here" => mark_here(app),
         // Rescue for any webview whose input died: a global hotkey needs no
         // clicks, and a reload rebuilds the page (state comes back through
-        // get_current_position/resync). eval auto-resumes a suspended view.
+        // get_current_position/resync).
         "reload_ui" => {
             for label in ["main", "minimap"] {
                 if let Some(window) = app.get_webview_window(label) {
-                    crate::webview_mem::resume(&window);
+                    crate::webview_mem::on_shown(&window);
                     let _ = window.eval("location.reload()");
                 }
             }
@@ -364,7 +362,7 @@ fn mark_here(app: &AppHandle) {
             log::warn!("saving waypoints failed: {e}");
         }
     }
-    crate::events::emit_to_visible(app, "waypoints://changed", ());
+    crate::events::emit_all(app, "waypoints://changed", ());
 }
 
 #[cfg(test)]

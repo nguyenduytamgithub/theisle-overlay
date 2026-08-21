@@ -34,9 +34,7 @@ pub fn apply_settings_patch(app: &AppHandle, patch: Value) -> Value {
     if settings::get_str(&merged, &["language"], "vi") != old_language {
         crate::tray::rebuild_menu(app);
     }
-    // Visible windows only — a broadcast would wake suspended hidden webviews
-    // (see webview_mem.rs); resync covers them when they reappear.
-    crate::events::emit_to_visible(app, SETTINGS_CHANGED, merged.clone());
+    crate::events::emit_all(app, SETTINGS_CHANGED, merged.clone());
     merged
 }
 
@@ -98,8 +96,7 @@ pub fn list_waypoints_px(state: State<AppState>) -> Vec<WaypointPx> {
     let cal = Calibration::gateway();
     state
         .waypoints
-        .lock()
-        .unwrap()
+        .lock_safe()
         .iter()
         .map(|wp| {
             let (px, py) = world_to_pixel(wp.x, wp.y, cal);

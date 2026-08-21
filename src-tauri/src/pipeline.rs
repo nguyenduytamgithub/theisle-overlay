@@ -5,7 +5,7 @@ use overlay_core::{bearing_to_compass_key, world_to_pixel, Calibration};
 use tauri::{AppHandle, Manager};
 
 use crate::events::{
-    emit_to_visible, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED,
+    emit_all, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED,
     TRAIL_CHANGED,
 };
 use crate::state::{AppState, LockExt};
@@ -48,9 +48,9 @@ pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
         compass_key: heading.map(bearing_to_compass_key),
         in_bounds: overlay_core::is_in_bounds(px, py, cal),
     };
-    emit_to_visible(app, POSITION_UPDATE, payload);
+    emit_all(app, POSITION_UPDATE, payload);
     if let Some(trail) = trail {
-        emit_to_visible(app, TRAIL_CHANGED, trail);
+        emit_all(app, TRAIL_CHANGED, trail);
     }
 }
 
@@ -79,8 +79,9 @@ pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
     })
 }
 
-/// Bring a window that was hidden (and therefore skipped by
-/// `emit_to_visible`) back up to date. Called right after showing it.
+/// Re-send the full current state to every window. Belt-and-braces: hidden
+/// windows receive broadcasts and reloads fetch get_current_position, so
+/// this mostly matters after a manual webview reload.
 pub fn resync(app: &AppHandle) {
     let state = app.state::<AppState>();
     let cal = Calibration::gateway();
@@ -90,14 +91,14 @@ pub fn resync(app: &AppHandle) {
         trail_payload(&tracker.segments, cal)
     };
     if let Some(payload) = current_payload(&state) {
-        emit_to_visible(app, POSITION_UPDATE, payload);
+        emit_all(app, POSITION_UPDATE, payload);
     }
-    emit_to_visible(app, TRAIL_CHANGED, trail);
+    emit_all(app, TRAIL_CHANGED, trail);
     {
         let settings = state.settings.lock_safe().clone();
-        emit_to_visible(app, SETTINGS_CHANGED, settings);
+        emit_all(app, SETTINGS_CHANGED, settings);
     }
-    emit_to_visible(app, "waypoints://changed", ());
+    emit_all(app, "waypoints://changed", ());
     crate::islepilot::emit_last(app);
 }
 

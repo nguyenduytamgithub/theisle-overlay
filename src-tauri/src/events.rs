@@ -3,7 +3,7 @@
 //! webview.
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 pub const POSITION_UPDATE: &str = "position://update";
 pub const TRAIL_CHANGED: &str = "trail://changed";
@@ -32,27 +32,12 @@ pub struct TrailPayload {
     pub segments_px: Vec<Vec<(f64, f64)>>,
 }
 
-/// Emit ONLY to windows that are currently visible.
-///
-/// Never broadcast UI data app-wide: hidden windows have their webview
-/// suspended (see webview_mem.rs), and any script evaluation — which a
-/// broadcast emit performs — silently auto-resumes them and brings their
-/// renderer memory back. Windows re-shown later catch up via
-/// `pipeline::resync`.
-pub fn emit_to_visible<S: Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
-    for (label, window) in app.webview_windows() {
-        // The registry read never blocks; the tauri getter round-trips into
-        // the main event loop, which must not happen on the emitting threads
-        // (clipboard, poller, supervisor). Unregistered labels (the login
-        // window) fall back to the blocking getter.
-        let visible = match crate::win::vis::is_visible(&label) {
-            Some(v) => v,
-            None => window.is_visible().unwrap_or(false),
-        };
-        if visible {
-            if let Err(e) = app.emit_to(label.as_str(), event, payload.clone()) {
-                log::warn!("emit {event} to {label} failed: {e}");
-            }
-        }
+/// Broadcast to every window, hidden ones included. Hidden webviews stay
+/// alive (suspension was removed — see webview_mem.rs) and are deliberately
+/// kept current, so a window being shown again is already up to date;
+/// `pipeline::resync` remains only as belt-and-braces for reloads.
+pub fn emit_all<S: Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+    if let Err(e) = app.emit(event, payload) {
+        log::warn!("emit {event} failed: {e}");
     }
 }

@@ -138,16 +138,13 @@ pub fn current_state(app: &AppHandle) -> IslepilotState {
 
 fn publish(app: &AppHandle, update: DinoUpdate) {
     *LAST_UPDATE.lock_safe() = Some(update.clone());
-    // Visible windows only — this fires every poll interval, and waking a
-    // suspended hidden window each time would defeat webview_mem::suspend.
-    crate::events::emit_to_visible(app, DINO_UPDATE, update);
+    crate::events::emit_all(app, DINO_UPDATE, update);
 }
 
-/// Re-send the latest update to (visible) windows — part of resync when a
-/// hidden window is shown again.
+/// Re-send the latest update — part of resync after a webview reload.
 pub fn emit_last(app: &AppHandle) {
     if let Some(update) = LAST_UPDATE.lock_safe().clone() {
-        crate::events::emit_to_visible(app, DINO_UPDATE, update);
+        crate::events::emit_all(app, DINO_UPDATE, update);
     }
 }
 

@@ -32,8 +32,6 @@ pub fn run(replay_file: Option<PathBuf>) {
         // second instance would silently lose half its hotkeys. The old app
         // used a named mutex for the same reason.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // Full show path: a bare show() on a suspended webview presents
-            // a stale frozen page.
             tray::show_main(app);
         }))
         .plugin(
@@ -63,7 +61,7 @@ pub fn run(replay_file: Option<PathBuf>) {
                 log::info!("main window: hide (X to tray)");
                 let _ = window.hide();
                 if let Some(webview) = window.app_handle().get_webview_window("main") {
-                    webview_mem::suspend(&webview);
+                    webview_mem::on_hidden(&webview);
                 }
             }
             tauri::WindowEvent::Destroyed => win::vis::unregister(window.label()),
