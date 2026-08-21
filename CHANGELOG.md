@@ -4,6 +4,61 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.2.0] — 2026-08-22
+
+### Thêm
+
+- **Mũi tên dẫn đường waypoint trên minimap**: mũi tên ở rìa đĩa chỉ hướng +
+  khoảng cách tới waypoint gần nhất khi nó nằm ngoài vùng nhìn; waypoint trong
+  vùng nhìn hiện thành chấm (viền trắng, khác chấm POI viền đen). Có công tắc
+  riêng trong Cài đặt › Bản đồ nhỏ.
+- **Chế độ bám vị trí + mũi tên mép** trên bản đồ lớn: kéo bản đồ đi nơi khác
+  là tạm ngừng tự căn giữa, mũi tên ở mép màn hình chỉ về phía bạn — bấm mũi
+  tên hoặc nút "Về vị trí của tôi" để quay lại và bám tiếp.
+- **Ô tìm kiếm địa danh** trên bảng phải tab Bản đồ: gõ tên vùng/địa
+  điểm/hồ nước/waypoint → nhảy tới kèm hiệu ứng nhấp nháy đánh dấu.
+- **Dán tọa độ → nhảy tới**: dán chuỗi tọa độ (bạn bè nhắn qua chat) vào ô tìm
+  kiếm — parse bằng đúng bộ đọc tọa độ của clipboard (thuần thao tác tay).
+- **Màu + biểu tượng cho waypoint**: nút tròn màu cạnh mỗi waypoint (bấm để
+  đổi qua 7 màu, đồng bộ cả minimap); hộp đặt tên có sẵn nút biểu tượng nhanh
+  💀 🏠 💧 ⚠️ 🍖 — waypoint mang biểu tượng thì **hiện thẳng biểu tượng đó
+  trên cả hai bản đồ** thay cho chấm tròn, và nhãn mũi tên dẫn đường cũng kèm
+  biểu tượng ("💧 850 m").
+
+- **Lớp "Động vật"**: ~340 điểm spawn động vật AI (Boar, Bunny, Chicken, Crab,
+  Deer, Frog, Goat, Teno, Turtle) từ dữ liệu cộng đồng của islemaps.com — bật
+  trong bảng lớp của bản đồ lớn, hiện trên cả minimap, dùng được với mọi kiểu
+  nền. **Mỗi loài một biểu tượng riêng** (🐗 🐰 🐔 🦀 🦌 🐸 🐐 🦕 🐢) để nhận
+  ra ngay không cần rê chuột. Nguồn tải runtime và fail-soft như mọi nguồn
+  khác: trang đổi cấu trúc thì lớp tạm vắng, không ảnh hưởng gì còn lại
+  (POIS_VERSION 3).
+- **Lớp "Nước ngọt"**: lớp phủ tô đúng các sông/hồ uống được (từ islemaps.com),
+  căn chỉnh chính xác trên CẢ ba kiểu nền nhờ quy đổi khung tọa độ phía Rust;
+  hiện trên cả bản đồ lớn lẫn minimap, bật/tắt trong bảng lớp.
+- **Nút "Xóa đường đi"** trong bảng bên phải tab Bản đồ: xóa vết phiên hiện
+  tại + ẩn vết phiên trước trên CẢ HAI cửa sổ cho đỡ rối mắt giữa trận; file
+  lịch sử trên đĩa vẫn giữ nguyên (có ghi mốc ngắt).
+- **Toggle "Hiện đường đi trên bản đồ nhỏ"** trong Cài đặt › Bản đồ nhỏ — tắt
+  là minimap sạch vết, bản đồ lớn vẫn hiện đủ.
+- **Lựa chọn nền bản đồ** trong Cài đặt: Vulnona (mặc định) / IsleMaps sáng /
+  IsleMaps tối — nền vẽ tay từ [islemaps.com](https://www.islemaps.com/) (Pont
+  & Emeara), áp dụng đồng thời cho bản đồ lớn lẫn minimap. Bản IsleMaps vẽ theo
+  phiên bản game mới hơn nên thấy cả quần đảo đông nam (Hell's Mouth) mà ảnh
+  Vulnona 0.21.7 cắt mất. Ảnh chỉ tải khi bạn chọn lần đầu (~6,4 / 4,5 MB, có
+  kiểm tra toàn vẹn kích thước), sau đó dùng offline; nút "Tải lại dữ liệu"
+  refresh có điều kiện qua ETag. Waypoint/trail giữ nguyên vì mọi tọa độ lưu
+  bằng cm gốc của game; mỗi nền có calibration riêng nhúng sẵn kèm bộ test
+  anchor, và `verify_data --source` đối chiếu điểm POI với ảnh nền cho cả 3
+  nguồn.
+
+### Thay đổi
+
+- Hình học bản đồ (kích thước ảnh, khung zoom) giờ lấy động từ Rust
+  (`get_map_info`) thay vì hằng số 7800×7817 phía frontend; khung zoom neo theo
+  tỉ lệ mặt đất nên mức phóng to/thu nhỏ thực tế giữ nguyên trên mọi nền.
+- Minimap nạp ảnh IsleMaps có thu nhỏ lúc decode (bitmap thường trú ~6 MB thay
+  vì ~25 MB) và giải phóng bitmap cũ ngay khi đổi nền.
+
 ## [1.1.1] — 2026-08-21
 
 ### Sửa

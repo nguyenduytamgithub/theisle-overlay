@@ -15,11 +15,19 @@ song ngữ Việt/Anh · cài một lần, tự cập nhật.
 
 - **Minimap tròn** bám góc cửa sổ game, chuột bấm xuyên qua, không cản trở lúc chơi.
   Hướng Bắc luôn ở trên, có mũi tên chỉ hướng đang đi.
-- **Bản đồ lớn**: phóng to/thu nhỏ mượt, 9 lớp bật/tắt được (nguồn nước, mỏ muối,
-  vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức ăn, tên vùng, địa điểm),
-  tên địa danh hiện trực tiếp trên bản đồ.
-- **Điểm đánh dấu (waypoint)**: bấm chuột phải để cắm, đổi tên, xóa; hiện hướng và
-  khoảng cách tới điểm gần nhất.
+- **Bản đồ lớn**: phóng to/thu nhỏ mượt, 11 lớp bật/tắt được (nước ngọt, nguồn
+  nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
+  ăn, động vật với biểu tượng riêng từng loài 🐗🦌🐢, tên vùng, địa điểm), tên
+  địa danh hiện trực tiếp trên bản đồ; nút xóa đường đi cho đỡ rối mắt giữa trận.
+- **3 kiểu nền bản đồ**: ảnh chụp Vulnona (mặc định) hoặc bản vẽ tay
+  [IsleMaps](https://www.islemaps.com/) sáng/tối — đổi trong Cài đặt, áp dụng
+  cho cả bản đồ lớn lẫn minimap. Nền IsleMaps vẽ theo phiên bản game mới hơn,
+  thấy cả quần đảo đông nam (Hell's Mouth).
+- **Điểm đánh dấu (waypoint)**: bấm chuột phải để cắm, đổi tên/đổi màu, xóa,
+  biểu tượng nhanh (💀 chỗ chết, 🏠 hang…); minimap có mũi tên rìa đĩa chỉ
+  hướng + khoảng cách tới điểm gần nhất.
+- **Tìm kiếm & điều hướng**: ô tìm địa danh/waypoint, dán tọa độ để nhảy tới,
+  chế độ bám vị trí với mũi tên mép màn hình dẫn về chỗ đứng.
 - **Đường đã đi**: tự ghi theo phiên, khôi phục lại đường đi của phiên trước.
 - **Khủng long của bạn**: growth, máu, đói, khát và Prime progress đọc từ panel
   IslePilot của server, có thanh chỉ số gọn ngay dưới minimap.
@@ -163,8 +171,10 @@ cd src-tauri; cargo test --workspace # toàn bộ test Rust
 cargo clippy --workspace -- -D warnings
 ..\scripts\check-forbidden-apis.ps1
 
-# Sau mỗi lần map game cập nhật:
-cargo run --bin verify_data --features devtools
+# Sau mỗi lần map game cập nhật (chạy cho từng nền đã tải):
+cargo run --bin verify_data --features devtools -- --source vulnona
+cargo run --bin verify_data --features devtools -- --source islemaps-light
+cargo run --bin verify_data --features devtools -- --source islemaps-dark
 cargo test -p theisle-overlay --lib -- --ignored parse_real_cache
 ```
 
@@ -177,6 +187,8 @@ cá nhân trên máy bạn, không phải bản phát hành lại.
 
 - Basemap: [VulnonaMAP](https://vulnona.com/game/map/) (Coco.N) — ghép từ ảnh
   chụp trong game. Bản quyền hình ảnh: Afterthought LLC (The Isle).
+- Nền IsleMaps (tùy chọn, chỉ tải khi bạn chọn trong Cài đặt) và điểm spawn
+  động vật: [islemaps.com](https://www.islemaps.com/) (Pont & Emeara).
 - POI: [myislemap.com](https://myislemap.com/), VulnonaMAP, hướng dẫn Steam
   của wiredredman.
 

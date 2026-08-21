@@ -1988,6 +1988,7 @@ dependencies = [
  "image-webp",
  "moxcms",
  "num-traits",
+ "png 0.18.1",
 ]
 
 [[package]]
@@ -4731,7 +4732,7 @@ dependencies = [
 
 [[package]]
 name = "theisle-overlay"
-version = "1.1.1"
+version = "1.2.0"
 dependencies = [
  "chrono",
  "image",

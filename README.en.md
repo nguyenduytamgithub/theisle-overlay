@@ -15,11 +15,19 @@ interface · one-click install with auto-update.
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
   never blocks play. North stays up, with an arrow showing your direction of travel.
-- **Full map**: smooth zoom/pan, 9 toggleable layers (water, salt licks, mud wallows,
-  sanctuaries, migration zones, AI patrol zones, food zones, region names, landmarks),
-  with place names drawn directly on the map.
-- **Waypoints**: right-click to drop, rename, delete; bearing and distance to the
-  nearest one.
+- **Full map**: smooth zoom/pan, 11 toggleable layers (fresh water, water, salt licks,
+  mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
+  with per-species icons 🐗🦌🐢, region names, landmarks), with place names drawn
+  directly on the map; a clear-trail button to declutter mid-session.
+- **3 basemap styles**: Vulnona captures (default) or the hand-drawn
+  [IsleMaps](https://www.islemaps.com/) light/dark art — switch in Settings,
+  applies to both the full map and the minimap. The IsleMaps art tracks a newer
+  game build and shows the SE archipelago (Hell's Mouth).
+- **Waypoints**: right-click to drop, rename/recolor, delete, quick icons
+  (💀 death spot, 🏠 nest…); the minimap gets a rim arrow with bearing +
+  distance to the nearest one.
+- **Search & navigation**: search places/waypoints, paste coordinates to jump
+  there, follow mode with an edge arrow leading back to your position.
 - **Travel trail** recorded per session, with the previous session's path restored.
 - **Your dino**: growth, health, hunger, thirst and Prime progress read from the
   server's IslePilot panel, plus a compact stats strip under the minimap.
@@ -164,8 +172,10 @@ cd src-tauri; cargo test --workspace # all Rust tests
 cargo clippy --workspace -- -D warnings
 ..\scripts\check-forbidden-apis.ps1
 
-# After each in-game map update:
-cargo run --bin verify_data --features devtools
+# After each in-game map update (run for every downloaded basemap):
+cargo run --bin verify_data --features devtools -- --source vulnona
+cargo run --bin verify_data --features devtools -- --source islemaps-light
+cargo run --bin verify_data --features devtools -- --source islemaps-dark
 cargo test -p theisle-overlay --lib -- --ignored parse_real_cache
 ```
 
@@ -179,6 +189,8 @@ your machine, not a redistribution.
 
 - Basemap: [VulnonaMAP](https://vulnona.com/game/map/) (Coco.N) — stitched
   from in-game captures. Imagery copyright Afterthought LLC (The Isle).
+- IsleMaps basemap (optional, downloaded only when selected in Settings) and
+  animal spawn points: [islemaps.com](https://www.islemaps.com/) (Pont & Emeara).
 - POIs: [myislemap.com](https://myislemap.com/), VulnonaMAP, wiredredman's
   Steam guide.
 
