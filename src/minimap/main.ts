@@ -6,6 +6,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { error } from "@tauri-apps/plugin-log";
 import { installGlobalErrorLog } from "../lib/errlog";
+import { ANIMAL_GLYPHS, waypointGlyph } from "../lib/theme";
 import { PANEL_H, render, type DinoBars, type MinimapState, type PoiDot } from "./render";
 
 installGlobalErrorLog("minimap");
@@ -33,6 +34,7 @@ const LAYER_COLORS: Record<string, string> = {
   sanctuary: "#a855f7",
   migration: "#72d653",
   food: "#e2664a",
+  animal: "#d66ba0",
 };
 
 // Compass letters + strings per language (kept inline: no i18n bundle here).
@@ -67,12 +69,18 @@ const state: MinimapState = {
   position: null,
   trailPx: [],
   pois: [],
+  waypoints: [],
+  nearestWaypoint: null,
   basemap: null,
+  freshwater: null,
   miniScale: 1,
   pxPerM: 0.7,
   sizePx: 260,
   radiusM: 600,
   opacity: 0.85,
+  showTrail: true,
+  showWaypoints: true,
+  showFreshwater: true,
   panelH: 0,
   dino: null,
   compassLetters: STRINGS.vi.letters,
@@ -90,6 +98,9 @@ function applySettings(s: Settings) {
   state.sizePx = Number(mm.size_px ?? 260);
   state.radiusM = Number(mm.radius_m ?? 600);
   state.opacity = Number(mm.opacity ?? 0.85);
+  state.showTrail = Boolean(mm.show_trail ?? true);
+  state.showWaypoints = Boolean(mm.show_waypoints ?? true);
+  state.showFreshwater = Boolean((s.layers ?? {}).freshwater ?? true);
   const ip = s.islepilot ?? {};
   state.panelH = ip.enabled && (ip.show_overlay_panel ?? true) ? PANEL_H : 0;
   const lang = (s.language === "en" ? "en" : "vi") as keyof typeof STRINGS;
@@ -124,6 +135,8 @@ function flattenPois() {
         px: item.px,
         py: item.py,
         color,
+        // Animals draw as their species glyph instead of a dot.
+        glyph: layer.key === "animal" ? ANIMAL_GLYPHS[item.label] : undefined,
         // carried for the visibility filter
         ...( { layerKey: layer.key } as object ),
       });
@@ -135,6 +148,31 @@ function flattenPois() {
 const draw = () => render(canvas, state);
 
 let imageWidthPx = 7800;
+// Which basemap imagery this webview currently renders — compared against
+// settings broadcasts to reload only on a real switch.
+let currentSource = "vulnona";
+// Fresh-water overlay descriptor from get_map_info (bounds already in the
+// ACTIVE calibration's px space); null when the file is not on disk yet.
+let overlayInfo: { url: string; boundsPx: [number, number, number, number] } | null = null;
+
+type MapInfoPayload = {
+  imageWidthPx: number;
+  pxPerMX: number;
+  source: string;
+  overlays?: { key: string; path: string; boundsPx: [number, number, number, number] }[];
+};
+
+function applyMapInfo(info: MapInfoPayload) {
+  state.pxPerM = info.pxPerMX;
+  imageWidthPx = info.imageWidthPx;
+  currentSource = info.source;
+  overlayInfo = null;
+  for (const ov of info.overlays ?? []) {
+    if (ov.key === "freshwater") {
+      overlayInfo = { url: convertFileSrc(ov.path), boundsPx: ov.boundsPx };
+    }
+  }
+}
 
 /// (Re)load basemap + POIs. Called at init AND whenever the first-run /
 /// re-download fetch finishes — the data may not exist yet when this webview
@@ -147,15 +185,129 @@ async function loadData() {
     // POI data missing (first run): map still works without dots.
   }
   try {
-    const paths = await invoke<{ minimap: string }>("get_basemap_paths");
+    const paths = await invoke<{ minimap: string; minimapDecodeWidth: number | null }>(
+      "get_basemap_paths",
+    );
     const resp = await fetch(convertFileSrc(paths.minimap));
     if (resp.ok) {
-      state.basemap = await createImageBitmap(await resp.blob());
+      // The islemaps PNGs decode to ~25 MB; the hint downscales them at
+      // decode so the always-resident bitmap stays small. miniScale
+      // normalises by bitmap width, so a downscaled decode needs no other
+      // change anywhere.
+      const blob = await resp.blob();
+      const bitmap = await createImageBitmap(
+        blob,
+        paths.minimapDecodeWidth
+          ? { resizeWidth: paths.minimapDecodeWidth, resizeQuality: "high" }
+          : {},
+      );
+      state.basemap?.close(); // release the old pixels promptly
+      state.basemap = bitmap;
       state.miniScale = state.basemap.width / imageWidthPx;
     }
   } catch {
     // Missing basemap: the disc just stays unfilled until data arrives.
   }
+  try {
+    if (overlayInfo) {
+      const resp = await fetch(overlayInfo.url);
+      if (resp.ok) {
+        // Same downscale reasoning as the islemaps basemap: ~6 MB resident
+        // instead of ~25 MB; the draw stretches to px bounds so resolution
+        // only affects sharpness.
+        const bmp = await createImageBitmap(await resp.blob(), {
+          resizeWidth: 1250,
+          resizeQuality: "high",
+        });
+        const [left, top, right, bottom] = overlayInfo.boundsPx;
+        state.freshwater?.bitmap.close();
+        state.freshwater = { bitmap: bmp, x: left, y: top, w: right - left, h: bottom - top };
+      }
+    } else if (state.freshwater) {
+      state.freshwater.bitmap.close();
+      state.freshwater = null;
+    }
+  } catch {
+    // Overlay missing: the layer is simply absent.
+  }
+  draw();
+}
+
+/// Waypoints for the disc + the nearest-waypoint rim arrow. Both piggyback
+/// on events (waypoints://changed, position updates) — no polling.
+interface WaypointPx {
+  id: string;
+  name: string;
+  /** world cm (legacy field names) */
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  color: string | null;
+}
+let waypointsPx: WaypointPx[] = [];
+
+async function refreshWaypoints() {
+  try {
+    waypointsPx = await invoke<WaypointPx[]>("list_waypoints_px");
+  } catch {
+    waypointsPx = [];
+  }
+  state.waypoints = waypointsPx.map((w) => ({
+    xCm: w.x,
+    yCm: w.y,
+    px: w.px,
+    py: w.py,
+    color: w.color,
+    glyph: waypointGlyph(w.name),
+  }));
+  await refreshNearest();
+  draw();
+}
+
+async function refreshNearest() {
+  try {
+    const near = await invoke<{
+      id: string;
+      bearingDeg: number;
+      distanceM: number;
+    } | null>("nearest_waypoint");
+    const target = near ? waypointsPx.find((w) => w.id === near.id) : undefined;
+    state.nearestWaypoint = near
+      ? {
+          bearingDeg: near.bearingDeg,
+          distanceM: near.distanceM,
+          color: target?.color ?? null,
+          glyph: target ? waypointGlyph(target.name) : undefined,
+        }
+      : null;
+  } catch {
+    state.nearestWaypoint = null;
+  }
+}
+
+/// Full reload after a basemap switch: new geometry, new bitmap, and a
+/// defensive position/trail re-fetch (resync events also arrive; this closes
+/// the one-stale-frame window in between).
+async function reloadMapSource() {
+  try {
+    applyMapInfo(await invoke<MapInfoPayload>("get_map_info"));
+  } catch {
+    return; // keep rendering the old frame rather than a mismatched one
+  }
+  await loadData();
+  try {
+    const p = await invoke<PositionUpdate | null>("get_current_position");
+    if (p) {
+      state.position = { xCm: p.xCm, yCm: p.yCm, px: p.px, py: p.py, headingDeg: p.headingDeg };
+    }
+    const trail = await invoke<{ segmentsPx: [number, number][][] }>("get_current_trail");
+    state.trailPx = trail.segmentsPx;
+  } catch {
+    // resync events will repaint us shortly anyway
+  }
+  // Waypoint px is calibration-dependent — refresh in the new frame.
+  await refreshWaypoints();
   draw();
 }
 
@@ -163,9 +315,7 @@ async function init() {
   settings = await invoke<Settings>("get_settings");
   applySettings(settings);
 
-  const info = await invoke<{ imageWidthPx: number; pxPerMX: number }>("get_map_info");
-  state.pxPerM = info.pxPerMX;
-  imageWidthPx = info.imageWidthPx;
+  applyMapInfo(await invoke<MapInfoPayload>("get_map_info"));
 
   await listen<PositionUpdate>("position://update", (e) => {
     const p = e.payload;
@@ -174,13 +324,22 @@ async function init() {
     lastHeadingDeg = p.headingDeg;
     refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
     draw();
+    // The rim arrow re-aims from the new position; repaints once more when
+    // the answer arrives (still purely event-driven).
+    void refreshNearest().then(draw);
   });
+  await listen("waypoints://changed", () => void refreshWaypoints());
   await listen<{ segmentsPx: [number, number][][] }>("trail://changed", (e) => {
     state.trailPx = e.payload.segmentsPx;
     draw();
   });
   await listen<Settings>("settings://changed", (e) => {
     applySettings(e.payload);
+    const src = (e.payload.map?.basemap as string) ?? "vulnona";
+    if (src !== currentSource) {
+      void reloadMapSource();
+      return; // reloadMapSource draws when the new frame is ready
+    }
     draw();
   });
 
@@ -217,8 +376,9 @@ async function init() {
     // feature off — strip just shows "…" until data arrives
   }
 
-  // First-run / re-download completed: pick up the new data live.
-  await listen("fetch://finished", () => void loadData());
+  // First-run / re-download / silent top-up completed: pick up the new data
+  // live — including overlays that did not exist at init (get_map_info again).
+  await listen("fetch://finished", () => void reloadMapSource());
 
   // Initial state: position/trail otherwise arrive only as events, so a
   // fresh (re)loaded webview would sit on the hint disc until the player's
@@ -243,6 +403,7 @@ async function init() {
 
   // Data load can lag behind the first paint; draws again when ready.
   void loadData();
+  void refreshWaypoints();
 }
 
 void init().catch((e) => {

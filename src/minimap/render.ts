@@ -3,14 +3,17 @@
 // The map NEVER rotates: north is always up, so the compass letters stay
 // put. The player's heading is shown by the arrow and the readout pill.
 // Drawn with one drawImage cropping the region around the player out of the
-// preloaded 975 px tier. No repaint timers: draw only on new data.
+// preloaded bitmap (vulnona 975 px tier, or a downscaled islemaps decode).
+// No repaint timers: draw only on new data.
 
 export interface PoiDot {
   xCm: number;
   yCm: number;
-  px: number; // basemap 7800-space pixels
+  px: number; // px in the ACTIVE calibration's basemap space
   py: number;
   color: string;
+  /** When set (animal species), drawn as this emoji instead of a dot. */
+  glyph?: string;
 }
 
 export interface DinoBars {
@@ -30,14 +33,38 @@ export interface MinimapState {
   trailPx: [number, number][][];
   /** Point POIs already filtered by layer visibility (not by distance). */
   pois: PoiDot[];
+  /** Saved waypoints (cm + basemap px + user colour; glyph = icon pins). */
+  waypoints: {
+    xCm: number;
+    yCm: number;
+    px: number;
+    py: number;
+    color: string | null;
+    glyph?: string;
+  }[];
+  /** Rim arrow target: the closest saved waypoint, or null. */
+  nearestWaypoint: {
+    bearingDeg: number;
+    distanceM: number;
+    color: string | null;
+    glyph?: string;
+  } | null;
   basemap: ImageBitmap | null;
-  /** basemap tier scale: tierWidth / 7800. */
+  /** Fresh-water overlay; x/y/w/h in ACTIVE-calibration basemap px. */
+  freshwater: { bitmap: ImageBitmap; x: number; y: number; w: number; h: number } | null;
+  /** bitmap scale: bitmapWidth / active calibration's image_width_px. */
   miniScale: number;
   /** Basemap px per real metre (horizontal). */
   pxPerM: number;
   sizePx: number;
   radiusM: number;
   opacity: number;
+  /** Trail lines on the disc — settings.minimap.show_trail (declutter). */
+  showTrail: boolean;
+  /** Waypoint dots + rim arrow — settings.minimap.show_waypoints. */
+  showWaypoints: boolean;
+  /** Fresh-water overlay visibility — settings.layers.freshwater. */
+  showFreshwater: boolean;
   /** Extra height for the dino-stats strip; 0 = strip off. */
   panelH: number;
   dino: DinoBars | null;
@@ -62,6 +89,7 @@ const COLORS = {
   playerArrowOutline: "#10130c",
   playerHalo: "rgba(255, 230, 0, 0.20)",
   trail: "#ffcc55",
+  waypoint: "#4fc3f7", // matches theme.ts COLORS.waypoint
 };
 
 export function render(canvas: HTMLCanvasElement, state: MinimapState): void {
@@ -107,6 +135,7 @@ export function render(canvas: HTMLCanvasElement, state: MinimapState): void {
   ctx.restore();
 
   drawCompass(ctx, state, c, radius);
+  drawWaypointArrow(ctx, state, c, radius);
   drawHeadingPill(ctx, state, c, radius);
   // Player marker LAST and always fully opaque: however faded the map is,
   // you must still see where you are or the whole map is pointless.
@@ -149,11 +178,22 @@ function drawMap(
     oy + ((sy - (pos.py - sceneR)) / (sceneR * 2)) * side,
   ];
 
+  // Fresh-water overlay: stretched over its px bounds, over the basemap and
+  // under the trail/POIs. The disc clip is already active.
+  if (state.showFreshwater && state.freshwater) {
+    const fw = state.freshwater;
+    const [dx1, dy1] = toWidget(fw.x, fw.y);
+    const [dx2, dy2] = toWidget(fw.x + fw.w, fw.y + fw.h);
+    ctx.globalAlpha = state.opacity;
+    ctx.drawImage(fw.bitmap, dx1, dy1, dx2 - dx1, dy2 - dy1);
+    ctx.globalAlpha = 1;
+  }
+
   // Trail.
   ctx.strokeStyle = COLORS.trail;
   ctx.lineWidth = 2;
   ctx.lineJoin = "round";
-  for (const seg of state.trailPx) {
+  for (const seg of state.showTrail ? state.trailPx : []) {
     if (seg.length < 2) continue;
     ctx.beginPath();
     const [x0, y0] = toWidget(seg[0][0], seg[0][1]);
@@ -173,12 +213,96 @@ function drawMap(
     const distM = Math.hypot(poi.xCm - pos.xCm, poi.yCm - pos.yCm) / 100;
     if (distM > limitM) continue;
     const [x, y] = toWidget(poi.px, poi.py);
+    if (poi.glyph) {
+      // Species "logo" — colour emoji ignores fillStyle.
+      ctx.font = "13px 'Segoe UI Emoji', 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(poi.glyph, x, y);
+      continue;
+    }
     ctx.beginPath();
     ctx.arc(x, y, 3.5, 0, Math.PI * 2);
     ctx.fillStyle = poi.color;
     ctx.fill();
     ctx.stroke();
   }
+
+  // Waypoints: user colour + WHITE ring, so they never read as POI dots
+  // (those carry a dark ring).
+  if (state.showWaypoints) {
+    for (const wp of state.waypoints) {
+      const distM = Math.hypot(wp.xCm - pos.xCm, wp.yCm - pos.yCm) / 100;
+      if (distM > limitM) continue;
+      const [x, y] = toWidget(wp.px, wp.py);
+      if (wp.glyph) {
+        // Icon pins (💀 🏠 💧 …) draw as the icon itself.
+        ctx.font = "14px 'Segoe UI Emoji', 'Segoe UI', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(wp.glyph, x, y);
+        continue;
+      }
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = wp.color ?? COLORS.waypoint;
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+}
+
+/** Rim arrow + distance toward the closest waypoint OUTSIDE the view radius
+ * (inside it, its dot is already visible). North is always up, so the screen
+ * angle IS the compass bearing. */
+export function drawWaypointArrow(
+  ctx: CanvasRenderingContext2D,
+  state: MinimapState,
+  c: number,
+  radius: number,
+): void {
+  const wp = state.nearestWaypoint;
+  if (!state.showWaypoints || !wp || !state.position) return;
+  if (wp.distanceM <= state.radiusM) return;
+  const color = wp.color ?? COLORS.waypoint;
+  const rad = ((wp.bearingDeg - 90) * Math.PI) / 180;
+  const ax = c + (radius - 9) * Math.cos(rad);
+  const ay = c + (radius - 9) * Math.sin(rad);
+
+  ctx.save();
+  ctx.globalAlpha = state.opacity;
+  ctx.translate(ax, ay);
+  ctx.rotate(rad + Math.PI / 2); // triangle drawn tip-up, rotate onto bearing
+  ctx.beginPath();
+  ctx.moveTo(0, -6);
+  ctx.lineTo(5, 4);
+  ctx.lineTo(-5, 4);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.75)";
+  ctx.lineWidth = 1.5;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // Distance label just inside the arrow, with the compass-letter shadow
+  // trick. Icon pins prefix their icon: "💧 850 m" says what you're chasing.
+  const distText =
+    wp.distanceM >= 1000 ? `${(wp.distanceM / 1000).toFixed(1)} km` : `${Math.round(wp.distanceM)} m`;
+  const dist = wp.glyph ? `${wp.glyph} ${distText}` : distText;
+  const tx = c + (radius - 24) * Math.cos(rad);
+  const ty = c + (radius - 24) * Math.sin(rad);
+  ctx.font = "bold 10px 'Segoe UI', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.globalAlpha = state.opacity;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+  ctx.fillText(dist, tx + 1, ty + 1);
+  ctx.fillStyle = color;
+  ctx.fillText(dist, tx, ty);
+  ctx.globalAlpha = 1;
 }
 
 function drawCompass(
