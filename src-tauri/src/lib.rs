@@ -24,7 +24,7 @@ use std::path::PathBuf;
 
 use tauri::Manager;
 
-use crate::state::AppState;
+use crate::state::{AppState, LockExt};
 
 pub fn run(replay_file: Option<PathBuf>) {
     let builder = tauri::Builder::default()
@@ -77,11 +77,15 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::add_waypoint_at_pixel,
             commands::add_waypoint_here,
             commands::rename_waypoint,
+            commands::set_waypoint_color,
             commands::delete_waypoint,
+            commands::resolve_coordinates,
             commands::get_previous_trail,
             commands::get_current_trail,
+            commands::clear_trail,
             commands::data_status,
             commands::get_basemap_paths,
+            commands::set_basemap_source,
             commands::get_pois,
             commands::get_pois_render,
             commands::nearest_waypoint,
@@ -107,6 +111,34 @@ pub fn run(replay_file: Option<PathBuf>) {
             // Upgrade pois_gateway.json in place (offline, from cache) when
             // an app update added new layers.
             fetch::ensure_pois_current();
+            // ...and quietly fetch sources an update added that the offline
+            // path cannot produce (islemaps animal sightings).
+            fetch::spawn_topup(app.handle());
+            // Heal settings that point at deleted islemaps imagery (LOCALDATA
+            // wiped, roaming settings kept) BEFORE any window exists, so
+            // every later path/calibration resolve can trust the settings
+            // without per-call file checks.
+            {
+                let state = app.state::<AppState>();
+                let source = state.active_source();
+                if let Some(variant) = fetch::IslemapsVariant::for_source(source) {
+                    if !variant.dest().exists() {
+                        log::warn!(
+                            "selected basemap {} missing on disk - reverting to vulnona",
+                            source.key()
+                        );
+                        // Direct settings write, not apply_settings_patch —
+                        // there are no windows to broadcast to yet.
+                        let mut s = state.settings.lock_safe();
+                        *s = settings::merge(
+                            &s,
+                            &serde_json::json!({ "map": { "basemap": "vulnona" } }),
+                        );
+                        drop(s);
+                        state.request_settings_save();
+                    }
+                }
+            }
             if let Some(main) = app.get_webview_window("main") {
                 if let Ok(hwnd) = main.hwnd() {
                     win::vis::register("main", hwnd.0 as isize);

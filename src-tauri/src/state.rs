@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use overlay_core::{Calibration, PositionTracker, TrailConfig};
+use overlay_core::{Calibration, MapSource, PositionTracker, TrailConfig};
 use serde_json::Value;
 
 use crate::hotkeys::HotkeyManager;
@@ -35,8 +35,10 @@ pub struct AppState {
     pub trail_writer: Mutex<Option<TrailWriter>>,
     pub waypoints: Mutex<Vec<Waypoint>>,
     /// The most recent trail file from a PREVIOUS session, captured at startup
-    /// before this session writes anything.
-    pub previous_trail_path: Option<PathBuf>,
+    /// before this session writes anything. Mutex<Option>: the clear-trail
+    /// action `take()`s it so the dimmed previous trail stays hidden for the
+    /// rest of the session (the file itself is untouched).
+    pub previous_trail_path: Mutex<Option<PathBuf>>,
     started: Instant,
     save_debouncer: SettingsDebouncer,
 }
@@ -60,13 +62,20 @@ impl AppState {
         let writer = trail_config.enabled.then(TrailWriter::new);
         Self {
             hotkeys: HotkeyManager::new(),
+            // Deliberately PINNED to Vulnona, not the selected basemap: the
+            // tracker's calibration feeds only bearing_deg's north_offset_deg
+            // (0.0 for every current source); trails are stored cm-only and
+            // px is derived at emit time with the ACTIVE calibration. If a
+            // future source ever ships north_offset_deg != 0, the tracker
+            // must resolve its calibration per call instead — recreating the
+            // tracker on a basemap switch would drop live trail segments.
             tracker: Mutex::new(PositionTracker::new(
                 Calibration::gateway().clone(),
                 trail_config,
             )),
             trail_writer: Mutex::new(writer),
             waypoints: Mutex::new(store::load_waypoints()),
-            previous_trail_path: store::latest_trail_path(),
+            previous_trail_path: Mutex::new(store::latest_trail_path()),
             settings: Mutex::new(settings),
             started: Instant::now(),
             save_debouncer: SettingsDebouncer::new(),
@@ -76,6 +85,18 @@ impl AppState {
     /// Monotonic seconds since app start — the sample clock.
     pub fn now_s(&self) -> f64 {
         self.started.elapsed().as_secs_f64()
+    }
+
+    /// The basemap imagery the settings currently select. The settings guard
+    /// drops at the end of the expression — never held across other locks.
+    pub fn active_source(&self) -> MapSource {
+        settings::active_source(&self.settings.lock_safe())
+    }
+
+    /// Calibration frame of the selected basemap. `&'static` because every
+    /// source's calibration is embedded at compile time.
+    pub fn active_calibration(&self) -> &'static Calibration {
+        self.active_source().calibration()
     }
 
     /// Queue a debounced settings save (1.2 s after the last change, not at

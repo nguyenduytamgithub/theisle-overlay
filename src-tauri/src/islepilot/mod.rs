@@ -150,7 +150,13 @@ pub fn emit_last(app: &AppHandle) {
 
 /// Feed the panel's own live-map position (percent of map frame) into the
 /// normal one-way position pipeline. Assumes the panel frames the exact
-/// calibration bounds; logged loudly so a mismatch is diagnosable.
+/// VULNONA calibration bounds; logged loudly so a mismatch is diagnosable.
+///
+/// PINNED to Vulnona deliberately: the pct is relative to the SERVER PANEL's
+/// map frame — a property of that site, independent of which basemap the user
+/// is viewing. The cm we produce here flows through `pipeline::ingest_sample`,
+/// which converts cm -> px with the ACTIVE calibration, so display is correct
+/// on any basemap. Do not switch this to `state.active_calibration()`.
 fn ingest_map_position(app: &AppHandle, map: &MapPosition) {
     let (Some(pct_x), Some(pct_y)) = (map.pct_x, map.pct_y) else {
         return;

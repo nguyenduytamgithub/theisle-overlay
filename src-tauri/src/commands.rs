@@ -2,7 +2,7 @@
 //! `src/lib/api.ts` on the frontend.
 
 use overlay_core::{
-    bearing_to_compass_key, pixel_to_world, world_to_pixel, Calibration,
+    bearing_to_compass_key, pixel_to_world, world_to_pixel, MapSource,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -93,7 +93,7 @@ pub struct WaypointPx {
 /// Waypoints with render pixels attached — the transform stays in Rust.
 #[tauri::command]
 pub fn list_waypoints_px(state: State<AppState>) -> Vec<WaypointPx> {
-    let cal = Calibration::gateway();
+    let cal = state.active_calibration();
     state
         .waypoints
         .lock_safe()
@@ -109,54 +109,80 @@ pub fn list_waypoints_px(state: State<AppState>) -> Vec<WaypointPx> {
         .collect()
 }
 
-fn persist_waypoints(waypoints: &[Waypoint]) {
+fn persist_waypoints(app: &AppHandle, waypoints: &[Waypoint]) {
     if let Err(e) = store::save_waypoints(waypoints) {
         log::warn!("saving waypoints failed: {e}");
     }
+    // Both windows refresh on this (the minimap draws waypoints too).
+    crate::events::emit_all(app, "waypoints://changed", ());
 }
 
 /// Right-click on the full map: the frontend sends the clicked PIXEL and Rust
 /// converts — the transform stays single-sourced. Stored coords are raw cm.
 #[tauri::command]
-pub fn add_waypoint_at_pixel(state: State<AppState>, px: f64, py: f64, name: String) -> Waypoint {
-    let (x, y) = pixel_to_world(px, py, Calibration::gateway());
+pub fn add_waypoint_at_pixel(
+    app: AppHandle,
+    state: State<AppState>,
+    px: f64,
+    py: f64,
+    name: String,
+) -> Waypoint {
+    let (x, y) = pixel_to_world(px, py, state.active_calibration());
     let wp = store::new_waypoint(&name, x, y, 0.0, None);
     let mut waypoints = state.waypoints.lock_safe();
     waypoints.push(wp.clone());
-    persist_waypoints(&waypoints);
+    persist_waypoints(&app, &waypoints);
     wp
 }
 
 /// The "mark here" hotkey action: drop a waypoint at the current position.
 #[tauri::command]
-pub fn add_waypoint_here(state: State<AppState>, name: String) -> Option<Waypoint> {
+pub fn add_waypoint_here(app: AppHandle, state: State<AppState>, name: String) -> Option<Waypoint> {
     let current = state.tracker.lock_safe().current?;
     let wp = store::new_waypoint(&name, current.x, current.y, current.z, None);
     let mut waypoints = state.waypoints.lock_safe();
     waypoints.push(wp.clone());
-    persist_waypoints(&waypoints);
+    persist_waypoints(&app, &waypoints);
     Some(wp)
 }
 
 #[tauri::command]
-pub fn rename_waypoint(state: State<AppState>, id: String, name: String) -> bool {
+pub fn rename_waypoint(app: AppHandle, state: State<AppState>, id: String, name: String) -> bool {
     let mut waypoints = state.waypoints.lock_safe();
     let Some(wp) = waypoints.iter_mut().find(|w| w.id == id) else {
         return false;
     };
     wp.name = name;
-    persist_waypoints(&waypoints);
+    persist_waypoints(&app, &waypoints);
+    true
+}
+
+/// Set (or clear, with None) a waypoint's colour. Colours live in the same
+/// legacy-compatible field the Python app already had.
+#[tauri::command]
+pub fn set_waypoint_color(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+    color: Option<String>,
+) -> bool {
+    let mut waypoints = state.waypoints.lock_safe();
+    let Some(wp) = waypoints.iter_mut().find(|w| w.id == id) else {
+        return false;
+    };
+    wp.color = color;
+    persist_waypoints(&app, &waypoints);
     true
 }
 
 #[tauri::command]
-pub fn delete_waypoint(state: State<AppState>, id: String) -> bool {
+pub fn delete_waypoint(app: AppHandle, state: State<AppState>, id: String) -> bool {
     let mut waypoints = state.waypoints.lock_safe();
     let before = waypoints.len();
     waypoints.retain(|w| w.id != id);
     let removed = waypoints.len() != before;
     if removed {
-        persist_waypoints(&waypoints);
+        persist_waypoints(&app, &waypoints);
     }
     removed
 }
@@ -165,19 +191,36 @@ pub fn delete_waypoint(state: State<AppState>, id: String) -> bool {
 /// restored them), rendered dimmed on both maps.
 #[tauri::command]
 pub fn get_previous_trail(state: State<AppState>) -> TrailPayload {
-    match &state.previous_trail_path {
-        Some(path) => {
-            pipeline::trail_payload(&store::load_trail(path), Calibration::gateway())
-        }
+    let cal = state.active_calibration();
+    match state.previous_trail_path.lock_safe().as_ref() {
+        Some(path) => pipeline::trail_payload(&store::load_trail(path), cal),
         None => TrailPayload::default(),
     }
+}
+
+/// "Clear trail": declutter the maps mid-session. Resets the in-memory trail
+/// (both windows repaint via trail://changed) and hides the previous
+/// session's dimmed trail for the rest of this session. The trail FILES are
+/// untouched — history survives on disk; a break record marks the cut.
+#[tauri::command]
+pub fn clear_trail(app: AppHandle, state: State<AppState>) {
+    state.tracker.lock_safe().clear_trail();
+    *state.previous_trail_path.lock_safe() = None;
+    if let Some(writer) = state.trail_writer.lock_safe().as_mut() {
+        writer.add_break();
+    }
+    let cal = state.active_calibration();
+    crate::events::emit_all(&app, crate::events::TRAIL_CHANGED, pipeline::trail_payload(&[], cal));
 }
 
 /// The current session's trail so far — for a window opening mid-session.
 #[tauri::command]
 pub fn get_current_trail(state: State<AppState>) -> TrailPayload {
+    // Resolve the calibration BEFORE taking the tracker lock (it briefly
+    // takes the settings lock).
+    let cal = state.active_calibration();
     let tracker = state.tracker.lock_safe();
-    pipeline::trail_payload(&tracker.segments, Calibration::gateway())
+    pipeline::trail_payload(&tracker.segments, cal)
 }
 
 #[derive(Serialize)]
@@ -202,22 +245,72 @@ pub fn data_status() -> DataStatus {
 pub struct BasemapPaths {
     pub minimap: String,
     pub fullmap: String,
+    /// "vulnona" | "islemaps_light" | "islemaps_dark"
+    pub source: String,
+    /// Decode-time downscale hint for the minimap's createImageBitmap — set
+    /// for the big islemaps PNGs so the always-resident bitmap stays small.
+    pub minimap_decode_width: Option<u32>,
 }
 
+/// The minimap decode width for islemaps imagery: 1250 px over the 1234-unit
+/// world span is slightly sharper than the vulnona minimap tier (975/1112)
+/// while keeping the resident bitmap at ~6 MB instead of ~25 MB.
+const ISLEMAPS_MINIMAP_DECODE_WIDTH: u32 = 1250;
+
 /// Absolute paths for the frontend to feed through `convertFileSrc()` (asset
-/// protocol) — the images are never bundled into the app.
+/// protocol) — the images are never bundled into the app. For islemaps both
+/// roles use the same PNG; the minimap downscales at decode.
 #[tauri::command]
-pub fn get_basemap_paths() -> BasemapPaths {
-    BasemapPaths {
-        minimap: settings::basemap_dir()
-            .join("minimap.webp")
-            .to_string_lossy()
-            .into_owned(),
-        fullmap: settings::basemap_dir()
-            .join("fullmap.webp")
-            .to_string_lossy()
-            .into_owned(),
+pub fn get_basemap_paths(state: State<AppState>) -> BasemapPaths {
+    let source = state.active_source();
+    match crate::fetch::IslemapsVariant::for_source(source) {
+        Some(variant) => {
+            let path = variant.dest().to_string_lossy().into_owned();
+            BasemapPaths {
+                minimap: path.clone(),
+                fullmap: path,
+                source: source.key().to_string(),
+                minimap_decode_width: Some(ISLEMAPS_MINIMAP_DECODE_WIDTH),
+            }
+        }
+        None => BasemapPaths {
+            minimap: settings::basemap_dir()
+                .join("minimap.webp")
+                .to_string_lossy()
+                .into_owned(),
+            fullmap: settings::basemap_dir()
+                .join("fullmap.webp")
+                .to_string_lossy()
+                .into_owned(),
+            source: source.key().to_string(),
+            minimap_decode_width: None,
+        },
     }
+}
+
+/// Switch the basemap imagery. Downloads the islemaps PNG on first selection
+/// (blocking work off the async core), then patches settings (which
+/// broadcasts `settings://changed`) and resyncs so both windows repaint in
+/// the new frame. Settings are only ever patched on success, so "revert on
+/// failure" needs no code. Deliberately does NOT emit `fetch://finished` —
+/// that channel means "the vulnona+POI bundle finished" and drives first-run.
+#[tauri::command]
+pub async fn set_basemap_source(app: AppHandle, source: String) -> Result<(), String> {
+    let src = MapSource::try_from_key(&source)
+        .ok_or_else(|| format!("unknown basemap source {source:?}"))?;
+    if let Some(variant) = crate::fetch::IslemapsVariant::for_source(src) {
+        if !variant.dest().exists() {
+            let app2 = app.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                crate::fetch::fetch_islemaps_with_events(&app2, variant, false)
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+        }
+    }
+    apply_settings_patch(&app, serde_json::json!({ "map": { "basemap": src.key() } }));
+    pipeline::resync(&app);
+    Ok(())
 }
 
 /// Raw pois_gateway.json (already px+cm normalised by the fetch step).
@@ -262,8 +355,8 @@ pub struct PoiLayer {
 /// POI layers with every coordinate already converted to basemap pixels —
 /// the frontend renders, it never transforms.
 #[tauri::command]
-pub fn get_pois_render() -> Result<Vec<PoiLayer>, String> {
-    let cal = Calibration::gateway();
+pub fn get_pois_render(state: State<AppState>) -> Result<Vec<PoiLayer>, String> {
+    let cal = state.active_calibration();
     let text = std::fs::read_to_string(settings::pois_path()).map_err(|e| e.to_string())?;
     let raw: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     let Some(layers) = raw.get("layers").and_then(|l| l.as_object()) else {
@@ -393,24 +486,91 @@ pub fn get_fullscreen_mode() -> Option<i32> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ResolvedCoords {
+    pub x_cm: f64,
+    pub y_cm: f64,
+    pub px: f64,
+    pub py: f64,
+    pub in_bounds: bool,
+}
+
+/// Parse a MANUALLY pasted coordinate string (friend's Discord message, own
+/// notes) into world cm + active-basemap px, with the same parser and number
+/// format the clipboard path uses. Manual input only — never wired to any
+/// automatic source.
+#[tauri::command]
+pub fn resolve_coordinates(state: State<AppState>, text: String) -> Option<ResolvedCoords> {
+    let format = {
+        let s = state.settings.lock_safe();
+        overlay_core::NumberFormat::from_setting(settings::get_str(&s, &["number_format"], "auto"))
+    };
+    let (x, y, _z) = overlay_core::parse_coordinates(&text, format)?;
+    let cal = state.active_calibration();
+    let (px, py) = world_to_pixel(x, y, cal);
+    Some(ResolvedCoords {
+        x_cm: x,
+        y_cm: y,
+        px,
+        py,
+        in_bounds: overlay_core::is_in_bounds(px, py, cal),
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MapInfo {
     pub image_width_px: u32,
     pub image_height_px: u32,
     /// Basemap pixels per real-world metre, horizontal / vertical.
     pub px_per_m_x: f64,
     pub px_per_m_y: f64,
+    /// "vulnona" | "islemaps_light" | "islemaps_dark"
+    pub source: String,
+    /// Image overlays drawn over the basemap (only those present on disk).
+    pub overlays: Vec<OverlayRender>,
 }
 
-/// Scale constants the minimap needs for its radius maths — derived from the
-/// calibration in Rust so the frontend holds no transform of its own.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayRender {
+    /// Doubles as the layers.* visibility key.
+    pub key: &'static str,
+    /// Absolute path — the frontend feeds it through convertFileSrc.
+    pub path: String,
+    /// [left, top, right, bottom] in ACTIVE-calibration basemap px. The
+    /// overlay image is stretched over this rect, so its own pixel size is
+    /// irrelevant and it stays aligned on every basemap.
+    pub bounds_px: [f64; 4],
+}
+
+/// Scale constants both windows need for their geometry maths — derived from
+/// the ACTIVE calibration in Rust so the frontend holds no transform of its
+/// own.
 #[tauri::command]
-pub fn get_map_info() -> MapInfo {
-    let cal = Calibration::gateway();
+pub fn get_map_info(state: State<AppState>) -> MapInfo {
+    let source = state.active_source();
+    let cal = source.calibration();
+    let mut overlays = Vec::new();
+    let freshwater = crate::fetch::freshwater_dest();
+    if freshwater.exists() {
+        // The overlay is painted in the islemaps frame; re-project its world
+        // rect into the active basemap's px space.
+        let frame = MapSource::IslemapsLight.calibration();
+        let (left, top) = world_to_pixel(frame.min_x * 1000.0, frame.min_y * 1000.0, cal);
+        let (right, bottom) = world_to_pixel(frame.max_x * 1000.0, frame.max_y * 1000.0, cal);
+        overlays.push(OverlayRender {
+            key: "freshwater",
+            path: freshwater.to_string_lossy().into_owned(),
+            bounds_px: [left, top, right, bottom],
+        });
+    }
     MapInfo {
         image_width_px: cal.image_width_px,
         image_height_px: cal.image_height_px,
         px_per_m_x: cal.image_width_px as f64 / (cal.span_y() * 10.0),
         px_per_m_y: cal.image_height_px as f64 / (cal.span_x() * 10.0),
+        source: source.key().to_string(),
+        overlays,
     }
 }
 

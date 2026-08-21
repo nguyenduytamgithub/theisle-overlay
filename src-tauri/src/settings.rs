@@ -42,6 +42,12 @@ pub fn basemap_dir() -> PathBuf {
     local_dir().join("basemap")
 }
 
+/// On-demand islemaps.com imagery (light.png / dark.png / meta.json). Not in
+/// `ensure_dirs` — the downloader creates it when the user first selects one.
+pub fn islemaps_dir() -> PathBuf {
+    basemap_dir().join("islemaps")
+}
+
 pub fn trails_dir() -> PathBuf {
     roaming_dir().join("trails")
 }
@@ -99,6 +105,8 @@ pub fn default_settings() -> Value {
             "opacity": 0.85,             // 0.25 - 1.0
             "radius_m": 600,             // real-world radius shown around the player
             "click_through": true,
+            "show_trail": true,          // trail lines on the minimap disc
+            "show_waypoints": true,      // waypoint dots + nearest-waypoint arrow
         },
         "hotkeys": {
             "toggle_minimap": "Ctrl+Alt+M",
@@ -124,9 +132,12 @@ pub fn default_settings() -> Value {
             "patrol": false,
             "region": true,              // big area-name labels
             "landmark": false,
+            "animal": false,             // islemaps.com AI spawn sightings
+            "freshwater": false,         // islemaps.com fresh-water overlay
         },
         "map": {
             "zone_labels": true,         // names inside zone outlines
+            "basemap": "vulnona",        // vulnona | islemaps_light | islemaps_dark
         },
         "trail": {
             "enabled": true,
@@ -221,6 +232,12 @@ pub fn read_game_fullscreen_mode() -> Option<i32> {
     None
 }
 
+/// The basemap imagery the settings select. Lenient: junk or missing values
+/// fall back to Vulnona, the imagery guaranteed to exist after first run.
+pub fn active_source(settings: &Value) -> overlay_core::MapSource {
+    overlay_core::MapSource::from_key(get_str(settings, &["map", "basemap"], "vulnona"))
+}
+
 // -- typed accessors into the settings Value --------------------------------
 
 pub fn get_f64(settings: &Value, path: &[&str], default: f64) -> f64 {
@@ -289,5 +306,11 @@ mod tests {
         assert_eq!(merged["layers"]["food"], true);
         assert_eq!(merged["number_format"], "eu");
         assert_eq!(merged["language"], "vi", "new key gets its default");
+        assert_eq!(merged["map"]["basemap"], "vulnona", "new key gets its default");
+        assert_eq!(
+            active_source(&merged),
+            overlay_core::MapSource::Vulnona,
+            "legacy settings resolve to the default imagery"
+        );
     }
 }

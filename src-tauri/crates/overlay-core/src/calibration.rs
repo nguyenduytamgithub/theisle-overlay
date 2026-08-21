@@ -11,6 +11,10 @@ use serde::Deserialize;
 /// out of this same string so code and fixtures cannot drift apart.
 pub const CALIBRATION_JSON: &str = include_str!("../data/calibration.json");
 
+/// Calibration for the islemaps.com imagery (light and dark share one
+/// geometry — same 2500x2500 frame, same world extent).
+pub const CALIBRATION_ISLEMAPS_JSON: &str = include_str!("../data/calibration_islemaps.json");
+
 /// Transform constants for one map version.
 ///
 /// Verified against VulnonaMAP `js/map.js` ($map.calc.game2map) and
@@ -63,6 +67,62 @@ impl Calibration {
         });
         &GATEWAY
     }
+
+    /// The embedded islemaps.com calibration (shared by light and dark).
+    pub fn islemaps() -> &'static Calibration {
+        static ISLEMAPS: LazyLock<Calibration> = LazyLock::new(|| {
+            Calibration::from_json(CALIBRATION_ISLEMAPS_JSON)
+                .expect("embedded calibration_islemaps.json must parse")
+        });
+        &ISLEMAPS
+    }
+}
+
+/// Which basemap imagery the user selected. One entry per *calibration frame*
+/// x style; a future multi-map feature adds a map dimension, not more variants
+/// here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MapSource {
+    #[default]
+    Vulnona,
+    IslemapsLight,
+    IslemapsDark,
+}
+
+impl MapSource {
+    /// Lenient: unknown/missing settings values fall back to Vulnona (the
+    /// imagery that is guaranteed to exist after first run).
+    pub fn from_key(key: &str) -> MapSource {
+        Self::try_from_key(key).unwrap_or_default()
+    }
+
+    /// Strict: for validating IPC input. None on unknown key.
+    pub fn try_from_key(key: &str) -> Option<MapSource> {
+        match key {
+            "vulnona" => Some(MapSource::Vulnona),
+            "islemaps_light" => Some(MapSource::IslemapsLight),
+            "islemaps_dark" => Some(MapSource::IslemapsDark),
+            _ => None,
+        }
+    }
+
+    /// The settings/IPC key for this source.
+    pub fn key(self) -> &'static str {
+        match self {
+            MapSource::Vulnona => "vulnona",
+            MapSource::IslemapsLight => "islemaps_light",
+            MapSource::IslemapsDark => "islemaps_dark",
+        }
+    }
+
+    /// The calibration frame this imagery is drawn in. Light and dark share
+    /// one geometry, so they return the identical `&'static`.
+    pub fn calibration(self) -> &'static Calibration {
+        match self {
+            MapSource::Vulnona => Calibration::gateway(),
+            MapSource::IslemapsLight | MapSource::IslemapsDark => Calibration::islemaps(),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -108,7 +168,12 @@ pub struct SelfTest {
 
 impl SelfTest {
     pub fn embedded() -> Self {
-        serde_json::from_str(CALIBRATION_JSON)
-            .expect("embedded calibration.json selftest block must parse")
+        Self::from_json(CALIBRATION_JSON)
+    }
+
+    /// Selftest block of any embedded calibration file (panics on a fixture
+    /// that does not parse — these are compile-time constants, not user data).
+    pub fn from_json(json: &str) -> Self {
+        serde_json::from_str(json).expect("embedded calibration selftest block must parse")
     }
 }

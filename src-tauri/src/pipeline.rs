@@ -2,6 +2,9 @@
 //! windows. Port of the sample-handling wiring from the original `main.py`.
 
 use overlay_core::{bearing_to_compass_key, world_to_pixel, Calibration};
+// Note: every px in these payloads is computed with state.active_calibration()
+// at emit time — nothing px-shaped is cached, so a basemap switch only needs a
+// resync to repaint everything in the new frame.
 use tauri::{AppHandle, Manager};
 
 use crate::events::{
@@ -14,7 +17,9 @@ use crate::state::{AppState, LockExt};
 pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
     let state = app.state::<AppState>();
     let now_s = state.now_s();
-    let cal = Calibration::gateway();
+    // Resolve the calibration BEFORE taking the tracker lock (active_calibration
+    // briefly takes the settings lock).
+    let cal = state.active_calibration();
 
     let (outcome, heading, trail) = {
         let mut tracker = state.tracker.lock_safe();
@@ -60,7 +65,7 @@ pub fn ingest_sample(app: &AppHandle, x: f64, y: f64, z: f64) {
 /// player's next manual coordinate copy.
 pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
     let now_s = state.now_s();
-    let cal = Calibration::gateway();
+    let cal = state.active_calibration();
     let (current, heading) = {
         let tracker = state.tracker.lock_safe();
         (tracker.current, tracker.heading(now_s))
@@ -84,7 +89,7 @@ pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
 /// this mostly matters after a manual webview reload.
 pub fn resync(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let cal = Calibration::gateway();
+    let cal = state.active_calibration();
 
     let trail = {
         let tracker = state.tracker.lock_safe();

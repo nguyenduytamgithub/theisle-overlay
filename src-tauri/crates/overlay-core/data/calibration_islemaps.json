@@ -1,0 +1,37 @@
+{
+  "map": "Gateway_islemaps",
+  "_source": "https://www.islemaps.com/map/map-light.png + map-dark.png (2500x2500, single Leaflet imageOverlay; site bounds [[-616,-560],[618,674]] in cm/1000 with lat = -gameX/1000)",
+  "_verified_against": "direction-named in-game POIs (Northern Beach gameX=-379k vs Southern Beach gameX=+397k) + dome landmark cross-checked on both imagery families (~1.5% agreement). Same linear formula shape as calibration.json - no axis flip.",
+
+  "min_X": -618,
+  "max_X": 616,
+  "min_Y": -560,
+  "max_Y": 674,
+  "axis_X": "H",
+
+  "image_width_px": 2500,
+  "image_height_px": 2500,
+
+  "_axis_note": "Same convention as calibration.json: game X (Lat) spans [min_X,max_X] = 1234 along the image HEIGHT; game Y (Long) spans [min_Y,max_Y] = 1234 along the image WIDTH. Units: world cm / 1000.",
+  "_extent_note": "This frame is LARGER than Vulnona's (X -607..509, Y -505..607): the SE archipelago (Hell's Mouth) is ON-image here because the islemaps art tracks a newer game build than Vulnona's 0.21.7 render. Per-source calibration is required; nothing may clamp.",
+
+  "north_offset_deg": 0.0,
+
+  "selftest_tolerance_px": 1.0,
+  "_anchor_note": "Same world-cm anchors as calibration.json, re-projected into the islemaps 2500px frame: px = (y/1000 + 560)/1234*2500, py = (x/1000 + 618)/1234*2500. Hell's Mouth is IN bounds under this calibration (py < 2500) - that is the sharpest regression test of the larger extent. The out-of-bounds record is synthetic: gameX = 700 units is past max_X = 616.",
+  "selftest_anchors": [
+    { "name": "Water Access Salt Lick", "raw": [-231654.353,  52099.673], "px": 1240.07, "py":  782.71 },
+    { "name": "Falls Pond Salt Lick",   "raw": [-159923.370, 293325.380], "px": 1728.78, "py":  928.03 },
+    { "name": "Highlands Salt Lick",    "raw": [  41151.966, -88576.924], "px":  955.07, "py": 1335.40 },
+    { "name": "Delta Salt Lick",        "raw": [ -51899.767, 158669.822], "px": 1455.98, "py": 1146.88 },
+    { "name": "Vein Island",            "raw": [ 404868.089, 436554.633], "px": 2018.95, "py": 2072.26 },
+    { "name": "Hell's Mouth (in bounds here)", "raw": [608519.832, -178543.339], "px": 772.81, "py": 2484.85 }
+  ],
+  "selftest_out_of_bounds": {
+    "name": "South of charted area (synthetic)",
+    "raw": [700000.0, -178543.339],
+    "px": 772.81,
+    "py": 2670.18,
+    "assert": "py > image_height_px; must NOT be clamped"
+  }
+}

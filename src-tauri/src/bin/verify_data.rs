@@ -1,24 +1,73 @@
 //! Check that the POI data matches the basemap image. Port of
 //! `tools/verify_data.py`.
 //!
-//!     cargo run --bin verify_data --features devtools
+//!     cargo run --bin verify_data --features devtools [-- --source <src>]
+//!     <src>: vulnona (default) | islemaps-light | islemaps-dark
 //!
 //! Why: the arithmetic tests only verify the FORMULA. They cannot catch "the
 //! right formula paired with the wrong basemap version". The check: sample
 //! the basemap pixel colour under every POI — salt licks, mud wallows and
 //! lakeshores must sit on LAND. If too many land in ocean, or swapping the
-//! axes scores BETTER, something is wrong. Run after every map update.
+//! axes scores BETTER, something is wrong. Run after every map update, and
+//! for every source after touching a calibration.
 
-use overlay_core::{world_to_pixel, Calibration};
+use overlay_core::{world_to_pixel, MapSource};
 use theisle_overlay_lib::settings;
 
-const STRICT_LAYERS: [&str; 4] = ["water", "saltlick", "mudwallow", "sanctuary"];
 const STRICT_MAX_PCT: f64 = 2.0;
-const OVERALL_MAX_PCT: f64 = 10.0;
+
+/// Layers that must sit on land, and the overall ocean-rate cap — per source.
+/// The dark islemaps style reuses the SEA fill for lakes and rivers, so
+/// water-adjacent layers (lake name labels ON the water, sanctuary polygons
+/// crossing rivers) legitimately sample as "ocean" there; the mis-transform
+/// signal on dark is the pure-land layers plus the axis-swap comparison.
+fn strict_layers(source: MapSource) -> &'static [&'static str] {
+    match source {
+        MapSource::IslemapsDark => &["saltlick", "mudwallow"],
+        _ => &["water", "saltlick", "mudwallow", "sanctuary"],
+    }
+}
+
+fn overall_max_pct(source: MapSource) -> f64 {
+    match source {
+        MapSource::IslemapsDark => 15.0,
+        _ => 10.0,
+    }
+}
+
+fn parse_source() -> Result<MapSource, String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.iter().position(|a| a == "--source") {
+        None => Ok(MapSource::Vulnona),
+        Some(i) => {
+            let value = args.get(i + 1).ok_or("--source needs a value")?;
+            // Accept both spellings; the settings key uses '_'.
+            MapSource::try_from_key(&value.replace('-', "_"))
+                .ok_or_else(|| format!("unknown source {value:?} (vulnona | islemaps-light | islemaps-dark)"))
+        }
+    }
+}
 
 fn main() -> std::process::ExitCode {
-    let cal = Calibration::gateway();
-    let img_path = settings::basemap_dir().join("fullmap.webp");
+    // --reconvert: rebuild pois_gateway.json from the cached source files
+    // first (offline), so a POIS_VERSION bump or a freshly cached source can
+    // be verified without launching the app.
+    if std::env::args().any(|a| a == "--reconvert") {
+        theisle_overlay_lib::fetch::ensure_pois_current();
+    }
+    let source = match parse_source() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{e}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+    let cal = source.calibration();
+    let img_path = match theisle_overlay_lib::fetch::IslemapsVariant::for_source(source) {
+        Some(variant) => variant.dest(),
+        None => settings::basemap_dir().join("fullmap.webp"),
+    };
+    println!("source: {}  image: {}", source.key(), img_path.display());
     let img = match image::open(&img_path) {
         Ok(i) => i.to_rgb8(),
         Err(e) => {
@@ -40,6 +89,17 @@ fn main() -> std::process::ExitCode {
     let sx = img.width() as f64 / cal.image_width_px as f64;
     let sy = img.height() as f64 / cal.image_height_px as f64;
 
+    // Ocean test per imagery family. Vulnona's ocean is photographic navy
+    // (relative channel test); islemaps paints the sea as ONE flat fill, so a
+    // near-exact match against the sampled fill colour is the sharp test.
+    let ocean_rgb = |r: i32, g: i32, b: i32| -> bool {
+        let near = |v: i32, want: i32| (v - want).abs() <= 8;
+        match source {
+            MapSource::Vulnona => b > r + 25 && b > g + 18 && r < 90,
+            MapSource::IslemapsLight => near(r, 48) && near(g, 56) && near(b, 72),
+            MapSource::IslemapsDark => near(r, 17) && near(g, 24) && near(b, 26),
+        }
+    };
     let is_ocean = |px: f64, py: f64| -> Option<bool> {
         let ix = (px * sx) as i64;
         let iy = (py * sy) as i64;
@@ -47,8 +107,7 @@ fn main() -> std::process::ExitCode {
             return None;
         }
         let p = img.get_pixel(ix as u32, iy as u32);
-        let (r, g, b) = (p[0] as i32, p[1] as i32, p[2] as i32);
-        Some(b > r + 25 && b > g + 18 && r < 90)
+        Some(ocean_rgb(p[0] as i32, p[1] as i32, p[2] as i32))
     };
 
     let survey = |swap: bool| -> Vec<(String, u64, u64)> {
@@ -96,7 +155,7 @@ fn main() -> std::process::ExitCode {
         g_ocean += o;
         g_total += n;
         let mut mark = "";
-        if STRICT_LAYERS.contains(&name.as_str()) && pct > STRICT_MAX_PCT {
+        if strict_layers(source).contains(&name.as_str()) && pct > STRICT_MAX_PCT {
             mark = "  <-- TOO HIGH";
             failures.push(format!("{name}: {pct:.1}% > {STRICT_MAX_PCT}%"));
         }
@@ -111,8 +170,9 @@ fn main() -> std::process::ExitCode {
     println!("\n  overall            {overall:5.1}%");
     println!("  with axes swapped  {swapped:5.1}%   (must be CLEARLY worse)");
 
-    if overall > OVERALL_MAX_PCT {
-        failures.push(format!("overall {overall:.1}% > {OVERALL_MAX_PCT}%"));
+    let overall_cap = overall_max_pct(source);
+    if overall > overall_cap {
+        failures.push(format!("overall {overall:.1}% > {overall_cap}%"));
     }
     if swapped <= overall {
         failures.push("axis swap scores equal or better — axes may be wrong".to_string());

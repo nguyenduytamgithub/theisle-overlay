@@ -9,7 +9,7 @@ pub mod coords;
 pub mod parse;
 pub mod tracker;
 
-pub use calibration::{Calibration, CALIBRATION_JSON};
+pub use calibration::{Calibration, MapSource, CALIBRATION_ISLEMAPS_JSON, CALIBRATION_JSON};
 pub use coords::{
     bearing_deg, bearing_to_compass_key, distance_m, is_in_bounds, pixel_to_world,
     world_to_pixel,
