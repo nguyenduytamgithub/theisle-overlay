@@ -4,7 +4,7 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
-## [1.1.1] — 2026-08-21 (chưa phát hành, nhánh `fix/minimap-focus`)
+## [1.1.1] — 2026-08-21
 
 ### Sửa
 
