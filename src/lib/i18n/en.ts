@@ -79,6 +79,7 @@ export const en: Record<MsgKey, string> = {
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Minimap",
   "settings.visible": "Show minimap",
+  "settings.require_game": "Only show while the game is running",
   "settings.click_through": "Click-through (never blocks gameplay)",
   "settings.corner": "Anchor corner on the game window",
   "corner.top-left": "Top left",
@@ -169,6 +170,8 @@ export const en: Record<MsgKey, string> = {
   "dino.map_disabled": "The live map is disabled on this server.",
   "dino.crashed":
     "The Your Dino section hit an error and was isolated — the map and other features are unaffected.",
+  "map.crashed":
+    "The map hit a display error. Click Retry, or press F5 to reload the whole app.",
   "btn.retry": "Retry",
 
   "update.available": "Update {version} available",
@@ -178,6 +181,7 @@ export const en: Record<MsgKey, string> = {
 
   "footer.developed_by": "Developed by",
   "footer.donate": "Donate",
+  "footer.reload_hint": "If the app breaks, press F5 to reload",
   "donate.title": "Support the author",
   "donate.hint": "Scan the VietQR code with your banking app, or transfer manually:",
   "donate.copy_stk": "Copy account number",

@@ -9,11 +9,13 @@
     addWaypointAtPixel,
     deleteWaypoint,
     getBasemapUrls,
+    getCurrentPosition,
     getCurrentTrail,
     getNearestWaypoint,
     getPoisRender,
     getPreviousTrail,
     getSettings,
+    listenerBag,
     listWaypointsPx,
     patchSettings,
     onWaypointsChanged,
@@ -35,7 +37,6 @@
     COLORS,
     LAYER_COLORS,
     LAYER_ORDER,
-    PLAYER_DOT_RADIUS,
     POI_DOT_RADIUS,
     WAYPOINT_RADIUS,
     ZONE_FILL_OPACITY,
@@ -61,7 +62,8 @@
   let waypointGroup: L.LayerGroup | undefined;
   let currentTrail: L.LayerGroup | undefined;
   let previousTrail: L.LayerGroup | undefined;
-  let playerMarker: L.CircleMarker | undefined;
+  let playerMarker: L.Marker | undefined;
+  let playerArrowEl: HTMLElement | null = null;
 
   let settings = $state<Settings | null>(null);
   let position = $state<PositionUpdate | null>(null);
@@ -70,7 +72,51 @@
   let promptOpen = $state(false);
   let pendingPixel: { px: number; py: number } | null = null;
 
-  const unlisteners: Array<() => void> = [];
+  const bag = listenerBag();
+
+  // The self-marker: a yellow dart when the heading is known, a plain disc
+  // when it is not — always with the dark+white double outline so it can
+  // never be confused with waypoint/POI circles.
+  const PLAYER_SVG = `<svg viewBox="0 0 28 28" width="28" height="28">
+    <g class="glyph-arrow">
+      <path d="M14 2 L24 24 L14 18 L4 24 Z" fill="${COLORS.playerArrow}"
+            stroke="${COLORS.playerArrowOutline}" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M14 2 L24 24 L14 18 L4 24 Z" fill="${COLORS.playerArrow}"
+            stroke="rgba(255,255,255,0.9)" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+    <g class="glyph-dot">
+      <circle cx="14" cy="14" r="6.5" fill="${COLORS.playerArrow}"
+              stroke="${COLORS.playerArrowOutline}" stroke-width="3"/>
+      <circle cx="14" cy="14" r="6.5" fill="${COLORS.playerArrow}"
+              stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/>
+    </g>
+  </svg>`;
+
+  function upsertPlayer(p: PositionUpdate) {
+    if (!map) return;
+    const ll = toLatLng(p.px, p.py);
+    if (!playerMarker) {
+      playerMarker = L.marker(ll, {
+        icon: L.divIcon({
+          className: "player-arrow",
+          html: `<div class="player-arrow-inner">${PLAYER_SVG}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(map);
+      playerArrowEl = playerMarker.getElement()?.querySelector(".player-arrow-inner") ?? null;
+    } else {
+      playerMarker.setLatLng(ll);
+    }
+    if (playerArrowEl) {
+      // Rotate the INNER element: Leaflet owns the icon's own transform for
+      // positioning. Compass 0 = north = up, clockwise — CSS rotate matches.
+      playerArrowEl.classList.toggle("no-heading", p.headingDeg === null);
+      playerArrowEl.style.transform = p.headingDeg !== null ? `rotate(${p.headingDeg}deg)` : "";
+    }
+  }
 
   const escapeHtml = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -300,47 +346,49 @@
         promptOpen = true;
       });
 
-      unlisteners.push(
-        await onPositionUpdate(async (p) => {
+      await bag.add(
+        onPositionUpdate(async (p) => {
           position = p;
           if (!map) return;
-          const ll = toLatLng(p.px, p.py);
-          if (!playerMarker) {
-            playerMarker = L.circleMarker(ll, {
-              radius: PLAYER_DOT_RADIUS,
-              color: "rgba(255,255,255,0.86)",
-              weight: 1.5,
-              fillColor: COLORS.player,
-              fillOpacity: 1,
-              interactive: false,
-            }).addTo(map);
-          } else {
-            playerMarker.setLatLng(ll);
-          }
-          map.panTo(ll);
+          upsertPlayer(p);
+          map.panTo(toLatLng(p.px, p.py));
           nearest = await getNearestWaypoint();
         }),
       );
-      unlisteners.push(
-        await onTrailChanged((trail) => {
+      await bag.add(
+        onTrailChanged((trail) => {
           if (currentTrail) drawTrail(currentTrail, trail, false);
         }),
       );
-      unlisteners.push(
-        await onSettingsChanged((s) => {
+      await bag.add(
+        onSettingsChanged((s) => {
           settings = s;
           applyLayerVisibility(s.layers, zoneLabelsOn(s));
         }),
       );
       // Hotkey "mark here" adds waypoints from Rust — refresh on its signal.
-      unlisteners.push(await onWaypointsChanged(() => void refreshWaypoints()));
+      await bag.add(onWaypointsChanged(() => void refreshWaypoints()));
+
+      // Initial paint: position otherwise arrives only as an event, so after
+      // an F5 the marker would wait for the player's next manual copy.
+      const p = await getCurrentPosition();
+      if (p && map) {
+        position = p;
+        upsertPlayer(p);
+        map.panTo(toLatLng(p.px, p.py));
+        nearest = await getNearestWaypoint();
+      }
     })();
 
-    return () => unlisteners.forEach((u) => u());
+    return () => bag.dispose();
   });
 
   onDestroy(() => {
-    map?.remove();
+    try {
+      map?.remove();
+    } catch {
+      // A torn-down Leaflet must not poison the next mount of this tab.
+    }
     map = undefined;
   });
 </script>
@@ -436,6 +484,26 @@
     border-radius: 50%;
     background: #cfc9b3;
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  }
+
+  /* Self-marker: the INNER element rotates (Leaflet owns the outer icon's
+     transform for positioning); .no-heading swaps the dart for the disc. */
+  :global(.player-arrow) {
+    pointer-events: none;
+  }
+  :global(.player-arrow-inner) {
+    width: 28px;
+    height: 28px;
+    transform-origin: 50% 50%;
+  }
+  :global(.player-arrow-inner .glyph-dot) {
+    display: none;
+  }
+  :global(.player-arrow-inner.no-heading .glyph-arrow) {
+    display: none;
+  }
+  :global(.player-arrow-inner.no-heading .glyph-dot) {
+    display: block;
   }
 
   /* Zone name labels: plain colour-matched text, no tooltip bubble. */

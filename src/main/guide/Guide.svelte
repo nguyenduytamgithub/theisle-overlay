@@ -3,18 +3,18 @@
   // installer-based app (no Python steps). Static prose per language; the
   // hotkey table reads the user's live bindings.
   import { onMount } from "svelte";
-  import { getSettings, onSettingsChanged, type Settings } from "$lib/api";
+  import { getSettings, listenerBag, onSettingsChanged, type Settings } from "$lib/api";
   import { locale, t } from "$lib/i18n";
 
   let settings = $state<Settings | null>(null);
 
   onMount(() => {
-    const unlisteners: Array<() => void> = [];
+    const bag = listenerBag();
     (async () => {
       settings = await getSettings();
-      unlisteners.push(await onSettingsChanged((s) => (settings = s)));
+      await bag.add(onSettingsChanged((s) => (settings = s)));
     })();
-    return () => unlisteners.forEach((u) => u());
+    return () => bag.dispose();
   });
 
   const ACTIONS = [

@@ -25,29 +25,32 @@
 </script>
 
 <footer
-  class="flex shrink-0 items-center justify-end gap-3 border-t px-3 py-1 text-xs"
+  class="flex shrink-0 items-center justify-between gap-3 border-t px-3 py-1 text-xs"
   style="border-color: var(--color-border); background: var(--color-panel); color: var(--color-muted)"
 >
-  <span>{$t("footer.developed_by")} <span style="color: var(--color-text)">Trần Quốc Toản</span></span>
-  <button
-    class="cursor-pointer underline-offset-2 hover:underline"
-    onclick={() => void openUrl(GITHUB_URL)}
-  >
-    GitHub
-  </button>
-  <button
-    class="cursor-pointer underline-offset-2 hover:underline"
-    onclick={() => void openUrl(FACEBOOK_URL)}
-  >
-    Facebook
-  </button>
-  <button
-    class="cursor-pointer rounded px-2 py-0.5 font-medium"
-    style="background: var(--color-accent); color: var(--color-bg)"
-    onclick={() => (donateOpen = true)}
-  >
-    ❤ {$t("footer.donate")}
-  </button>
+  <span>v{__APP_VERSION__} · {$t("footer.reload_hint")}</span>
+  <div class="flex items-center gap-3">
+    <span>{$t("footer.developed_by")} <span style="color: var(--color-text)">Trần Quốc Toản</span></span>
+    <button
+      class="cursor-pointer underline-offset-2 hover:underline"
+      onclick={() => void openUrl(GITHUB_URL)}
+    >
+      GitHub
+    </button>
+    <button
+      class="cursor-pointer underline-offset-2 hover:underline"
+      onclick={() => void openUrl(FACEBOOK_URL)}
+    >
+      Facebook
+    </button>
+    <button
+      class="cursor-pointer rounded px-2 py-0.5 font-medium"
+      style="background: var(--color-accent); color: var(--color-bg)"
+      onclick={() => (donateOpen = true)}
+    >
+      ❤ {$t("footer.donate")}
+    </button>
+  </div>
 </footer>
 
 {#if donateOpen}

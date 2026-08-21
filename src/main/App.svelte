@@ -6,6 +6,7 @@
     getDataStatus,
     getFullscreenMode,
     getSettings,
+    listenerBag,
     onFetchFinished,
     onHotkeyFailed,
     onSettingsChanged,
@@ -26,6 +27,11 @@
     ? (location.hash.slice(1) as Tab)
     : "map";
   let tab = $state<Tab>(initialTab);
+  // Write-back so F5 restores the tab the user was on (the hash was already
+  // read above; nothing ever wrote it). replaceState: no history spam.
+  $effect(() => {
+    history.replaceState(null, "", `#${tab}`);
+  });
   let dataStatus = $state<DataStatus | null>(null);
   let exclusiveFullscreen = $state(false);
   let failedHotkeys = $state<FailedHotkey[]>([]);
@@ -69,25 +75,21 @@
   );
 
   onMount(() => {
-    const unlisteners: Array<() => void> = [];
+    const bag = listenerBag();
     (async () => {
       const settings = await getSettings();
       locale.set((settings.language as Locale) ?? "vi");
       dataStatus = await getDataStatus();
       exclusiveFullscreen = (await getFullscreenMode()) === 0;
-      unlisteners.push(
-        await onSettingsChanged((s) => locale.set((s.language as Locale) ?? "vi")),
-      );
-      unlisteners.push(await onHotkeyFailed((failed) => (failedHotkeys = failed)));
+      await bag.add(onSettingsChanged((s) => locale.set((s.language as Locale) ?? "vi")));
+      await bag.add(onHotkeyFailed((failed) => (failedHotkeys = failed)));
       // The download can finish while the user is on another tab (FirstRun
       // unmounted) — the App itself must notice and unlock the map tab.
-      unlisteners.push(
-        await onFetchFinished(() => void getDataStatus().then((d) => (dataStatus = d))),
-      );
+      await bag.add(onFetchFinished(() => void getDataStatus().then((d) => (dataStatus = d))));
       ready = true;
       void checkForUpdate();
     })();
-    return () => unlisteners.forEach((u) => u());
+    return () => bag.dispose();
   });
 
   // Dev-only: walk south-east to exercise the pipeline without the game.
@@ -193,7 +195,23 @@
       {#if !dataOk}
         <FirstRun oncomplete={() => void getDataStatus().then((d) => (dataStatus = d))} />
       {:else}
-        <FullMap />
+        <!-- Error-isolated like DinoTab: a Leaflet throw must not take the
+             whole shell (and its tab bar) down with it. -->
+        <svelte:boundary>
+          <FullMap />
+          {#snippet failed(_error, reset)}
+            <div class="mx-auto max-w-lg p-8">
+              <p class="mb-3 text-sm" style="color: #ff8a80">{$t("map.crashed")}</p>
+              <button
+                class="cursor-pointer rounded border px-3 py-1 text-sm"
+                style="border-color: var(--color-border)"
+                onclick={reset}
+              >
+                {$t("btn.retry")}
+              </button>
+            </div>
+          {/snippet}
+        </svelte:boundary>
       {/if}
     {:else if tab === "dino"}
       <!-- Error-isolated: a failure in the IslePilot integration must never

@@ -6,6 +6,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import {
     getSettings,
+    listenerBag,
     onFetchFinished,
     patchSettings,
     startFetchData,
@@ -18,10 +19,10 @@
   let refetching = $state(false);
 
   onMount(() => {
-    const unlisteners: Array<() => void> = [];
+    const bag = listenerBag();
     void getSettings().then((s) => (settings = s));
-    void onFetchFinished(() => (refetching = false)).then((u) => unlisteners.push(u));
-    return () => unlisteners.forEach((u) => u());
+    void bag.add(onFetchFinished(() => (refetching = false)));
+    return () => bag.dispose();
   });
 
   function redownload() {
@@ -73,6 +74,15 @@
             onchange={(e) => void patch({ minimap: { visible: e.currentTarget.checked } })}
           />
           {$t("settings.visible")}
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.minimap.require_game}
+            onchange={(e) =>
+              void patch({ minimap: { require_game: e.currentTarget.checked } })}
+          />
+          {$t("settings.require_game")}
         </label>
         <label class="flex cursor-pointer items-center gap-2 text-sm">
           <input

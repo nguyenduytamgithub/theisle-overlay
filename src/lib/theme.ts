@@ -9,6 +9,10 @@ export const COLORS = {
   textMuted: "#a3aa8c",
   accent: "#e8a33d",
   player: "#ff3b8b", // pink: collides with no terrain colour
+  // Electric yellow + double outline: the self-marker must outrank every
+  // waypoint/POI dot and never be mistaken for the (softer yellow) trail.
+  playerArrow: "#ffe600",
+  playerArrowOutline: "#10130c",
   trail: "#ffcc55",
   waypoint: "#4fc3f7",
 } as const;

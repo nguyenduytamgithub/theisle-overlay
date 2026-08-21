@@ -56,8 +56,11 @@ const COLORS = {
   text: "#eae6d6",
   textMuted: "#a3aa8c",
   accent: "#e8a33d",
-  player: "#ff3b8b",
-  playerHalo: "rgba(255, 59, 139, 0.27)",
+  // Electric yellow + double outline (dark under, white over): the
+  // self-marker must never be confused with POI dots or the softer trail.
+  playerArrow: "#ffe600",
+  playerArrowOutline: "#10130c",
+  playerHalo: "rgba(255, 230, 0, 0.20)",
   trail: "#ffcc55",
 };
 
@@ -215,34 +218,42 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: MinimapState, c: numbe
   ctx.fill();
 
   if (heading !== null) {
-    // Compass bearing: 0 = north = up on screen, clockwise. The arrow sits
-    // OUTSIDE the halo so it stays visible.
-    const rad = ((heading - 90) * Math.PI) / 180;
-    const bx = c + 13 * Math.cos(rad);
-    const by = c + 13 * Math.sin(rad);
-    const tx = c + 30 * Math.cos(rad);
-    const ty = c + 30 * Math.sin(rad);
-    const wing = (150 * Math.PI) / 180;
+    // Compass bearing 0 = north = up; canvas rotate() is clockwise in
+    // y-down coordinates, so the bearing maps 1:1. Dart shape (tip ahead,
+    // notched tail) centred on the player.
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate((heading * Math.PI) / 180);
     ctx.beginPath();
-    ctx.moveTo(tx, ty);
-    ctx.lineTo(tx + 11 * Math.cos(rad + wing), ty + 11 * Math.sin(rad + wing));
-    ctx.lineTo(bx, by);
-    ctx.lineTo(tx + 11 * Math.cos(rad - wing), ty + 11 * Math.sin(rad - wing));
+    ctx.moveTo(0, -14);
+    ctx.lineTo(9, 11);
+    ctx.lineTo(0, 5);
+    ctx.lineTo(-9, 11);
     ctx.closePath();
-    ctx.fillStyle = COLORS.player;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = COLORS.playerArrowOutline;
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+    ctx.fillStyle = COLORS.playerArrow;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    // Heading unknown: a plain disc implies no direction (the pill below
+    // says why); same yellow + double outline keeps it unmistakably "you".
+    ctx.beginPath();
+    ctx.arc(c, c, 7, 0, Math.PI * 2);
+    ctx.strokeStyle = COLORS.playerArrowOutline;
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+    ctx.fillStyle = COLORS.playerArrow;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
-
-  ctx.beginPath();
-  ctx.arc(c, c, 7, 0, Math.PI * 2);
-  ctx.fillStyle = COLORS.player;
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
 }
 
 function drawHeadingPill(

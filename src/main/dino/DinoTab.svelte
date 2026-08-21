@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import {
     getSettings,
+    listenerBag,
     islepilotApply,
     islepilotCancelLogin,
     islepilotLogin,
@@ -33,21 +34,21 @@
   let cookieError = $state(false);
 
   onMount(() => {
-    const unlisteners: Array<() => void> = [];
+    const bag = listenerBag();
     (async () => {
       settings = await getSettings();
       domainInput = settings.islepilot.domain;
       const st = await islepilotState();
       loggedIn = st.loggedIn;
       update = st.lastUpdate;
-      unlisteners.push(
-        await onDinoUpdate((u) => {
+      await bag.add(
+        onDinoUpdate((u) => {
           update = u;
           authExpired = false;
         }),
       );
-      unlisteners.push(
-        await onDinoLoginOk(async () => {
+      await bag.add(
+        onDinoLoginOk(async () => {
           loginBusy = false;
           loginError = false;
           authExpired = false;
@@ -55,19 +56,19 @@
           settings = await getSettings();
         }),
       );
-      unlisteners.push(
-        await onDinoLoginFailed(() => {
+      await bag.add(
+        onDinoLoginFailed(() => {
           loginBusy = false;
           loginError = true;
         }),
       );
-      unlisteners.push(
-        await onDinoAuthExpired(() => {
+      await bag.add(
+        onDinoAuthExpired(() => {
           authExpired = true;
         }),
       );
     })();
-    return () => unlisteners.forEach((u) => u());
+    return () => bag.dispose();
   });
 
   async function patch(p: object, reapply = false) {

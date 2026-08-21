@@ -4,6 +4,7 @@
   // basemap without POI data is a valid outcome.
   import { onMount } from "svelte";
   import {
+    listenerBag,
     onFetchFinished,
     onFetchProgress,
     startFetchData,
@@ -17,22 +18,23 @@
   type Phase = "idle" | "running" | "done" | "partial" | "failed";
   let phase = $state<Phase>("idle");
   let progress = $state<FetchProgress[]>([]);
+  let doneTimer: ReturnType<typeof setTimeout> | undefined;
 
   onMount(() => {
-    const unlisteners: Array<() => void> = [];
+    const bag = listenerBag();
     (async () => {
-      unlisteners.push(
-        await onFetchProgress((p) => {
+      await bag.add(
+        onFetchProgress((p) => {
           const idx = progress.findIndex((x) => x.file === p.file);
           if (idx >= 0) progress[idx] = p;
           else progress = [...progress, p];
         }),
       );
-      unlisteners.push(
-        await onFetchFinished((f: FetchFinished) => {
+      await bag.add(
+        onFetchFinished((f: FetchFinished) => {
           if (f.ok) {
             phase = "done";
-            setTimeout(oncomplete, 800);
+            doneTimer = setTimeout(oncomplete, 800);
           } else if (f.basemapOk) {
             phase = "partial";
           } else {
@@ -41,7 +43,10 @@
         }),
       );
     })();
-    return () => unlisteners.forEach((u) => u());
+    return () => {
+      clearTimeout(doneTimer);
+      bag.dispose();
+    };
   });
 
   function start() {

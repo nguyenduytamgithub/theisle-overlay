@@ -90,6 +90,7 @@ export const vi = {
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Bản đồ nhỏ",
   "settings.visible": "Hiện bản đồ nhỏ",
+  "settings.require_game": "Chỉ hiện khi game đang chạy",
   "settings.click_through": "Chuột bấm xuyên qua (không cản trở lúc chơi)",
   "settings.corner": "Góc neo theo cửa sổ game",
   "corner.top-left": "Trên trái",
@@ -180,6 +181,8 @@ export const vi = {
   "dino.map_disabled": "Server này tắt live map.",
   "dino.crashed":
     "Phần Khủng long gặp lỗi và đã được cách ly — bản đồ và các tính năng khác không bị ảnh hưởng.",
+  "map.crashed":
+    "Bản đồ gặp lỗi hiển thị. Bấm Thử lại, hoặc nhấn F5 để tải lại toàn bộ ứng dụng.",
   "btn.retry": "Thử lại",
 
   // --- cập nhật ---
@@ -191,6 +194,7 @@ export const vi = {
   // --- footer + donate ---
   "footer.developed_by": "Được phát triển bởi",
   "footer.donate": "Ủng hộ",
+  "footer.reload_hint": "Nếu ứng dụng bị lỗi, nhấn F5 để tải lại",
   "donate.title": "Ủng hộ tác giả",
   "donate.hint": "Quét mã VietQR bằng app ngân hàng, hoặc chuyển khoản thủ công:",
   "donate.copy_stk": "Copy số tài khoản",

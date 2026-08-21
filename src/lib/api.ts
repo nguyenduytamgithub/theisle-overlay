@@ -25,6 +25,7 @@ export interface TrailPayload {
 export type Settings = Record<string, unknown> & {
   minimap: {
     visible: boolean;
+    require_game: boolean;
     corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
     size_px: number;
     margin_px: number;
@@ -67,6 +68,28 @@ export const onSettingsChanged = (
 export const onWaypointsChanged = (cb: () => void): Promise<UnlistenFn> =>
   listen("waypoints://changed", () => cb());
 
+/**
+ * Await-safe listener collection. The old pattern — pushing awaited unlisten
+ * fns into an array the cleanup closes over — leaked every listener whose
+ * `listen()` resolved after the component unmounted (fast tab switching).
+ */
+export function listenerBag() {
+  let disposed = false;
+  const fns: UnlistenFn[] = [];
+  return {
+    async add(p: Promise<UnlistenFn>): Promise<void> {
+      const unlisten = await p;
+      if (disposed) unlisten();
+      else fns.push(unlisten);
+    },
+    dispose(): void {
+      disposed = true;
+      for (const fn of fns) fn();
+      fns.length = 0;
+    },
+  };
+}
+
 export interface FailedHotkey {
   action: string;
   spec: string;
@@ -97,6 +120,10 @@ export interface DataStatus {
 export const getSettings = () => invoke<Settings>("get_settings");
 export const patchSettings = (patch: object) =>
   invoke<Settings>("patch_settings", { patch });
+
+/** Last known position (null before the first sample) — for initial paint. */
+export const getCurrentPosition = () =>
+  invoke<PositionUpdate | null>("get_current_position");
 
 export type WaypointPx = Waypoint & { px: number; py: number };
 

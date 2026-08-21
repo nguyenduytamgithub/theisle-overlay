@@ -4,7 +4,11 @@
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
+import { error } from "@tauri-apps/plugin-log";
+import { installGlobalErrorLog } from "../lib/errlog";
 import { PANEL_H, render, type DinoBars, type MinimapState, type PoiDot } from "./render";
+
+installGlobalErrorLog("minimap");
 
 // Local minimal types — this bundle stays free of the main window's modules.
 interface PositionUpdate {
@@ -216,6 +220,23 @@ async function init() {
   // First-run / re-download completed: pick up the new data live.
   await listen("fetch://finished", () => void loadData());
 
+  // Initial state: position/trail otherwise arrive only as events, so a
+  // fresh (re)loaded webview would sit on the hint disc until the player's
+  // next manual copy.
+  try {
+    const p = await invoke<PositionUpdate | null>("get_current_position");
+    if (p) {
+      state.position = { xCm: p.xCm, yCm: p.yCm, px: p.px, py: p.py, headingDeg: p.headingDeg };
+      lastHeadingKey = p.compassKey;
+      lastHeadingDeg = p.headingDeg;
+      refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
+    }
+    const trail = await invoke<{ segmentsPx: [number, number][][] }>("get_current_trail");
+    state.trailPx = trail.segmentsPx;
+  } catch {
+    // Stays on the hint disc until the first event.
+  }
+
   // First paint before the window is shown (Rust shows it on this signal).
   draw();
   await emit("minimap://ready", {});
@@ -224,4 +245,9 @@ async function init() {
   void loadData();
 }
 
-void init();
+void init().catch((e) => {
+  void error(`[minimap] init failed: ${e}`).catch(() => {});
+  // A blank-but-alive overlay beats an invisible one: Rust wires up the
+  // supervisor on this signal (and has its own 5 s fallback besides).
+  void emit("minimap://ready", {});
+});
