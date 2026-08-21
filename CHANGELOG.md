@@ -4,6 +4,25 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.1.1] — 2026-08-21 (chưa phát hành, nhánh `fix/minimap-focus`)
+
+### Sửa
+
+- **Minimap ẩn khi Alt-Tab ra ngoài game**: game chạy borderless vẫn "visible"
+  phía sau các app khác nên gate theo sự-tồn-tại khiến minimap lơ lửng đè lên
+  Chrome/desktop — giờ gate theo cửa sổ foreground, có debounce ~0,5 giây chống
+  nhấp nháy, quay lại game là hiện ngay. (`c45ecf8`)
+- **Cài mới xong minimap không hiện trong game**: quy tắc "ẩn khi bản đồ lớn
+  đang mở" kiểm tra WS_VISIBLE, mà cửa sổ chính nằm SAU game vẫn tính là
+  visible → chặn nhầm minimap tới khi người dùng tự ẩn cửa sổ chính. Giờ chỉ
+  chặn khi cửa sổ chính thực sự ở foreground. (`4409e87`)
+
+### Thay đổi
+
+- Bản đồ lần đầu mở chỉ bật lớp **Tên vùng** — các lớp POI khác tắt sẵn cho
+  sạch, bật lại một chạm trong bảng lớp; lựa chọn đã lưu của người dùng cũ
+  không bị ảnh hưởng. (`6f06035`)
+
 ## [1.1.0] — 2026-08-21
 
 ### Thêm
