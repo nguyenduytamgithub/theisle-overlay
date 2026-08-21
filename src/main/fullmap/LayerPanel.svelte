@@ -12,11 +12,16 @@
     position,
     nearest,
     waypoints,
+    places,
     ontoggle,
     ontogglezonelabels,
     onrename,
     ondelete,
     onfocus,
+    oncleartrail,
+    onsetcolor,
+    onlocate,
+    onsearchcoords,
   }: {
     available: string[];
     layers: Record<string, boolean>;
@@ -24,15 +29,70 @@
     position: PositionUpdate | null;
     nearest: NearestWaypoint | null;
     waypoints: WaypointPx[];
+    places: { label: string; px: number; py: number; kind: string }[];
     ontoggle: (key: string, visible: boolean) => void;
     ontogglezonelabels: (visible: boolean) => void;
     onrename: (id: string, name: string) => void;
     ondelete: (wp: Waypoint) => void;
     onfocus: (wp: Waypoint) => void;
+    oncleartrail: () => void;
+    onsetcolor: (wp: Waypoint, color: string | null) => void;
+    onlocate: (px: number, py: number) => void;
+    onsearchcoords: (text: string) => Promise<boolean>;
   } = $props();
 
   let editingId = $state<string | null>(null);
   let editingName = $state("");
+
+  // --- search ---------------------------------------------------------------
+  let query = $state("");
+  let coordsFailed = $state(false);
+
+  const looksLikeCoords = (q: string) => /\d[\d.,\s−-]*\d/.test(q);
+
+  const results = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return [
+      ...waypoints.map((w) => ({ label: w.name, px: w.px, py: w.py, kind: "wp" })),
+      ...places,
+    ]
+      .filter((p) => p.label.toLowerCase().includes(q))
+      .slice(0, 6);
+  });
+
+  function pickResult(r: { px: number; py: number }) {
+    onlocate(r.px, r.py);
+    query = "";
+    coordsFailed = false;
+  }
+
+  async function tryCoords() {
+    coordsFailed = !(await onsearchcoords(query));
+    if (!coordsFailed) query = "";
+  }
+
+  function onSearchKey(e: KeyboardEvent) {
+    coordsFailed = false;
+    if (e.key === "Escape") {
+      query = "";
+      return;
+    }
+    if (e.key !== "Enter") return;
+    if (results.length > 0) pickResult(results[0]);
+    else if (looksLikeCoords(query)) void tryCoords();
+  }
+
+  const kindColor = (kind: string) =>
+    kind === "wp" ? "#4fc3f7" : (LAYER_COLORS[kind] ?? "#e8a33d");
+
+  // --- waypoint colours ------------------------------------------------------
+  const WP_PALETTE = ["#4fc3f7", "#ef5350", "#ffa726", "#ffee58", "#66bb6a", "#ab47bc", "#eceff1"];
+
+  function cycleColor(wp: WaypointPx) {
+    const i = WP_PALETTE.indexOf(wp.color ?? WP_PALETTE[0]);
+    onsetcolor(wp, WP_PALETTE[(i + 1) % WP_PALETTE.length]);
+  }
 
   const layerKey = (key: string) => `layer.${key}` as Parameters<typeof $t>[0];
 
@@ -54,6 +114,55 @@
   class="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto p-3"
   style="background: var(--color-panel); border-left: 1px solid var(--color-border)"
 >
+  <section>
+    <input
+      class="w-full rounded border px-2 py-1 text-sm"
+      style="border-color: var(--color-border); background: var(--color-bg); color: var(--color-text)"
+      placeholder={$t("search.placeholder")}
+      bind:value={query}
+      onkeydown={onSearchKey}
+    />
+    {#if query.trim()}
+      <ul class="mt-1 space-y-0.5">
+        {#each results as r (r.kind + r.label)}
+          <li>
+            <button
+              class="flex w-full cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-left text-sm hover:underline"
+              onclick={() => pickResult(r)}
+            >
+              <span
+                class="inline-block size-2 shrink-0 rounded-full"
+                style="background: {kindColor(r.kind)}"
+              ></span>
+              <span class="truncate">{r.label}</span>
+            </button>
+          </li>
+        {/each}
+        {#if looksLikeCoords(query)}
+          <li>
+            <button
+              class="w-full cursor-pointer rounded px-1.5 py-1 text-left text-sm hover:underline"
+              style="color: var(--color-accent)"
+              onclick={() => void tryCoords()}
+            >
+              → {$t("search.goto_coords")}
+            </button>
+          </li>
+        {/if}
+        {#if results.length === 0 && !looksLikeCoords(query)}
+          <li class="px-1.5 py-1 text-xs" style="color: var(--color-muted)">
+            {$t("search.no_results")}
+          </li>
+        {/if}
+        {#if coordsFailed}
+          <li class="px-1.5 py-1 text-xs" style="color: #ff8a80">
+            {$t("search.coords_failed")}
+          </li>
+        {/if}
+      </ul>
+    {/if}
+  </section>
+
   <section>
     <h2 class="mb-1 text-sm font-semibold" style="color: var(--color-accent)">
       {$t("layers.title")}
@@ -88,6 +197,22 @@
       />
       {$t("layers.zone_labels")}
     </label>
+  </section>
+
+  <section>
+    <h2 class="mb-1 text-sm font-semibold" style="color: var(--color-accent)">
+      {$t("trail.title")}
+    </h2>
+    <button
+      class="cursor-pointer rounded border px-2 py-1 text-xs"
+      style="border-color: var(--color-border)"
+      onclick={() => oncleartrail()}
+    >
+      {$t("trail.clear")}
+    </button>
+    <p class="mt-1 text-xs leading-snug" style="color: var(--color-muted)">
+      {$t("trail.clear_hint")}
+    </p>
   </section>
 
   <section class="text-sm" style="color: var(--color-muted)">
@@ -159,6 +284,13 @@
               >
                 {wp.name}
               </button>
+              <button
+                class="size-3.5 shrink-0 cursor-pointer rounded-full border opacity-80 hover:opacity-100"
+                style="background: {wp.color ?? '#4fc3f7'}; border-color: rgba(255,255,255,0.55)"
+                title={$t("wp.color")}
+                aria-label={$t("wp.color")}
+                onclick={() => cycleColor(wp)}
+              ></button>
               <button
                 class="shrink-0 cursor-pointer px-1 text-xs opacity-70 hover:opacity-100"
                 title={$t("wp.rename")}

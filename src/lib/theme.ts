@@ -17,8 +17,9 @@ export const COLORS = {
   waypoint: "#4fc3f7",
 } as const;
 
-// Keys match pois_gateway.json layer keys.
+// Keys match pois_gateway.json layer keys (+ image-overlay layer keys).
 export const LAYER_COLORS: Record<string, string> = {
+  freshwater: "#149af2", // islemaps.com's own fresh-water blue
   water: "#4aa8d8",
   saltlick: "#d9a441",
   mudwallow: "#9c7b4f",
@@ -26,12 +27,15 @@ export const LAYER_COLORS: Record<string, string> = {
   migration: "#72d653",
   food: "#e2664a",
   patrol: "#ef6f6c", // myislemap's original patrol colour
+  animal: "#d66ba0", // islemaps.com AI spawn sightings
   region: "#eae6d6",
   landmark: "#cfc9b3",
 };
 
-// Draw order: big zones first, small dots after, text labels on top.
+// Draw order: image overlays lowest, big zones next, small dots after, text
+// labels on top.
 export const LAYER_ORDER = [
+  "freshwater",
   "patrol",
   "migration",
   "sanctuary",
@@ -39,9 +43,36 @@ export const LAYER_ORDER = [
   "water",
   "mudwallow",
   "saltlick",
+  "animal",
   "landmark",
   "region",
 ];
+
+// Waypoint icon presets (offered in the naming prompt). A waypoint whose
+// name STARTS with one of these renders as that glyph on both maps instead
+// of a colour dot — the name itself is the single source of truth, so the
+// on-disk waypoint format stays byte-compatible.
+export const WAYPOINT_GLYPHS = ["💀", "🏠", "💧", "⚠️", "🍖"];
+
+/** The glyph a waypoint renders as, or undefined for the plain colour dot. */
+export function waypointGlyph(name: string): string | undefined {
+  return WAYPOINT_GLYPHS.find((g) => name.startsWith(g));
+}
+
+// One recognisable glyph per animal species (labels from the islemaps
+// sighting data). Rendered as text: Segoe UI Emoji covers all of these on
+// Windows. Species without a glyph fall back to the layer-colour dot.
+export const ANIMAL_GLYPHS: Record<string, string> = {
+  Boar: "🐗",
+  Bunny: "🐰",
+  Chicken: "🐔",
+  Crab: "🦀",
+  Deer: "🦌",
+  Frog: "🐸",
+  Goat: "🐐",
+  Teno: "🦕",
+  Turtle: "🐢",
+};
 
 export const ZONE_FILL_OPACITY = 60 / 255;
 export const ZONE_STROKE_OPACITY = 190 / 255;
@@ -50,6 +81,5 @@ export const POI_DOT_RADIUS = 5;
 export const PLAYER_DOT_RADIUS = 7;
 export const WAYPOINT_RADIUS = 6;
 
-// Original basemap space; the Leaflet scene uses these bounds.
-export const BASEMAP_W = 7800;
-export const BASEMAP_H = 7817;
+// Basemap geometry deliberately lives in Rust (get_map_info) — it varies with
+// the selected basemap source, so no pixel constants belong here.

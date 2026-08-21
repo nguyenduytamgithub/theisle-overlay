@@ -1,16 +1,21 @@
 <script lang="ts">
-  // Full map: Leaflet with CRS.Simple over the original 7800x7817 basemap
-  // space, so every px/py from Rust is used directly as a map coordinate.
-  // The frontend never runs a world<->pixel transform.
+  // Full map: Leaflet with CRS.Simple over the ACTIVE basemap's pixel space
+  // (geometry from get_map_info — vulnona 7800x7817 or islemaps 2500x2500),
+  // so every px/py from Rust is used directly as a map coordinate. The
+  // frontend never runs a world<->pixel transform. On a basemap switch the
+  // whole component is remounted by App.svelte ({#key}) — every layer's px
+  // changes together with the imageOverlay.
   import { onDestroy, onMount } from "svelte";
   import L from "leaflet";
   import "leaflet/dist/leaflet.css";
   import {
     addWaypointAtPixel,
+    clearTrail,
     deleteWaypoint,
     getBasemapUrls,
     getCurrentPosition,
     getCurrentTrail,
+    getMapInfo,
     getNearestWaypoint,
     getPoisRender,
     getPreviousTrail,
@@ -18,12 +23,16 @@
     listenerBag,
     listWaypointsPx,
     patchSettings,
+    resolveCoordinates,
+    setWaypointColor,
+    onFetchFinished,
     onWaypointsChanged,
     onPositionUpdate,
     onSettingsChanged,
     onTrailChanged,
     renameWaypoint,
     type NearestWaypoint,
+    type OverlayRender,
     type PoiLayer,
     type PositionUpdate,
     type Settings,
@@ -32,30 +41,38 @@
     type WaypointPx,
   } from "$lib/api";
   import {
-    BASEMAP_H,
-    BASEMAP_W,
+    ANIMAL_GLYPHS,
     COLORS,
     LAYER_COLORS,
     LAYER_ORDER,
     POI_DOT_RADIUS,
+    WAYPOINT_GLYPHS,
     WAYPOINT_RADIUS,
+    waypointGlyph,
     ZONE_FILL_OPACITY,
     ZONE_STROKE_OPACITY,
   } from "$lib/theme";
   import LayerPanel from "./LayerPanel.svelte";
   import NamePrompt from "./NamePrompt.svelte";
-  import { tNow } from "$lib/i18n";
+  import { t, tNow } from "$lib/i18n";
   import { ask } from "@tauri-apps/plugin-dialog";
 
-  // Same zoom envelope as the original QGraphicsView (scale 0.04 .. 3.0).
-  const MIN_ZOOM = Math.log2(0.04);
-  const MAX_ZOOM = Math.log2(3.0);
+  // Ground-anchored zoom envelope: the same real-world scale range on every
+  // basemap (zoom is screen px per BASEMAP px, which differs per source).
+  // Derived from the original QGraphicsView envelope, scale 0.04 .. 3.0 over
+  // the vulnona space (pxPerMY = 7817/11160): 0.04 * 0.70044 and 3.0 *
+  // 0.70044 — so on vulnona these reproduce log2(0.04)..log2(3.0) exactly.
+  const MIN_PX_PER_M = 0.028018;
+  const MAX_PX_PER_M = 2.1013;
 
   const toLatLng = (px: number, py: number): L.LatLngTuple => [-py, px];
 
   let mapEl: HTMLDivElement;
   let map: L.Map | undefined;
   let layerGroups: Record<string, L.LayerGroup> = {};
+  // Image overlays (fresh water). Separate from layerGroups so POI rebuilds
+  // (after a background top-up) never tear them down.
+  let overlayGroups: Record<string, L.LayerGroup> = {};
   // Zone name labels live in their own groups so the "zone names" toggle can
   // hide the text while the outlines stay.
   let zoneLabelGroups: Record<string, L.LayerGroup> = {};
@@ -71,6 +88,15 @@
   let availableLayers = $state<string[]>([]);
   let promptOpen = $state(false);
   let pendingPixel: { px: number; py: number } | null = null;
+
+  // Follow mode: the map auto-centres on each position update until the user
+  // drags away; then the edge arrow points back and a click resumes follow.
+  let follow = $state(true);
+  let edgeArrow = $state<{ x: number; y: number; angle: number } | null>(null);
+  let pxPerMY = 0.70044; // replaced by get_map_info at mount
+
+  /** Searchable places (region/landmark/water names) for the panel. */
+  let searchPlaces = $state<{ label: string; px: number; py: number; kind: string }[]>([]);
 
   const bag = listenerBag();
 
@@ -120,6 +146,44 @@
 
   const escapeHtml = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /** Union of POI layers and image overlays, in draw order. */
+  function refreshAvailable(poiKeys: Set<string>) {
+    availableLayers = LAYER_ORDER.filter(
+      (k) => poiKeys.has(k) || k in overlayGroups,
+    );
+  }
+
+  /** Register one image overlay (fresh water) as a toggleable layer. */
+  function addOverlay(ov: OverlayRender) {
+    if (!map || overlayGroups[ov.key]) return;
+    const [left, top, right, bottom] = ov.boundsPx;
+    const group = L.layerGroup([
+      L.imageOverlay(
+        ov.url,
+        [
+          [-bottom, left],
+          [-top, right],
+        ],
+        { opacity: 0.9, interactive: false },
+      ),
+    ]);
+    overlayGroups[ov.key] = group;
+    if (settings?.layers?.[ov.key] ?? true) group.addTo(map);
+  }
+
+  let poiKeysPresent = new Set<string>();
+
+  /** Tear down and rebuild the POI layers (after a re-download/top-up). */
+  function rebuildPoiLayers(pois: PoiLayer[]) {
+    if (!map) return;
+    for (const group of [...Object.values(layerGroups), ...Object.values(zoneLabelGroups)]) {
+      map.removeLayer(group);
+    }
+    layerGroups = {};
+    zoneLabelGroups = {};
+    buildPoiLayers(pois);
+  }
 
   function buildPoiLayers(pois: PoiLayer[]) {
     if (!map) return;
@@ -187,16 +251,33 @@
             .bindTooltip(item.label, { sticky: true })
             .addTo(group);
         } else {
-          // Fixed screen-size dot at any zoom (circleMarker radius is px).
-          L.circleMarker(toLatLng(item.px, item.py), {
-            radius: POI_DOT_RADIUS,
-            color: "rgba(0,0,0,0.63)",
-            weight: 1,
-            fillColor: color,
-            fillOpacity: 1,
-          })
-            .bindTooltip(item.label)
-            .addTo(group);
+          // Animals get a per-species glyph "logo"; everything else (and any
+          // species without a glyph) stays a fixed screen-size dot.
+          const glyph = key === "animal" ? ANIMAL_GLYPHS[item.label] : undefined;
+          if (glyph) {
+            L.marker(toLatLng(item.px, item.py), {
+              icon: L.divIcon({
+                className: "animal-glyph",
+                html: glyph,
+                iconSize: [18, 18],
+                iconAnchor: [9, 9],
+              }),
+              keyboard: false,
+            })
+              .bindTooltip(item.label)
+              .addTo(group);
+          } else {
+            // Fixed screen-size dot at any zoom (circleMarker radius is px).
+            L.circleMarker(toLatLng(item.px, item.py), {
+              radius: POI_DOT_RADIUS,
+              color: "rgba(0,0,0,0.63)",
+              weight: 1,
+              fillColor: color,
+              fillOpacity: 1,
+            })
+              .bindTooltip(item.label)
+              .addTo(group);
+          }
         }
       }
       layerGroups[key] = group;
@@ -208,7 +289,14 @@
         }
       }
     }
-    availableLayers = LAYER_ORDER.filter((k) => byKey.has(k));
+    poiKeysPresent = new Set(byKey.keys());
+    refreshAvailable(poiKeysPresent);
+    // Named places for the search box (labels only, not zones).
+    searchPlaces = ["region", "landmark", "water"].flatMap((key) =>
+      (byKey.get(key)?.items ?? [])
+        .filter((it) => it.label)
+        .map((it) => ({ label: it.label, px: it.px, py: it.py, kind: key })),
+    );
   }
 
   function drawTrail(target: L.LayerGroup, trail: TrailPayload, dimmed: boolean) {
@@ -233,6 +321,23 @@
     if (!map || !waypointGroup) return;
     waypointGroup.clearLayers();
     for (const wp of waypointsPx) {
+      // A name starting with a preset icon (💀 🏠 💧 ⚠️ 🍖) renders as that
+      // glyph itself; everything else stays a colour dot.
+      const glyph = waypointGlyph(wp.name);
+      if (glyph) {
+        L.marker(toLatLng(wp.px, wp.py), {
+          icon: L.divIcon({
+            className: "wp-glyph",
+            html: glyph,
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+          }),
+          keyboard: false,
+        })
+          .bindTooltip(wp.name)
+          .addTo(waypointGroup);
+        continue;
+      }
       L.circleMarker(toLatLng(wp.px, wp.py), {
         radius: WAYPOINT_RADIUS,
         color: "rgba(0,0,0,0.78)",
@@ -252,7 +357,7 @@
       if (visible && !map!.hasLayer(group)) group.addTo(map!);
       if (!visible && map!.hasLayer(group)) map!.removeLayer(group);
     };
-    for (const [key, group] of Object.entries(layerGroups)) {
+    for (const [key, group] of Object.entries({ ...overlayGroups, ...layerGroups })) {
       setVisible(group, layers[key] ?? true);
     }
     for (const [key, group] of Object.entries(zoneLabelGroups)) {
@@ -299,17 +404,99 @@
 
   function focusWaypoint(wp: Waypoint) {
     const found = waypointsPx.find((w) => w.id === wp.id);
-    if (map && found) map.panTo(toLatLng(found.px, found.py));
+    if (map && found) locatePx(found.px, found.py);
+  }
+
+  async function onClearTrail() {
+    // The command clears the tracker and broadcasts trail://changed (empty),
+    // which repaints currentTrail here AND on the minimap. The previous
+    // session's dimmed trail has no event channel — clear it locally.
+    await clearTrail();
+    previousTrail?.clearLayers();
+  }
+
+  async function onSetColor(wp: Waypoint, color: string | null) {
+    await setWaypointColor(wp.id, color);
+    await refreshWaypoints();
+  }
+
+  /** Player marker outside the viewport -> an arrow at the viewport edge on
+   * the centre->player ray; clicking it (or the recenter button) resumes
+   * follow. Recomputed on map moves and position updates — no timers. */
+  function updateEdgeArrow() {
+    if (!map || !position) {
+      edgeArrow = null;
+      return;
+    }
+    const p = map.latLngToContainerPoint(toLatLng(position.px, position.py));
+    const size = map.getSize();
+    const m = 28;
+    if (p.x >= m && p.x <= size.x - m && p.y >= m && p.y <= size.y - m) {
+      edgeArrow = null;
+      return;
+    }
+    const cx = size.x / 2;
+    const cy = size.y / 2;
+    const dx = p.x - cx;
+    const dy = p.y - cy;
+    const sx = dx !== 0 ? (size.x / 2 - m) / Math.abs(dx) : Infinity;
+    const sy = dy !== 0 ? (size.y / 2 - m) / Math.abs(dy) : Infinity;
+    const s = Math.min(sx, sy, 1);
+    edgeArrow = {
+      x: cx + dx * s,
+      y: cy + dy * s,
+      angle: (Math.atan2(dy, dx) * 180) / Math.PI,
+    };
+  }
+
+  function recenter() {
+    follow = true;
+    if (map && position) map.panTo(toLatLng(position.px, position.py));
+    edgeArrow = null;
+  }
+
+  /** One-shot locate pulse; the marker removes itself (no repaint loops). */
+  function pulseAt(px: number, py: number) {
+    if (!map) return;
+    const marker = L.marker(toLatLng(px, py), {
+      icon: L.divIcon({ className: "locate-pulse", iconSize: [18, 18], iconAnchor: [9, 9] }),
+      interactive: false,
+      keyboard: false,
+    }).addTo(map);
+    setTimeout(() => marker.remove(), 2600);
+  }
+
+  function locatePx(px: number, py: number) {
+    if (!map) return;
+    follow = false;
+    // Ground-anchored floor (~0.35 px/m) so "locate" lands at a readable
+    // scale on every basemap without yanking an already-zoomed view.
+    const floor = Math.log2(0.35 / pxPerMY);
+    map.setView(toLatLng(px, py), Math.max(map.getZoom(), floor));
+    pulseAt(px, py);
+    updateEdgeArrow();
+  }
+
+  /** Manually pasted coordinate text from the search box. */
+  async function onSearchCoords(text: string): Promise<boolean> {
+    const r = await resolveCoordinates(text);
+    if (!r) return false;
+    locatePx(r.px, r.py);
+    return true;
   }
 
   onMount(() => {
     (async () => {
       settings = await getSettings();
+      const info = await getMapInfo();
+      const W = info.imageWidthPx;
+      const H = info.imageHeightPx;
+      pxPerMY = info.pxPerMY;
 
       map = L.map(mapEl, {
         crs: L.CRS.Simple,
-        minZoom: MIN_ZOOM,
-        maxZoom: MAX_ZOOM,
+        minZoom: Math.log2(MIN_PX_PER_M / info.pxPerMY),
+        maxZoom: Math.log2(MAX_PX_PER_M / info.pxPerMY),
         zoomSnap: 0,
         zoomDelta: 0.25,
         wheelPxPerZoomLevel: 90,
@@ -317,16 +504,20 @@
         zoomControl: true,
       });
       const bounds: L.LatLngBoundsExpression = [
-        [-BASEMAP_H, 0],
-        [0, BASEMAP_W],
+        [-H, 0],
+        [0, W],
       ];
       const urls = await getBasemapUrls();
       L.imageOverlay(urls.fullmap, bounds).addTo(map);
       map.fitBounds(bounds);
       map.setMaxBounds([
-        [-BASEMAP_H * 1.15, -BASEMAP_W * 0.15],
-        [BASEMAP_H * 0.15, BASEMAP_W * 1.15],
+        [-H * 1.15, -W * 0.15],
+        [H * 0.15, W * 1.15],
       ]);
+
+      // Image overlays right after the basemap so their <img> sits under
+      // every vector layer added later.
+      for (const ov of info.overlays) addOverlay(ov);
 
       previousTrail = L.layerGroup().addTo(map);
       currentTrail = L.layerGroup().addTo(map);
@@ -345,13 +536,18 @@
         pendingPixel = { px: e.latlng.lng, py: -e.latlng.lat };
         promptOpen = true;
       });
+      // A manual drag pauses follow; the edge arrow / recenter button resume
+      // it. Zoom alone does NOT pause (you zoom around your own position).
+      map.on("dragstart", () => (follow = false));
+      map.on("move", updateEdgeArrow);
 
       await bag.add(
         onPositionUpdate(async (p) => {
           position = p;
           if (!map) return;
           upsertPlayer(p);
-          map.panTo(toLatLng(p.px, p.py));
+          if (follow) map.panTo(toLatLng(p.px, p.py));
+          updateEdgeArrow();
           nearest = await getNearestWaypoint();
         }),
       );
@@ -368,6 +564,20 @@
       );
       // Hotkey "mark here" adds waypoints from Rust — refresh on its signal.
       await bag.add(onWaypointsChanged(() => void refreshWaypoints()));
+      // A re-download or the silent top-up finished: new overlays/POI layers
+      // (animal, fresh water) appear live without leaving the tab.
+      await bag.add(
+        onFetchFinished(async () => {
+          const fresh = await getMapInfo();
+          for (const ov of fresh.overlays) addOverlay(ov);
+          refreshAvailable(poiKeysPresent);
+          try {
+            rebuildPoiLayers(await getPoisRender());
+          } catch {
+            // POI data still missing — overlays alone are fine.
+          }
+        }),
+      );
 
       // Initial paint: position otherwise arrives only as an event, so after
       // an F5 the marker would wait for the player's next manual copy.
@@ -394,7 +604,24 @@
 </script>
 
 <div class="flex h-full min-h-0">
-  <div class="min-w-0 flex-1" bind:this={mapEl} style="background: var(--color-bg)"></div>
+  <div class="relative min-w-0 flex-1">
+    <div class="absolute inset-0" bind:this={mapEl} style="background: var(--color-bg)"></div>
+    {#if edgeArrow}
+      <button
+        class="edge-arrow"
+        style="left: {edgeArrow.x}px; top: {edgeArrow.y}px; transform: translate(-50%, -50%) rotate({edgeArrow.angle}deg)"
+        title={$t("map.recenter")}
+        onclick={recenter}
+      >
+        ➤
+      </button>
+    {/if}
+    {#if !follow && position}
+      <button class="recenter-btn" title={$t("map.recenter")} onclick={recenter}>
+        ◎ {$t("map.recenter")}
+      </button>
+    {/if}
+  </div>
   <LayerPanel
     available={availableLayers}
     layers={settings?.layers ?? {}}
@@ -402,11 +629,16 @@
     {position}
     {nearest}
     waypoints={waypointsPx}
+    places={searchPlaces}
     ontoggle={onToggleLayer}
     ontogglezonelabels={onToggleZoneLabels}
     onrename={onRename}
     ondelete={onDelete}
     onfocus={focusWaypoint}
+    oncleartrail={() => void onClearTrail()}
+    onsetcolor={(wp, color) => void onSetColor(wp, color)}
+    onlocate={locatePx}
+    onsearchcoords={onSearchCoords}
   />
 </div>
 
@@ -414,6 +646,7 @@
   open={promptOpen}
   title={tNow("wp.new")}
   label={tNow("wp.name_prompt")}
+  presets={WAYPOINT_GLYPHS}
   onconfirm={confirmPrompt}
   oncancel={() => {
     promptOpen = false;
@@ -484,6 +717,78 @@
     border-radius: 50%;
     background: #cfc9b3;
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  }
+
+  /* Edge arrow + recenter: the way back to your position after panning away. */
+  .edge-arrow {
+    position: absolute;
+    z-index: 1000;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--color-accent);
+    text-shadow:
+      0 0 3px rgba(0, 0, 0, 0.95),
+      0 0 8px rgba(0, 0, 0, 0.6);
+    background: none;
+    border: none;
+    padding: 4px;
+  }
+  .recenter-btn {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 1000;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background: var(--color-panel);
+    color: var(--color-text);
+  }
+  .recenter-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  /* One-shot locate pulse (removed by timeout — nothing loops). */
+  :global(.locate-pulse) {
+    border: 2px solid var(--color-accent);
+    border-radius: 50%;
+    animation: locate-pulse 0.85s ease-out 3;
+  }
+  @keyframes locate-pulse {
+    0% {
+      transform: scale(0.5);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+    }
+  }
+
+  /* Per-species animal markers: an emoji glyph instead of a dot. The drop
+     shadow separates it from bright terrain; no box, no border. */
+  :global(.animal-glyph) {
+    font-size: 14px;
+    line-height: 18px;
+    text-align: center;
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.8));
+    background: none;
+    border: none;
+  }
+
+  /* Waypoints named with a preset icon: the icon IS the marker — slightly
+     larger than animal glyphs because it is the user's own pin. */
+  :global(.wp-glyph) {
+    font-size: 17px;
+    line-height: 22px;
+    text-align: center;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
+    background: none;
+    border: none;
   }
 
   /* Self-marker: the INNER element rotates (Leaflet owns the outer icon's

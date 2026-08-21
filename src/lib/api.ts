@@ -6,6 +6,9 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 // ---------------------------------------------------------------- events ---
 
+/** Which basemap imagery is rendered. One key per calibration-frame x style. */
+export type BasemapSource = "vulnona" | "islemaps_light" | "islemaps_dark";
+
 export interface PositionUpdate {
   xCm: number;
   yCm: number;
@@ -32,10 +35,12 @@ export type Settings = Record<string, unknown> & {
     opacity: number;
     radius_m: number;
     click_through: boolean;
+    show_trail: boolean;
+    show_waypoints: boolean;
   };
   hotkeys: Record<string, string>;
   layers: Record<string, boolean>;
-  map: { zone_labels: boolean };
+  map: { zone_labels: boolean; basemap: BasemapSource };
   trail: {
     enabled: boolean;
     break_after_minutes: number;
@@ -136,11 +141,35 @@ export const addWaypointHere = (name: string) =>
   invoke<Waypoint | null>("add_waypoint_here", { name });
 export const renameWaypoint = (id: string, name: string) =>
   invoke<boolean>("rename_waypoint", { id, name });
+export const setWaypointColor = (id: string, color: string | null) =>
+  invoke<boolean>("set_waypoint_color", { id, color });
 export const deleteWaypoint = (id: string) =>
   invoke<boolean>("delete_waypoint", { id });
 
+export interface ResolvedCoords {
+  xCm: number;
+  yCm: number;
+  px: number;
+  py: number;
+  inBounds: boolean;
+}
+
+/**
+ * Parse a MANUALLY pasted coordinate string into world cm + active-basemap
+ * px — same Rust parser and number format as the clipboard path.
+ */
+export const resolveCoordinates = (text: string) =>
+  invoke<ResolvedCoords | null>("resolve_coordinates", { text });
+
 export const getPreviousTrail = () => invoke<TrailPayload>("get_previous_trail");
 export const getCurrentTrail = () => invoke<TrailPayload>("get_current_trail");
+
+/**
+ * Declutter: reset the in-memory trail (both windows repaint via
+ * trail://changed) and hide the previous session's dimmed trail. Files on
+ * disk keep the full history.
+ */
+export const clearTrail = () => invoke("clear_trail");
 
 export const getDataStatus = () => invoke<DataStatus>("data_status");
 
@@ -214,13 +243,65 @@ export const checkHotkeyAvailable = (spec: string) =>
 /** Re-register all hotkeys from the current settings (after a rebind). */
 export const applyHotkeys = () => invoke("apply_hotkeys");
 
-export async function getBasemapUrls(): Promise<{ minimap: string; fullmap: string }> {
-  const paths = await invoke<{ minimap: string; fullmap: string }>("get_basemap_paths");
+export interface BasemapUrls {
+  minimap: string;
+  fullmap: string;
+  source: BasemapSource;
+  /** Decode-time downscale hint for the minimap (set for islemaps PNGs). */
+  minimapDecodeWidth: number | null;
+}
+
+export async function getBasemapUrls(): Promise<BasemapUrls> {
+  const paths = await invoke<BasemapUrls>("get_basemap_paths");
   return {
+    ...paths,
     minimap: convertFileSrc(paths.minimap),
     fullmap: convertFileSrc(paths.fullmap),
   };
 }
+
+export interface OverlayRender {
+  /** Doubles as the layers.* visibility key. */
+  key: string;
+  /** Ready-to-use asset URL (already through convertFileSrc). */
+  url: string;
+  /** [left, top, right, bottom] in ACTIVE-calibration basemap px. */
+  boundsPx: [number, number, number, number];
+}
+
+export interface MapInfo {
+  imageWidthPx: number;
+  imageHeightPx: number;
+  /** Basemap pixels per real-world metre, horizontal / vertical. */
+  pxPerMX: number;
+  pxPerMY: number;
+  source: BasemapSource;
+  /** Image overlays present on disk, re-projected to the active basemap. */
+  overlays: OverlayRender[];
+}
+
+/** Geometry of the ACTIVE basemap — the frontend holds no transform of its own. */
+export async function getMapInfo(): Promise<MapInfo> {
+  const info = await invoke<Omit<MapInfo, "overlays"> & {
+    overlays: { key: string; path: string; boundsPx: [number, number, number, number] }[];
+  }>("get_map_info");
+  return {
+    ...info,
+    overlays: info.overlays.map((o) => ({
+      key: o.key,
+      url: convertFileSrc(o.path),
+      boundsPx: o.boundsPx,
+    })),
+  };
+}
+
+/**
+ * Switch basemap imagery. Downloads the islemaps PNG on first selection
+ * (rejects offline, settings untouched); on success settings are patched
+ * (broadcast to every window) and position/trail are resynced.
+ */
+export const setBasemapSource = (source: BasemapSource) =>
+  invoke("set_basemap_source", { source });
 
 // ----------------------------------------------------- "your dino" (IslePilot) ---
 

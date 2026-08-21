@@ -9,7 +9,9 @@
     listenerBag,
     onFetchFinished,
     patchSettings,
+    setBasemapSource,
     startFetchData,
+    type BasemapSource,
     type Settings,
   } from "$lib/api";
   import { t } from "$lib/i18n";
@@ -33,6 +35,28 @@
   async function patch(p: object) {
     settings = await patchSettings(p);
   }
+
+  // Basemap switch: the command downloads the imagery on first selection, so
+  // the active pill only moves after the command succeeds — a failed
+  // (offline) download leaves settings and UI exactly as they were.
+  let basemapBusy = $state<BasemapSource | null>(null);
+  let basemapError = $state(false);
+
+  async function chooseBasemap(source: BasemapSource) {
+    if (basemapBusy || settings?.map.basemap === source) return;
+    basemapBusy = source;
+    basemapError = false;
+    try {
+      await setBasemapSource(source);
+      settings = await getSettings();
+    } catch {
+      basemapError = true;
+    } finally {
+      basemapBusy = null;
+    }
+  }
+
+  const BASEMAPS = ["vulnona", "islemaps_light", "islemaps_dark"] as const;
 
   const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
 
@@ -92,6 +116,24 @@
               void patch({ minimap: { click_through: e.currentTarget.checked } })}
           />
           {$t("settings.click_through")}
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.minimap.show_trail ?? true}
+            onchange={(e) =>
+              void patch({ minimap: { show_trail: e.currentTarget.checked } })}
+          />
+          {$t("settings.show_trail")}
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.minimap.show_waypoints ?? true}
+            onchange={(e) =>
+              void patch({ minimap: { show_waypoints: e.currentTarget.checked } })}
+          />
+          {$t("settings.show_waypoints")}
         </label>
 
         <div class="text-sm">
@@ -162,6 +204,35 @@
           </button>
         {/each}
       </div>
+    </section>
+
+    <!-- Basemap style -->
+    <section>
+      <h2 class="mb-2 font-semibold" style="color: var(--color-accent)">
+        {$t("settings.basemap")}
+      </h2>
+      <div class="flex flex-wrap gap-2">
+        {#each BASEMAPS as source (source)}
+          <button
+            class="cursor-pointer rounded border px-3 py-1 text-sm disabled:opacity-50"
+            style={settings.map.basemap === source
+              ? "background: var(--color-accent); color: var(--color-bg); border-color: var(--color-accent); font-weight: 600"
+              : "border-color: var(--color-border)"}
+            disabled={basemapBusy !== null}
+            onclick={() => void chooseBasemap(source)}
+          >
+            {basemapBusy === source
+              ? $t("basemap.downloading")
+              : $t(`basemap.${source}` as never)}
+          </button>
+        {/each}
+      </div>
+      {#if basemapError}
+        <p class="mt-2 text-xs" style="color: #ff8a80">{$t("basemap.failed")}</p>
+      {/if}
+      <p class="mt-2 text-xs leading-relaxed" style="color: var(--color-muted)">
+        {$t("basemap.hint")}
+      </p>
     </section>
 
     <!-- Data -->

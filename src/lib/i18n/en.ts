@@ -29,6 +29,7 @@ export const en: Record<MsgKey, string> = {
   "heading.unknown": "Heading unknown",
   "heading.hint": "Copy your coordinates again after moving to reveal your heading.",
 
+  "layer.freshwater": "Fresh water",
   "layer.water": "Water",
   "layer.sanctuary": "Sanctuaries",
   "layer.migration": "Migration zones",
@@ -38,6 +39,7 @@ export const en: Record<MsgKey, string> = {
   "layer.patrol": "AI patrol zones",
   "layer.region": "Region names",
   "layer.landmark": "Landmarks",
+  "layer.animal": "Animals",
   "layers.title": "Map layers",
   "layers.zone_labels": "Zone name labels",
 
@@ -51,9 +53,19 @@ export const en: Record<MsgKey, string> = {
   "wp.distance": "{dir} · {dist}",
   "wp.here": "My position",
   "wp.confirm_delete": "Delete waypoint “{name}”?",
+  "wp.color": "Change color",
+
+  "search.placeholder": "Search places or paste coords…",
+  "search.goto_coords": "Go to these coordinates",
+  "search.no_results": "No matches",
+  "search.coords_failed": "Could not parse the coordinates — check the pasted text",
+  "map.recenter": "Back to my position",
 
   "trail.title": "Travelled path",
   "trail.previous": "Previous session path",
+  "trail.clear": "Clear trail",
+  "trail.clear_hint":
+    "Clears the lines on both maps to declutter; the history files on disk are kept.",
 
   "btn.close": "Close",
   "btn.ok": "OK",
@@ -82,6 +94,8 @@ export const en: Record<MsgKey, string> = {
   "settings.visible": "Show minimap",
   "settings.require_game": "Only show while you are in the game (hides on Alt-Tab)",
   "settings.click_through": "Click-through (never blocks gameplay)",
+  "settings.show_trail": "Show the trail on the minimap",
+  "settings.show_waypoints": "Show waypoints on the minimap",
   "settings.corner": "Anchor corner on the game window",
   "corner.top-left": "Top left",
   "corner.top-right": "Top right",
@@ -105,6 +119,17 @@ export const en: Record<MsgKey, string> = {
   "settings.data": "Data",
   "settings.open_trails": "Open trails folder",
   "settings.redownload": "Re-download map data",
+  "settings.basemap": "Basemap style",
+  "basemap.vulnona": "Vulnona (default)",
+  "basemap.islemaps_light": "IsleMaps — light",
+  "basemap.islemaps_dark": "IsleMaps — dark",
+  "basemap.hint":
+    "Applies to both the full map and the minimap. The first selection downloads " +
+    "the imagery (~5–7 MB) — offline afterwards. The IsleMaps art tracks a newer " +
+    "game build and shows the SE archipelago (Hell's Mouth).",
+  "basemap.downloading": "Downloading imagery…",
+  "basemap.failed":
+    "Imagery download failed — check your connection and retry. The current basemap stays.",
 
   "firstrun.title": "Download map data",
   "firstrun.explain":
@@ -196,6 +221,7 @@ export const en: Record<MsgKey, string> = {
   "credits.title": "Data sources",
   "credits.body":
     "Basemap: VulnonaMAP (Coco.N) — stitched from in-game captures. " +
+    "IsleMaps basemap & animal points: IsleMaps.com (Pont & Emeara). " +
     "Imagery copyright Afterthought LLC (The Isle). " +
     "Point data: VulnonaMAP, myislemap.com, wiredredman's Steam guide. " +
     "This app is not affiliated with Afterthought LLC.",

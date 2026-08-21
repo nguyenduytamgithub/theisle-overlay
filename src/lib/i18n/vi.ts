@@ -33,6 +33,7 @@ export const vi = {
   "heading.hint": "Chép tọa độ lần nữa sau khi di chuyển để biết hướng đi.",
 
   // --- layer POI ---
+  "layer.freshwater": "Nước ngọt",
   "layer.water": "Nguồn nước",
   "layer.sanctuary": "Khu bảo tồn",
   "layer.migration": "Vùng di cư",
@@ -42,6 +43,7 @@ export const vi = {
   "layer.patrol": "Vùng tuần tra AI",
   "layer.region": "Tên vùng",
   "layer.landmark": "Địa điểm",
+  "layer.animal": "Động vật",
   "layers.title": "Lớp bản đồ",
   "layers.zone_labels": "Tên vùng khoanh",
 
@@ -56,10 +58,21 @@ export const vi = {
   "wp.distance": "{dir} · {dist}",
   "wp.here": "Vị trí của tôi",
   "wp.confirm_delete": "Xóa điểm “{name}”?",
+  "wp.color": "Đổi màu",
+
+  // --- tìm kiếm & điều hướng ---
+  "search.placeholder": "Tìm địa danh hoặc dán tọa độ…",
+  "search.goto_coords": "Tới tọa độ đã nhập",
+  "search.no_results": "Không thấy địa danh nào",
+  "search.coords_failed": "Không đọc được tọa độ — kiểm tra lại chuỗi đã dán",
+  "map.recenter": "Về vị trí của tôi",
 
   // --- vết đường ---
   "trail.title": "Đường đã đi",
   "trail.previous": "Đường đi phiên trước",
+  "trail.clear": "Xóa đường đi",
+  "trail.clear_hint":
+    "Xóa vết trên cả hai bản đồ cho đỡ rối; file lịch sử trên máy vẫn giữ nguyên.",
 
   // --- nút chung ---
   "btn.close": "Đóng",
@@ -93,6 +106,8 @@ export const vi = {
   "settings.visible": "Hiện bản đồ nhỏ",
   "settings.require_game": "Chỉ hiện khi đang trong game (Alt-Tab ra là tự ẩn)",
   "settings.click_through": "Chuột bấm xuyên qua (không cản trở lúc chơi)",
+  "settings.show_trail": "Hiện đường đi trên bản đồ nhỏ",
+  "settings.show_waypoints": "Hiện waypoint trên bản đồ nhỏ",
   "settings.corner": "Góc neo theo cửa sổ game",
   "corner.top-left": "Trên trái",
   "corner.top-right": "Trên phải",
@@ -116,6 +131,17 @@ export const vi = {
   "settings.data": "Dữ liệu",
   "settings.open_trails": "Mở thư mục đường đi",
   "settings.redownload": "Tải lại dữ liệu bản đồ",
+  "settings.basemap": "Nền bản đồ",
+  "basemap.vulnona": "Vulnona (mặc định)",
+  "basemap.islemaps_light": "IsleMaps — sáng",
+  "basemap.islemaps_dark": "IsleMaps — tối",
+  "basemap.hint":
+    "Áp dụng cho cả bản đồ lớn lẫn bản đồ nhỏ. Lần đầu chọn sẽ tải ảnh nền " +
+    "(~5–7 MB) về máy — sau đó dùng offline. Bản IsleMaps vẽ theo phiên bản game " +
+    "mới hơn, thấy cả quần đảo đông nam (Hell's Mouth).",
+  "basemap.downloading": "Đang tải ảnh nền…",
+  "basemap.failed":
+    "Tải ảnh nền thất bại — kiểm tra mạng rồi thử lại. Vẫn dùng nền hiện tại.",
 
   // --- chạy lần đầu ---
   "firstrun.title": "Tải dữ liệu bản đồ",
@@ -210,6 +236,7 @@ export const vi = {
   "credits.title": "Nguồn dữ liệu",
   "credits.body":
     "Ảnh nền: VulnonaMAP (Coco.N) — ghép từ ảnh chụp trong game. " +
+    "Nền IsleMaps & điểm động vật: IsleMaps.com (Pont & Emeara). " +
     "Hình ảnh thuộc bản quyền Afterthought LLC (The Isle). " +
     "Dữ liệu điểm: VulnonaMAP, myislemap.com, hướng dẫn Steam của wiredredman. " +
     "Ứng dụng này không liên kết với Afterthought LLC.",

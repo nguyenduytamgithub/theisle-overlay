@@ -36,6 +36,10 @@
   let exclusiveFullscreen = $state(false);
   let failedHotkeys = $state<FailedHotkey[]>([]);
   let ready = $state(false);
+  // Remount FullMap when the basemap changes ({#key} below): the imageOverlay
+  // bounds and every layer's px change together, so a rebuild IS the correct
+  // "in-place" update. Seeded before ready=true — no spurious first remount.
+  let basemapSource = $state("vulnona");
 
   // Update prompt: silent check on launch, non-blocking banner, only ever in
   // this window — never over the game.
@@ -79,9 +83,15 @@
     (async () => {
       const settings = await getSettings();
       locale.set((settings.language as Locale) ?? "vi");
+      basemapSource = settings.map?.basemap ?? "vulnona";
       dataStatus = await getDataStatus();
       exclusiveFullscreen = (await getFullscreenMode()) === 0;
-      await bag.add(onSettingsChanged((s) => locale.set((s.language as Locale) ?? "vi")));
+      await bag.add(
+        onSettingsChanged((s) => {
+          locale.set((s.language as Locale) ?? "vi");
+          basemapSource = s.map?.basemap ?? "vulnona";
+        }),
+      );
       await bag.add(onHotkeyFailed((failed) => (failedHotkeys = failed)));
       // The download can finish while the user is on another tab (FirstRun
       // unmounted) — the App itself must notice and unlock the map tab.
@@ -197,21 +207,23 @@
       {:else}
         <!-- Error-isolated like DinoTab: a Leaflet throw must not take the
              whole shell (and its tab bar) down with it. -->
-        <svelte:boundary>
-          <FullMap />
-          {#snippet failed(_error, reset)}
-            <div class="mx-auto max-w-lg p-8">
-              <p class="mb-3 text-sm" style="color: #ff8a80">{$t("map.crashed")}</p>
-              <button
-                class="cursor-pointer rounded border px-3 py-1 text-sm"
-                style="border-color: var(--color-border)"
-                onclick={reset}
-              >
-                {$t("btn.retry")}
-              </button>
-            </div>
-          {/snippet}
-        </svelte:boundary>
+        {#key basemapSource}
+          <svelte:boundary>
+            <FullMap />
+            {#snippet failed(_error, reset)}
+              <div class="mx-auto max-w-lg p-8">
+                <p class="mb-3 text-sm" style="color: #ff8a80">{$t("map.crashed")}</p>
+                <button
+                  class="cursor-pointer rounded border px-3 py-1 text-sm"
+                  style="border-color: var(--color-border)"
+                  onclick={reset}
+                >
+                  {$t("btn.retry")}
+                </button>
+              </div>
+            {/snippet}
+          </svelte:boundary>
+        {/key}
       {/if}
     {:else if tab === "dino"}
       <!-- Error-isolated: a failure in the IslePilot integration must never
