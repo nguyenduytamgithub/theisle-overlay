@@ -145,6 +145,9 @@ export const en: Record<MsgKey, string> = {
   "dino.manual_cookie_checking": "Checking cookie…",
   "dino.manual_cookie_bad":
     "Cookie invalid or session not signed in — double-check the pasted string.",
+  "dino.server_settings": "Server settings",
+  "dino.live_map_yes": "This server has a live map — your position updates automatically",
+  "dino.live_map_checking": "Checking whether this server has a live map…",
   "dino.enabled": "Track dino info",
   "dino.interval": "Update frequency",
   "dino.overlay_panel": "Show stats strip under the minimap",

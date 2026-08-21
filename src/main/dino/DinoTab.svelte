@@ -24,6 +24,9 @@
 
   let settings = $state<Settings | null>(null);
   let loggedIn = $state(false);
+  // Server + cookie setup is bulky; once the cookie is in it collapses so
+  // the stats are visible without scrolling. The gear button reopens it.
+  let serverOpen = $state(true);
   let update = $state<DinoUpdate | null>(null);
   let loginBusy = $state(false);
   let loginError = $state(false);
@@ -40,6 +43,7 @@
       domainInput = settings.islepilot.domain;
       const st = await islepilotState();
       loggedIn = st.loggedIn;
+      serverOpen = !st.loggedIn;
       update = st.lastUpdate;
       await bag.add(
         onDinoUpdate((u) => {
@@ -53,6 +57,7 @@
           loginError = false;
           authExpired = false;
           loggedIn = true;
+          serverOpen = false;
           settings = await getSettings();
         }),
       );
@@ -65,6 +70,7 @@
       await bag.add(
         onDinoAuthExpired(() => {
           authExpired = true;
+          serverOpen = true; // re-login lives in the collapsed section
         }),
       );
     })();
@@ -90,6 +96,7 @@
   async function logout() {
     await islepilotLogout();
     loggedIn = false;
+    serverOpen = true;
     update = null;
     settings = await getSettings();
   }
@@ -122,19 +129,35 @@
     new Date(ms).toLocaleTimeString($locale === "vi" ? "vi-VN" : "en-US");
 
   const player = $derived(update?.player ?? null);
+  /** Server live-map capability: true / false / null while unknown. */
+  const liveMap = $derived(update?.liveMapAvailable ?? null);
 </script>
 
 {#if settings}
   <div class="mx-auto max-w-2xl space-y-5 p-6">
     <section>
-      <h2 class="mb-1 text-lg font-semibold" style="color: var(--color-accent)">
-        {$t("dino.title")}
-      </h2>
-      <p class="text-sm" style="color: var(--color-muted)">{$t("dino.explain")}</p>
-      <p class="mt-2 text-xs" style="color: #ffd591">{$t("dino.rules_note")}</p>
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold" style="color: var(--color-accent)">
+          {$t("dino.title")}
+        </h2>
+        <button
+          class="cursor-pointer rounded border px-2 py-1 text-xs"
+          style={serverOpen
+            ? "border-color: var(--color-accent); color: var(--color-accent)"
+            : "border-color: var(--color-border); color: var(--color-muted)"}
+          onclick={() => (serverOpen = !serverOpen)}
+        >
+          ⚙ {$t("dino.server_settings")}
+        </button>
+      </div>
+      {#if serverOpen}
+        <p class="mt-1 text-sm" style="color: var(--color-muted)">{$t("dino.explain")}</p>
+        <p class="mt-2 text-xs" style="color: #ffd591">{$t("dino.rules_note")}</p>
+      {/if}
     </section>
 
-    <!-- Server + login -->
+    <!-- Server + login (collapsed once the cookie is installed) -->
+    {#if serverOpen}
     <section
       class="rounded border p-3"
       style="border-color: var(--color-border); background: var(--color-panel)"
@@ -217,6 +240,7 @@
         </button>
       </div>
     </section>
+    {/if}
 
     <!-- Options -->
     <section
@@ -241,15 +265,44 @@
         />
         {$t("dino.overlay_panel")}
       </label>
-      <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <!-- Live-map position: driven by the server's capability. No live map
+           -> forced off and not clickable; live map -> on by default, and a
+           manual flip marks map_pref_user_set so auto-on never overrides. -->
+      <label
+        class="flex items-center gap-2 text-sm {liveMap === false
+          ? 'opacity-50'
+          : 'cursor-pointer'}"
+      >
         <input
           type="checkbox"
           checked={settings.islepilot.use_map_position}
+          disabled={liveMap === false}
           onchange={(e) =>
-            void patch({ islepilot: { use_map_position: e.currentTarget.checked } }, true)}
+            void patch(
+              {
+                islepilot: {
+                  use_map_position: e.currentTarget.checked,
+                  map_pref_user_set: true,
+                },
+              },
+              true,
+            )}
         />
         {$t("dino.use_map_position")}
       </label>
+      {#if settings.islepilot.enabled && loggedIn}
+        {#if liveMap === true}
+          <p class="pl-6 text-xs" style="color: #72d653">✓ {$t("dino.live_map_yes")}</p>
+        {:else if liveMap === false}
+          <p class="pl-6 text-xs" style="color: var(--color-muted)">
+            ✗ {$t("dino.map_disabled")}
+          </p>
+        {:else}
+          <p class="pl-6 text-xs" style="color: var(--color-muted)">
+            {$t("dino.live_map_checking")}
+          </p>
+        {/if}
+      {/if}
       <label class="block text-sm">
         <div class="mb-0.5 flex justify-between">
           <span>{$t("dino.interval")}</span>
@@ -349,11 +402,6 @@
 
         {#if update?.layoutChanged}
           <p class="mt-3 text-xs" style="color: #ffd591">{$t("dino.layout_changed")}</p>
-        {/if}
-        {#if update?.map?.mapDisabled && settings.islepilot.use_map_position}
-          <p class="mt-2 text-xs" style="color: var(--color-muted)">
-            {$t("dino.map_disabled")}
-          </p>
         {/if}
       {:else if update?.error}
         <p class="text-sm" style="color: #ff8a80">

@@ -157,6 +157,9 @@ export const vi = {
   "dino.manual_cookie_checking": "Đang kiểm tra cookie…",
   "dino.manual_cookie_bad":
     "Cookie không hợp lệ hoặc phiên chưa đăng nhập — kiểm tra lại chuỗi đã dán.",
+  "dino.server_settings": "Cài đặt server",
+  "dino.live_map_yes": "Server có live map — vị trí sẽ tự cập nhật",
+  "dino.live_map_checking": "Đang kiểm tra live map của server…",
   "dino.enabled": "Theo dõi thông tin khủng long",
   "dino.interval": "Tần suất cập nhật",
   "dino.overlay_panel": "Hiện thanh chỉ số dưới bản đồ nhỏ",

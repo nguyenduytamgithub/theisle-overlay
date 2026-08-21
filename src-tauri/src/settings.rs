@@ -137,7 +137,8 @@ pub fn default_settings() -> Value {
             "enabled": false,
             "domain": "https://mixi.islepilot.eu",
             "poll_interval_s": 10,
-            "use_map_position": false,   // opt-in per user; check server rules
+            "use_map_position": false,   // auto-managed: on when the server has a live map
+            "map_pref_user_set": false,  // true once the USER touches the toggle — stops auto-on
             "show_overlay_panel": true,  // compact stats under the minimap
         },
         "poll": {

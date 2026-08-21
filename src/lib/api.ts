@@ -49,6 +49,7 @@ export type Settings = Record<string, unknown> & {
     domain: string;
     poll_interval_s: number;
     use_map_position: boolean;
+    map_pref_user_set: boolean;
     show_overlay_panel: boolean;
   };
 };
@@ -261,6 +262,8 @@ export interface DinoUpdate {
   player: DinoPlayer | null;
   map: DinoMap | null;
   layoutChanged: boolean;
+  /** Whether the server runs a live map at all; null until probed. */
+  liveMapAvailable: boolean | null;
   error: string | null;
 }
 

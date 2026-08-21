@@ -56,6 +56,9 @@ pub struct DinoUpdate {
     /// IslePilot deployed a new build since we started — markup may have
     /// changed, so treat odd values with suspicion.
     pub layout_changed: bool,
+    /// Whether this server runs a live map at all (probed from /map).
+    /// None until the first successful probe.
+    pub live_map_available: Option<bool>,
     pub error: Option<String>,
 }
 
@@ -163,6 +166,39 @@ fn ingest_map_position(app: &AppHandle, map: &MapPosition) {
     pipeline::ingest_sample(app, x_cm, y_cm, 0.0);
 }
 
+/// Keep `use_map_position` truthful to the server's capability: no live map
+/// -> force it off (the UI disables the checkbox); live map present ->
+/// default it ON, unless the user has ever flipped the toggle themselves
+/// (`map_pref_user_set`). The poller re-reads settings every iteration, so
+/// no restart is needed after the patch.
+fn sync_map_pref(app: &AppHandle, available: bool) {
+    let state = app.state::<AppState>();
+    let (use_map, user_set) = {
+        let s = state.settings.lock_safe();
+        (
+            settings::get_bool(&s, &["islepilot", "use_map_position"], false),
+            settings::get_bool(&s, &["islepilot", "map_pref_user_set"], false),
+        )
+    };
+    let desired = if !available {
+        false
+    } else if !user_set {
+        true
+    } else {
+        use_map
+    };
+    if desired != use_map {
+        log::info!(
+            "islepilot live map {} -> use_map_position={desired}",
+            if available { "available" } else { "disabled" }
+        );
+        crate::commands::apply_settings_patch(
+            app,
+            serde_json::json!({ "islepilot": { "use_map_position": desired } }),
+        );
+    }
+}
+
 /// (Re)start the background poller from current settings. Safe to call any
 /// time; the previous loop exits on its next tick.
 pub fn restart_poller(app: &AppHandle) {
@@ -195,6 +231,9 @@ pub fn restart_poller(app: &AppHandle) {
         let mut last_build_check = std::time::Instant::now();
         let mut failures: u32 = 0;
         let mut auth_warned = false;
+        // Probed lazily from /map (even when position use is off) so the UI
+        // can tell the user up front whether this server has a live map.
+        let mut live_map: Option<bool> = None;
 
         loop {
             if GENERATION.load(Ordering::SeqCst) != generation {
@@ -231,11 +270,22 @@ pub fn restart_poller(app: &AppHandle) {
                     } else {
                         auth_warned = false;
                         failures = 0;
-                        let map = if config.use_map_position {
+                        // Fetch /map when position use is on, or once as a
+                        // capability probe — the availability answer drives
+                        // the use_map_position setting (sync_map_pref) and
+                        // the checkbox state in the UI.
+                        let map = if config.use_map_position || live_map.is_none() {
                             match get_page(&client, &config.domain, "/map", &cookie) {
                                 Ok(map_html) => {
                                     let map = parser::parse_map(&map_html);
-                                    ingest_map_position(&app, &map);
+                                    let available = !map.map_disabled;
+                                    if live_map != Some(available) {
+                                        live_map = Some(available);
+                                        sync_map_pref(&app, available);
+                                    }
+                                    if config.use_map_position {
+                                        ingest_map_position(&app, &map);
+                                    }
                                     Some(map)
                                 }
                                 Err(e) => {
@@ -254,6 +304,7 @@ pub fn restart_poller(app: &AppHandle) {
                                 player: Some(player),
                                 map,
                                 layout_changed,
+                                live_map_available: live_map,
                                 error: None,
                             },
                         );
@@ -270,6 +321,7 @@ pub fn restart_poller(app: &AppHandle) {
                             player: None,
                             map: None,
                             layout_changed,
+                            live_map_available: live_map,
                             error: Some(e),
                         },
                     );
