@@ -244,15 +244,17 @@ fn spawn_supervisor(app: AppHandle) {
             }
             let game_active = game_present && unfocused_ticks < 2;
 
-            // While the full map is on screen the minimap is redundant — and
-            // being TOPMOST it would float over the app itself, eating every
-            // click in its disc when click-through is off (a field-reported
-            // "cannot click the tabs"). It returns when the full map hides.
-            let main_on_screen = vis::is_visible("main") == Some(true)
-                && vis::is_minimized("main") != Some(true);
+            // While the user is LOOKING at the full map (main window in the
+            // foreground) the minimap is redundant — and being TOPMOST it
+            // would float over the app, eating clicks in its disc when
+            // click-through is off. Foreground, NOT WS_VISIBLE: the main
+            // window stays "visible" buried behind a borderless game, which
+            // suppressed the in-game minimap until the user hid the full
+            // map by hand (fresh-install field report).
+            let main_in_front = vis::is_foreground("main");
 
             let effective =
-                cur.user_visible && (!cur.require_game || game_active) && !main_on_screen;
+                cur.user_visible && (!cur.require_game || game_active) && !main_in_front;
             if effective != effective_prev {
                 if effective {
                     log::info!("minimap: show (game_active={game_active})");
@@ -268,7 +270,7 @@ fn spawn_supervisor(app: AppHandle) {
                     }
                 } else if window.hide().is_ok() {
                     log::info!(
-                        "minimap: hide (user={}, game={game_active}, fullmap={main_on_screen})",
+                        "minimap: hide (user={}, game={game_active}, fullmap={main_in_front})",
                         cur.user_visible
                     );
                     effective_prev = false;

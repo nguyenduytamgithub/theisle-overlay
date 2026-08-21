@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, IsIconic, IsWindowVisible};
 
 use crate::state::LockExt;
 
@@ -38,6 +38,14 @@ pub fn is_visible(label: &str) -> Option<bool> {
 pub fn is_minimized(label: &str) -> Option<bool> {
     let raw = hwnd(label)?;
     Some(unsafe { IsIconic(HWND(raw as *mut std::ffi::c_void)).as_bool() })
+}
+
+/// Whether this window is the one the user is currently in. WS_VISIBLE is
+/// NOT that test — a window stays "visible" while buried behind a
+/// borderless-fullscreen game.
+pub fn is_foreground(label: &str) -> bool {
+    hwnd(label)
+        .is_some_and(|raw| unsafe { GetForegroundWindow() == HWND(raw as *mut std::ffi::c_void) })
 }
 
 /// Wait briefly until the window reports visible. `show()` is posted to the
