@@ -111,16 +111,19 @@ pub fn default_settings() -> Value {
             "zoom_out": "Ctrl+Alt+Left",
             "reload_ui": "Ctrl+Alt+R",   // rescue: works even when clicks are dead
         },
+        // The map starts CLEAN: only the big region-name labels are on, so a
+        // first look reads as a map, not a poi soup. Everything else is one
+        // click away in the layer panel (and per-user choices persist).
         "layers": {
-            "water": true,
-            "sanctuary": true,
-            "migration": true,
-            "saltlick": true,
-            "mudwallow": true,
-            "food": false,               // densest layer, off by default
-            "patrol": false,             // 61 zones — also off by default
+            "water": false,
+            "sanctuary": false,
+            "migration": false,
+            "saltlick": false,
+            "mudwallow": false,
+            "food": false,
+            "patrol": false,
             "region": true,              // big area-name labels
-            "landmark": true,            // landmark/structure labels
+            "landmark": false,
         },
         "map": {
             "zone_labels": true,         // names inside zone outlines
