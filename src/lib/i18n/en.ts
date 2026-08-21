@@ -134,7 +134,8 @@ export const en: Record<MsgKey, string> = {
   "dino.logout": "Sign out",
   "dino.auth_expired": "Your session expired — please sign in again.",
   "dino.supported_servers":
-    "Only xxx.islepilot.eu servers are supported right now (e.g. mixi, sdvn2…).",
+    "Works with any IslePilot-powered server — xxx.islepilot.eu or islepilot.eu/p/server-name. " +
+    "See the Guide tab for examples and a step-by-step walkthrough.",
   "dino.manual_cookie": "Paste your session cookie",
   "dino.manual_cookie_hint":
     "Open the server page in your browser and sign in with Steam. Press F12 → " +

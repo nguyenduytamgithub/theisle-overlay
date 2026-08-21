@@ -37,6 +37,44 @@ nếu thiếu, installer tự tải về).
 > Windows có thể hiện cảnh báo SmartScreen vì installer chưa ký số.
 > Bấm **More info → Run anyway**.
 
+## Kết nối "Khủng long của bạn" (IslePilot)
+
+Tab **Khủng long** đọc chỉ số dino của chính bạn (growth, máu, đói, khát, Prime
+progress) từ panel IslePilot của server. Có 2 cách kết nối — chọn một:
+
+**Cách 1 — Đăng nhập Steam (nhanh nhất):** mở tab Khủng long → nhập link server
+→ bấm **Đăng nhập Steam** → đăng nhập trong cửa sổ hiện ra. Xong.
+
+**Cách 2 — Dán cookie thủ công** (khi cách 1 không được):
+
+1. Mở trang server trong trình duyệt và đăng nhập Steam ở đó. Bấm **F12**
+   (hoặc chuột phải → **Inspect**) rồi chọn tab **Application** (Chrome) /
+   **Storage** (Firefox).
+
+   ![Mở DevTools và chọn tab Application](docs/guide-dino-1-devtools.png)
+
+2. Chọn **Cookies** → domain của server → bấm cookie tên **`islepilot_player`**
+   → copy toàn bộ **Value**. Giữ bí mật chuỗi này như mật khẩu.
+
+   ![Copy giá trị cookie islepilot_player](docs/guide-dino-2-copy-cookie.jpg)
+
+3. Trong app: dán vào ô cookie → bấm **Kiểm tra & lưu cookie**.
+
+   ![Nhập link server, dán cookie và lưu trong app](docs/guide-dino-3-paste-app.jpg)
+
+Server có **live map** thì app tự nhận và bật "lấy vị trí tự động" — khỏi cần
+copy tọa độ thủ công; server tắt live map thì tùy chọn này tự khóa.
+
+**Một số server dùng IslePilot** (tham khảo — mọi server chạy IslePilot đều
+dùng được):
+
+- https://mixi.islepilot.eu
+- https://hoho.islepilot.eu
+- https://sdvn.islepilot.eu
+- https://sdvn2.islepilot.eu
+- https://khunglong.islepilot.eu
+- https://islepilot.eu/p/sbtcisland
+
 ## Nhẹ cỡ nào?
 
 Số đo thật trên máy: **Intel Core i5-14400F (10 nhân/16 luồng), 32 GB RAM,
@@ -69,18 +107,23 @@ RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản rel
    thì hướng hết hạn để tránh chỉ sai.
 4. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
-5. **Máy ít RAM**: chỉ cần ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự
-   đóng băng cửa sổ ẩn và trả lại ~75 MB. Đóng bằng nút X cũng được (app vẫn chạy
-   với minimap, `Ctrl+Alt+F` mở lại).
+5. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm
+   bộ nhớ của cửa sổ ẩn. Bấm nút X thì app thu về **khay hệ thống** (icon cạnh
+   đồng hồ) như Steam/Discord — chuột trái icon để mở lại, chuột phải → Thoát
+   để tắt hẳn.
 6. **Phím tắt bị ứng dụng khác chiếm**: app báo ngay khi khởi động, đổi lại trong
    tab Cài đặt.
-7. **Tính năng "Khủng long của bạn"** chỉ hỗ trợ server dùng nền tảng IslePilot
-   (`xxx.islepilot.eu`). Nó đọc dữ liệu bằng cách phân tích HTML trang web của
-   server (không có API chính thức), nên **có thể hỏng khi IslePilot đổi giao diện**
-   — app sẽ báo khi phát hiện server vừa cập nhật. Nếu phần này lỗi, các tính năng
-   bản đồ **không bị ảnh hưởng**.
+7. **Tính năng "Khủng long của bạn"** hỗ trợ server dùng nền tảng IslePilot
+   (dạng `xxx.islepilot.eu` hoặc `islepilot.eu/p/tên-server` — xem mục
+   [Kết nối "Khủng long của bạn"](#kết-nối-khủng-long-của-bạn-islepilot)).
+   Nó đọc dữ liệu bằng cách phân tích HTML trang web của server (không có API
+   chính thức), nên **có thể hỏng khi IslePilot đổi giao diện** — app sẽ báo khi
+   phát hiện server vừa cập nhật. Nếu phần này lỗi, các tính năng bản đồ
+   **không bị ảnh hưởng**.
 8. **Nên hỏi admin server** trước khi dùng thường xuyên — một số server có luật
-   riêng về công cụ bên thứ ba. Tùy chọn lấy vị trí tự động từ live map mặc định TẮT.
+   riêng về công cụ bên thứ ba. Tùy chọn lấy vị trí tự động chỉ bật khi app dò
+   thấy server có live map; server tắt live map thì tùy chọn tự khóa, và lựa
+   chọn tắt/bật thủ công của bạn luôn được tôn trọng.
 9. **Cookie đăng nhập panel** được mã hóa bằng Windows DPAPI, chỉ giải được bằng
    tài khoản Windows của bạn trên chính máy đó.
 10. **SmartScreen** sẽ cảnh báo ở lần cài đầu vì installer chưa ký số (chứng chỉ ký

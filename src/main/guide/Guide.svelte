@@ -81,20 +81,55 @@
 
     <h2>Bản đồ nhỏ</h2>
     <p>
-      Hình tròn, bám theo một góc cửa sổ game. <strong>B</strong> (màu vàng) = Bắc ·
-      <strong>Đ</strong> = Đông · <strong>N</strong> = Nam · <strong>T</strong> = Tây. Bản đồ
-      <strong>không xoay</strong> — hướng Bắc luôn ở trên. Chấm hồng là bạn, luôn giữ nguyên độ
-      đậm dù bản đồ mờ tới đâu.
+      Hình tròn, bám theo một góc cửa sổ game và <strong>chỉ hiện khi game đang chạy</strong>.
+      <strong>B</strong> (màu vàng) = Bắc · <strong>Đ</strong> = Đông · <strong>N</strong> = Nam ·
+      <strong>T</strong> = Tây. Bản đồ <strong>không xoay</strong> — hướng Bắc luôn ở trên.
+      Tam giác/đĩa <strong>màu vàng viền đen-trắng</strong> là bạn, luôn giữ nguyên độ đậm dù
+      bản đồ mờ tới đâu.
     </p>
     <p>
       Mặc định <strong>chuột bấm xuyên qua</strong> — bấm vào chỗ đó thì game nhận, không cản
-      trở lúc chơi.
+      trở lúc chơi. Khi mở bản đồ lớn, bản đồ nhỏ tự ẩn và tự hiện lại lúc đóng.
     </p>
     <p>
       <strong>Lưu ý:</strong> lớp phủ không thể hiện đè lên chế độ
       <strong>Toàn màn hình độc quyền</strong>. Đây là giới hạn của Windows. Dùng Cửa sổ hoặc
       Toàn màn hình không viền.
     </p>
+
+    <h2>Khủng long của bạn (IslePilot)</h2>
+    <p>
+      Tab <strong>Khủng long</strong> đọc chỉ số dino của chính bạn (growth, máu, đói, khát,
+      Prime progress) từ trang quản lý IslePilot của server. Có 2 cách kết nối — chọn một:
+    </p>
+    <ol>
+      <li>
+        <strong>Đăng nhập Steam (nhanh nhất):</strong> nhập link server → bấm
+        <strong>Đăng nhập Steam</strong> → đăng nhập trong cửa sổ hiện ra. Xong.
+      </li>
+      <li>
+        <strong>Dán cookie thủ công</strong> (khi cách 1 không được): mở trang server trong
+        trình duyệt và đăng nhập Steam ở đó → bấm <strong>F12</strong> (hoặc chuột phải →
+        Inspect) → tab <strong>Application</strong> (Chrome) / <strong>Storage</strong>
+        (Firefox) → <strong>Cookies</strong> → chọn domain server → bấm cookie tên
+        <strong>islepilot_player</strong> → copy toàn bộ <strong>Value</strong> → dán vào ô
+        trong app → <strong>Kiểm tra &amp; lưu cookie</strong>. Giữ bí mật chuỗi này như mật
+        khẩu.
+      </li>
+    </ol>
+    <p>
+      Server có <strong>live map</strong> thì app tự nhận và bật "lấy vị trí tự động" — khỏi
+      cần copy tọa độ thủ công; server tắt live map thì tùy chọn này tự khóa.
+    </p>
+    <p><strong>Một số server dùng IslePilot</strong> (tham khảo — mọi server chạy IslePilot đều dùng được):</p>
+    <ul>
+      <li>https://mixi.islepilot.eu</li>
+      <li>https://hoho.islepilot.eu</li>
+      <li>https://sdvn.islepilot.eu</li>
+      <li>https://sdvn2.islepilot.eu</li>
+      <li>https://khunglong.islepilot.eu</li>
+      <li>https://islepilot.eu/p/sbtcisland</li>
+    </ul>
   {:else}
     <h1>How to use — the important part</h1>
     <p>
@@ -146,20 +181,59 @@
 
     <h2>Minimap</h2>
     <p>
-      Circular, pinned to a corner of the game window. <strong>N</strong> (amber) = North ·
-      <strong>E</strong> · <strong>S</strong> · <strong>W</strong>. The map
-      <strong>never rotates</strong> — north stays up. The pink dot is you, always fully
+      Circular, pinned to a corner of the game window and
+      <strong>only shown while the game is running</strong>. <strong>N</strong> (amber) =
+      North · <strong>E</strong> · <strong>S</strong> · <strong>W</strong>. The map
+      <strong>never rotates</strong> — north stays up. The
+      <strong>yellow dart/disc</strong> with the dark-and-white outline is you, always fully
       opaque however faded the map is.
     </p>
     <p>
       <strong>Click-through</strong> is on by default — clicks land in the game, never
-      blocking play.
+      blocking play. While the full map is open the minimap hides itself and returns when
+      the full map closes.
     </p>
     <p>
       <strong>Note:</strong> no overlay can draw over
       <strong>exclusive Fullscreen</strong> — a Windows limitation. Use Windowed or
       Borderless Fullscreen.
     </p>
+
+    <h2>Your Dino (IslePilot)</h2>
+    <p>
+      The <strong>Dino</strong> tab reads your own dino's stats (growth, health, hunger,
+      thirst, Prime progress) from the server's IslePilot panel. Two ways to connect — pick
+      one:
+    </p>
+    <ol>
+      <li>
+        <strong>Steam login (fastest):</strong> enter the server link → click
+        <strong>Steam login</strong> → sign in in the window that opens. Done.
+      </li>
+      <li>
+        <strong>Paste the cookie manually</strong> (when method 1 fails): open the server
+        page in your browser and sign in with Steam there → press <strong>F12</strong> (or
+        right-click → Inspect) → <strong>Application</strong> tab (Chrome) /
+        <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → pick the server's
+        domain → click the <strong>islepilot_player</strong> cookie → copy the whole
+        <strong>Value</strong> → paste it into the app →
+        <strong>Verify &amp; save cookie</strong>. Treat this string like a password.
+      </li>
+    </ol>
+    <p>
+      If the server runs a <strong>live map</strong>, the app detects it and enables
+      automatic position — no manual coordinate copying needed; when the server has the
+      live map disabled the option locks itself off.
+    </p>
+    <p><strong>Some servers using IslePilot</strong> (examples — any IslePilot-powered server works):</p>
+    <ul>
+      <li>https://mixi.islepilot.eu</li>
+      <li>https://hoho.islepilot.eu</li>
+      <li>https://sdvn.islepilot.eu</li>
+      <li>https://sdvn2.islepilot.eu</li>
+      <li>https://khunglong.islepilot.eu</li>
+      <li>https://islepilot.eu/p/sbtcisland</li>
+    </ul>
   {/if}
 
   <h2>{$t("settings.hotkeys")}</h2>

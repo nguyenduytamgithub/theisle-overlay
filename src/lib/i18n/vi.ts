@@ -147,7 +147,8 @@ export const vi = {
   "dino.logout": "Đăng xuất",
   "dino.auth_expired": "Phiên đăng nhập đã hết hạn — hãy đăng nhập lại.",
   "dino.supported_servers":
-    "Hiện tại chỉ hỗ trợ server thuộc xxx.islepilot.eu (ví dụ mixi, sdvn2…).",
+    "Hỗ trợ mọi server chạy IslePilot — dạng xxx.islepilot.eu hoặc islepilot.eu/p/tên-server. " +
+    "Xem danh sách ví dụ và hướng dẫn từng bước trong tab Hướng dẫn.",
   "dino.manual_cookie": "Dán cookie đăng nhập",
   "dino.manual_cookie_hint":
     "Mở trang server trong trình duyệt và đăng nhập Steam. Bấm F12 → tab Application " +

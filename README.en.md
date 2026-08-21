@@ -37,6 +37,44 @@ installs; the installer fetches it if missing.
 > Windows may show a SmartScreen warning because the installer is not
 > code-signed. Click **More info → Run anyway**.
 
+## Connecting "Your Dino" (IslePilot)
+
+The **Dino** tab reads your own dino's stats (growth, health, hunger, thirst,
+Prime progress) from the server's IslePilot panel. Two ways to connect — pick one:
+
+**Method 1 — Steam login (fastest):** open the Dino tab → enter the server
+link → click **Steam login** → sign in in the window that opens. Done.
+
+**Method 2 — Paste the cookie manually** (when method 1 fails):
+
+1. Open the server page in your browser and sign in with Steam there. Press
+   **F12** (or right-click → **Inspect**) and open the **Application** tab
+   (Chrome) / **Storage** (Firefox).
+
+   ![Open DevTools and pick the Application tab](docs/guide-dino-1-devtools.png)
+
+2. Pick **Cookies** → the server's domain → click the **`islepilot_player`**
+   cookie → copy the whole **Value**. Treat this string like a password.
+
+   ![Copy the islepilot_player cookie value](docs/guide-dino-2-copy-cookie.jpg)
+
+3. In the app: paste it into the cookie box → click **Verify & save cookie**.
+
+   ![Enter the server link, paste the cookie and save](docs/guide-dino-3-paste-app.jpg)
+
+If the server runs a **live map**, the app detects it and enables automatic
+position — no manual coordinate copying needed; when the server has the live
+map disabled the option locks itself off.
+
+**Some servers using IslePilot** (examples — any IslePilot-powered server works):
+
+- https://mixi.islepilot.eu
+- https://hoho.islepilot.eu
+- https://sdvn.islepilot.eu
+- https://sdvn2.islepilot.eu
+- https://khunglong.islepilot.eu
+- https://islepilot.eu/p/sbtcisland
+
 ## How light is it?
 
 Measured on a real machine: **Intel Core i5-14400F (10 cores / 16 threads), 32 GB
@@ -70,17 +108,21 @@ when new data arrives.
    10 minutes expire so the arrow never points the wrong way.
 4. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
-5. **Low-RAM machines**: just hide the full map with `Ctrl+Alt+F` while playing —
-   the app freezes the hidden window and returns ~75 MB. Closing it with the X
-   button also works (the app keeps running with the minimap; `Ctrl+Alt+F` reopens).
+5. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
+   the app trims the hidden window's memory. Clicking X parks the app in the
+   **system tray** (icon next to the clock), Steam/Discord-style — left-click
+   the icon to bring it back, right-click → Quit to exit fully.
 6. **Hotkeys taken by another app** are reported at startup; rebind them in Settings.
-7. **The "Your dino" feature** only supports IslePilot-based servers
-   (`xxx.islepilot.eu`). It reads data by parsing the server's web pages (there is
-   no official API), so it **can break whenever IslePilot changes their markup** —
-   the app flags it when it detects a new deployment. If this part fails, the map
-   features are **unaffected**.
+7. **The "Your dino" feature** supports IslePilot-based servers
+   (`xxx.islepilot.eu` or `islepilot.eu/p/server-name` — see
+   [Connecting "Your Dino"](#connecting-your-dino-islepilot)). It reads data by
+   parsing the server's web pages (there is no official API), so it **can break
+   whenever IslePilot changes their markup** — the app flags it when it detects
+   a new deployment. If this part fails, the map features are **unaffected**.
 8. **Ask your server admins** before using it routinely — some servers have their
-   own rules about third-party tools. Auto-position from the live map is OFF by default.
+   own rules about third-party tools. Auto-position only turns on when the app
+   detects that the server runs a live map; it locks itself off when the live map
+   is disabled, and a manual choice you make is always respected.
 9. **Your panel session cookie** is encrypted with Windows DPAPI and can only be
    decrypted by your Windows account on that machine.
 10. **SmartScreen** warns on first install because the installer is not code-signed
