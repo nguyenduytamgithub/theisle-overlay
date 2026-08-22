@@ -641,6 +641,17 @@ pub async fn islepilot_set_token(app: AppHandle, token: String) -> Result<(), St
     .map_err(|e| e.to_string())?
 }
 
+/// IslePilot POIs (sanctuaries, migration/patrol zones, ...) as render
+/// pixels for the full map. Token mode only; cached ~15 s in Rust.
+#[tauri::command]
+pub async fn islepilot_overlay_map(
+    app: AppHandle,
+) -> Result<crate::islepilot::OverlayMapRender, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::islepilot::overlay_map_render(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Garage (gacha) listing: parked dinos + server flags. Token mode only.
 #[tauri::command]
 pub async fn islepilot_garage(

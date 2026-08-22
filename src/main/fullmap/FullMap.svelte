@@ -20,6 +20,8 @@
     getPoisRender,
     getPreviousTrail,
     getSettings,
+    islepilotOverlayMap,
+    type IslepilotOverlayMap,
     listenerBag,
     listWaypointsPx,
     patchSettings,
@@ -183,6 +185,72 @@
     layerGroups = {};
     zoneLabelGroups = {};
     buildPoiLayers(pois);
+    // The rebuild tore the IslePilot group down with the rest — restore it
+    // from the cached data, no refetch.
+    if (islepilotData) buildIslepilotLayer(islepilotData);
+  }
+
+  // --- IslePilot live server POIs (token mode) -----------------------------
+  let islepilotData: IslepilotOverlayMap | null = null;
+  let islepilotNote = $state<string | null>(null);
+
+  function buildIslepilotLayer(data: IslepilotOverlayMap) {
+    if (!map || !data.available) return;
+    const catName = new Map(data.categories.map((c) => [c.id, c.name]));
+    const group = L.layerGroup();
+    for (const poi of data.pois) {
+      const color = poi.color ?? LAYER_COLORS.islepilot;
+      const cat = poi.categoryId ? catName.get(poi.categoryId) : undefined;
+      const tooltip = [poi.name, cat].filter(Boolean).join(" · ");
+      const pts = poi.pointsPx.map(([px, py]) => toLatLng(px, py));
+      if (pts.length >= 3) {
+        L.polygon(pts, {
+          color,
+          weight: 1.6,
+          opacity: ZONE_STROKE_OPACITY,
+          fillColor: color,
+          fillOpacity: ZONE_FILL_OPACITY,
+        })
+          .bindTooltip(tooltip || "IslePilot", { sticky: true })
+          .addTo(group);
+      } else if (pts.length === 2) {
+        L.polyline(pts, { color, weight: 2, opacity: ZONE_STROKE_OPACITY })
+          .bindTooltip(tooltip || "IslePilot", { sticky: true })
+          .addTo(group);
+      } else if (pts.length === 1) {
+        L.circleMarker(pts[0], {
+          radius: POI_DOT_RADIUS,
+          color: "rgba(0,0,0,0.63)",
+          weight: 1,
+          fillColor: color,
+          fillOpacity: 1,
+        })
+          .bindTooltip(tooltip || "IslePilot")
+          .addTo(group);
+      }
+    }
+    layerGroups["islepilot"] = group;
+    if (settings?.layers?.["islepilot"] ?? false) group.addTo(map);
+    poiKeysPresent.add("islepilot");
+    refreshAvailable(poiKeysPresent);
+  }
+
+  async function loadIslepilotPois() {
+    try {
+      const data = await islepilotOverlayMap();
+      if (data.available) {
+        islepilotData = data;
+        islepilotNote = null;
+        buildIslepilotLayer(data);
+      } else if (data.reason === "discord") {
+        islepilotNote = tNow("poi.islepilot_discord");
+      } else if (data.reason === "disabled") {
+        islepilotNote = tNow("poi.islepilot_disabled");
+      }
+      // "not-logged-in" / "empty": stay silent — the layer simply is absent.
+    } catch {
+      // Token expired or offline: the map works without server POIs.
+    }
   }
 
   function buildPoiLayers(pois: PoiLayer[]) {
@@ -528,6 +596,8 @@
       } catch {
         // POI data missing (partial first run): map works without dots.
       }
+      // Server POIs load in the background — never block the map paint.
+      void loadIslepilotPois();
       drawTrail(previousTrail, await getPreviousTrail(), true);
       drawTrail(currentTrail, await getCurrentTrail(), false);
       await refreshWaypoints();
@@ -630,6 +700,7 @@
     {nearest}
     waypoints={waypointsPx}
     places={searchPlaces}
+    {islepilotNote}
     ontoggle={onToggleLayer}
     ontogglezonelabels={onToggleZoneLabels}
     onrename={onRename}

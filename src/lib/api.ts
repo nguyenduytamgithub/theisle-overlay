@@ -383,6 +383,36 @@ export const islepilotSetToken = (token: string) =>
   invoke("islepilot_set_token", { token });
 export const islepilotCancelLogin = () => invoke("islepilot_cancel_login");
 
+// -- token-mode extras: overlay-map POIs + garage (gacha) --
+
+export interface IslepilotPoiCategory {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+export interface IslepilotPoi {
+  id: string;
+  name: string | null;
+  categoryId: string | null;
+  color: string | null;
+  shape: string | null;
+  /** Render pixels on the ACTIVE basemap, one per source point. */
+  pointsPx: [number, number][];
+}
+
+export interface IslepilotOverlayMap {
+  available: boolean;
+  /** "not-logged-in" | "disabled" | "discord" | "empty" when unavailable. */
+  reason: string | null;
+  categories: IslepilotPoiCategory[];
+  pois: IslepilotPoi[];
+}
+
+/** IslePilot POIs for the full map (token mode; Rust caches ~15 s). */
+export const islepilotOverlayMap = () =>
+  invoke<IslepilotOverlayMap>("islepilot_overlay_map");
+
 /** Parked-dino record — backend shape, read defensively in the UI. */
 export type GarageDino = Record<string, unknown> & { id?: string };
 

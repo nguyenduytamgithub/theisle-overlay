@@ -18,12 +18,12 @@ pub mod token;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
-use overlay_core::{pixel_to_world, Calibration};
+use overlay_core::{pixel_to_world, world_to_pixel, Calibration};
 
 use crate::pipeline;
 use crate::settings;
@@ -1033,6 +1033,143 @@ pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<
     let _ = app.emit(DINO_LOGIN_OK, domain);
     restart_poller(app);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Token-mode extras: overlay-map POIs + garage (gacha)
+// ---------------------------------------------------------------------------
+
+/// Raw /api/overlay/map cache — the data changes rarely; 15 s matches the
+/// official app's poll and keeps tab switches free.
+static OVERLAY_MAP_CACHE: Mutex<Option<(Instant, api::OverlayMap)>> = Mutex::new(None);
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayMapRender {
+    pub available: bool,
+    /// Why not, when unavailable: "not-logged-in" | "disabled" (operator
+    /// turned the live map off) | "discord" (needs a linked Discord) |
+    /// "empty".
+    pub reason: Option<String>,
+    pub categories: Vec<OverlayCategoryOut>,
+    pub pois: Vec<OverlayPoiRender>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayCategoryOut {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayPoiRender {
+    pub id: String,
+    pub name: Option<String>,
+    pub category_id: Option<String>,
+    pub color: Option<String>,
+    pub shape: Option<String>,
+    /// Render pixels on the ACTIVE basemap, one per source point.
+    pub points_px: Vec<[f64; 2]>,
+}
+
+impl OverlayMapRender {
+    fn unavailable(reason: &str) -> Self {
+        Self {
+            available: false,
+            reason: Some(reason.to_string()),
+            categories: Vec::new(),
+            pois: Vec::new(),
+        }
+    }
+}
+
+/// IslePilot POIs (sanctuaries, migration/patrol zones, ...) converted to
+/// render pixels for the full map. Token mode only.
+pub fn overlay_map_render(app: &AppHandle) -> Result<OverlayMapRender, String> {
+    let Some(tok) = token::get() else {
+        return Ok(OverlayMapRender::unavailable("not-logged-in"));
+    };
+    let cached = {
+        let cache = OVERLAY_MAP_CACHE.lock_safe();
+        cache
+            .as_ref()
+            .filter(|(at, _)| at.elapsed().as_secs_f64() < 15.0)
+            .map(|(_, m)| m.clone())
+    };
+    let raw = match cached {
+        Some(m) => m,
+        None => {
+            let client = http_client()?;
+            match api::get_map(&client, &tok.token) {
+                Ok(m) => {
+                    *OVERLAY_MAP_CACHE.lock_safe() = Some((Instant::now(), m.clone()));
+                    m
+                }
+                Err(api::ApiError::Unauthorized) => return Err("unauthorized".into()),
+                Err(api::ApiError::NotFound) => {
+                    return Ok(OverlayMapRender::unavailable("empty"))
+                }
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+    };
+    if raw.live_map_enabled == Some(false) {
+        return Ok(OverlayMapRender::unavailable("disabled"));
+    }
+    if raw.allowed == Some(false) {
+        return Ok(OverlayMapRender::unavailable("discord"));
+    }
+    let state = app.state::<AppState>();
+    let cal = state.active_calibration();
+    let source_cal = raw.calibration;
+    let pois: Vec<OverlayPoiRender> = raw
+        .pois
+        .iter()
+        .filter_map(|poi| {
+            let points_px: Vec<[f64; 2]> = poi
+                .points
+                .iter()
+                .filter_map(|&p| {
+                    let (x_cm, y_cm) = api::poi_point_cm(source_cal.as_ref(), p)?;
+                    let (px, py) = world_to_pixel(x_cm, y_cm, cal);
+                    Some([px, py])
+                })
+                .collect();
+            if points_px.is_empty() {
+                return None;
+            }
+            Some(OverlayPoiRender {
+                id: poi.id.clone().unwrap_or_default(),
+                name: poi.name.clone(),
+                category_id: poi.category_id.clone(),
+                color: poi.color.clone(),
+                shape: poi.shape.clone(),
+                points_px,
+            })
+        })
+        .collect();
+    if pois.is_empty() {
+        return Ok(OverlayMapRender::unavailable("empty"));
+    }
+    Ok(OverlayMapRender {
+        available: true,
+        reason: None,
+        categories: raw
+            .categories
+            .iter()
+            .filter_map(|c| {
+                Some(OverlayCategoryOut {
+                    id: c.id.clone()?,
+                    name: c.name.clone().unwrap_or_default(),
+                    color: c.color.clone(),
+                })
+            })
+            .collect(),
+        pois,
+    })
 }
 
 fn token_or_err() -> Result<token::OverlayToken, String> {

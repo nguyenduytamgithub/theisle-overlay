@@ -258,6 +258,13 @@ export const vi = {
   "garage.sold": "Đã bán — nhận {amount} {currency}",
   "garage.done": "Xong!",
 
+  // --- POI IslePilot trên bản đồ ---
+  "layer.islepilot": "POI server (IslePilot)",
+  "poi.islepilot_discord":
+    "Cần liên kết Discord với IslePilot để mở khóa bản đồ server.",
+  "poi.islepilot_disabled": "Server này tắt live map.",
+  "poi.islepilot_login": "Đăng nhập token (tab Khủng long) để hiện POI của server.",
+  "poi.islepilot_empty": "Server chưa có POI nào.",
   "map.crashed":
     "Bản đồ gặp lỗi hiển thị. Bấm Thử lại, hoặc nhấn F5 để tải lại toàn bộ ứng dụng.",
   "btn.retry": "Thử lại",

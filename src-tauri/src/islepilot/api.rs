@@ -208,6 +208,101 @@ pub fn position_cm(me: &OverlayMe) -> Option<(f64, f64)> {
 }
 
 // ---------------------------------------------------------------------------
+// /api/overlay/map — POIs + categories (token mode extra map layers)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OverlayMap {
+    pub live_map_enabled: Option<bool>,
+    pub allowed: Option<bool>,
+    pub calibration: Option<OverlayCalibration>,
+    pub pois: Vec<OverlayPoi>,
+    pub categories: Vec<OverlayCategory>,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default)]
+#[serde(default)]
+pub struct OverlayCalibration {
+    pub a: OverlayCalPoint,
+    pub b: OverlayCalPoint,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OverlayCalPoint {
+    pub u: f64,
+    pub v: f64,
+    pub world_x: f64,
+    pub world_y: f64,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OverlayPoi {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub category_id: Option<String>,
+    pub color: Option<String>,
+    pub shape: Option<String>,
+    pub size: Option<f64>,
+    pub points: Vec<OverlayPoint>,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default)]
+#[serde(default)]
+pub struct OverlayPoint {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OverlayCategory {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub color: Option<String>,
+}
+
+pub fn get_map(
+    client: &reqwest::blocking::Client,
+    token: &str,
+) -> Result<OverlayMap, ApiError> {
+    let v = get(client, "/api/overlay/map", token)?;
+    serde_json::from_value(v).map_err(|e| ApiError::Http(format!("/api/overlay/map: {e}")))
+}
+
+impl OverlayCalibration {
+    /// Their-map (u,v 0..1) -> world (their axes). Two independent linear
+    /// interpolations, exactly what the official app does.
+    fn uv_to_world(&self, u: f64, v: f64) -> Option<(f64, f64)> {
+        let (a, b) = (self.a, self.b);
+        if (b.u - a.u).abs() < f64::EPSILON || (b.v - a.v).abs() < f64::EPSILON {
+            return None;
+        }
+        let world_x = a.world_x + (u - a.u) / (b.u - a.u) * (b.world_x - a.world_x);
+        let world_y = a.world_y + (v - a.v) / (b.v - a.v) * (b.world_y - a.world_y);
+        Some((world_x, world_y))
+    }
+}
+
+/// One POI point in game cm, OUR axis convention. POI points have been seen
+/// both as u,v fractions and as raw world cm depending on backend version, so
+/// disambiguate by magnitude: |coord| <= 1.5 can only be a fraction (1.5 cm
+/// off the world origin is not a real POI).
+pub fn poi_point_cm(
+    cal: Option<&OverlayCalibration>,
+    p: OverlayPoint,
+) -> Option<(f64, f64)> {
+    let (their_x, their_y) = if p.x.abs() <= 1.5 && p.y.abs() <= 1.5 {
+        cal?.uv_to_world(p.x, p.y)?
+    } else {
+        (p.x, p.y)
+    };
+    Some((their_y, their_x)) // their x = our y
+}
+
+// ---------------------------------------------------------------------------
 // /api/overlay/garage — gacha park/restore/sell/rename
 // ---------------------------------------------------------------------------
 
@@ -336,6 +431,26 @@ mod tests {
         assert_eq!(position_cm(&me), None);
         let stats = to_player_stats(&me);
         assert!(!stats.looks_logged_in());
+    }
+
+    #[test]
+    fn poi_points_convert_from_both_spaces() {
+        let cal = OverlayCalibration {
+            a: OverlayCalPoint { u: 0.0, v: 0.0, world_x: -100_000.0, world_y: -200_000.0 },
+            b: OverlayCalPoint { u: 1.0, v: 1.0, world_x: 100_000.0, world_y: 200_000.0 },
+        };
+        // uv fraction: center of the map -> world origin -> swapped ours.
+        assert_eq!(
+            poi_point_cm(Some(&cal), OverlayPoint { x: 0.5, y: 0.5 }),
+            Some((0.0, 0.0))
+        );
+        // Raw world cm passes through (with the axis swap).
+        assert_eq!(
+            poi_point_cm(Some(&cal), OverlayPoint { x: 50_000.0, y: -30_000.0 }),
+            Some((-30_000.0, 50_000.0))
+        );
+        // Fraction without calibration: unusable.
+        assert_eq!(poi_point_cm(None, OverlayPoint { x: 0.5, y: 0.5 }), None);
     }
 
     #[test]

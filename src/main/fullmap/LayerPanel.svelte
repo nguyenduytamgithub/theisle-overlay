@@ -13,6 +13,7 @@
     nearest,
     waypoints,
     places,
+    islepilotNote = null,
     ontoggle,
     ontogglezonelabels,
     onrename,
@@ -30,6 +31,8 @@
     nearest: NearestWaypoint | null;
     waypoints: WaypointPx[];
     places: { label: string; px: number; py: number; kind: string }[];
+    /** Why IslePilot server POIs are unavailable (already localized). */
+    islepilotNote?: string | null;
     ontoggle: (key: string, visible: boolean) => void;
     ontogglezonelabels: (visible: boolean) => void;
     onrename: (id: string, name: string) => void;
@@ -185,6 +188,9 @@
         </label>
       {/if}
     {/each}
+    {#if islepilotNote}
+      <p class="py-1 text-xs" style="color: var(--color-muted)">{islepilotNote}</p>
+    {/if}
     <label
       class="mt-1 flex cursor-pointer items-center gap-2 border-t pt-1.5 text-sm"
       style="border-color: var(--color-border)"

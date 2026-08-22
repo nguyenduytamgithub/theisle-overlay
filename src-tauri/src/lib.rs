@@ -101,6 +101,7 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::islepilot_cancel_login,
             commands::islepilot_token_login,
             commands::islepilot_set_token,
+            commands::islepilot_overlay_map,
             commands::islepilot_garage,
             commands::islepilot_garage_park,
             commands::islepilot_garage_restore,

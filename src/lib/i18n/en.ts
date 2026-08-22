@@ -244,6 +244,12 @@ export const en: Record<MsgKey, string> = {
   "garage.sold": "Sold — received {amount} {currency}",
   "garage.done": "Done!",
 
+  "layer.islepilot": "Server POIs (IslePilot)",
+  "poi.islepilot_discord":
+    "Link your Discord account with IslePilot to unlock the server map.",
+  "poi.islepilot_disabled": "The live map is disabled on this server.",
+  "poi.islepilot_login": "Log in with a token (Your Dino tab) to show server POIs.",
+  "poi.islepilot_empty": "This server has no POIs yet.",
   "map.crashed":
     "The map hit a display error. Click Retry, or press F5 to reload the whole app.",
   "btn.retry": "Retry",

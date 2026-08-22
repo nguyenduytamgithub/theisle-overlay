@@ -30,12 +30,14 @@ export const LAYER_COLORS: Record<string, string> = {
   animal: "#d66ba0", // islemaps.com AI spawn sightings
   region: "#eae6d6",
   landmark: "#cfc9b3",
+  islepilot: "#34d399", // live server POIs from the IslePilot overlay API
 };
 
 // Draw order: image overlays lowest, big zones next, small dots after, text
 // labels on top.
 export const LAYER_ORDER = [
   "freshwater",
+  "islepilot",
   "patrol",
   "migration",
   "sanctuary",

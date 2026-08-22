@@ -135,6 +135,7 @@ pub fn default_settings() -> Value {
             "landmark": false,
             "animal": false,             // islemaps.com AI spawn sightings
             "freshwater": false,         // islemaps.com fresh-water overlay
+            "islepilot": false,          // live server POIs (token mode only)
         },
         "map": {
             "zone_labels": true,         // names inside zone outlines
