@@ -67,14 +67,6 @@
       không thể "live" theo đúng nghĩa. Đây là đánh đổi có chủ ý.
     </p>
 
-    <h2>Hướng hoạt động thế nào</h2>
-    <p>
-      Ứng dụng tự tính hướng đi, nhưng cần <strong>hai lần chép tọa độ</strong> cách nhau
-      ít nhất <strong>20 mét</strong>. Mũi tên chỉ <strong>hướng bạn vừa đi</strong>, không phải hướng
-      mặt bạn đang quay về — đứng yên xoay người thì nó không biết được. Mẫu cũ quá
-      <strong>10 phút</strong> thì hướng hết hạn và hiện lại <em>"Chưa rõ hướng"</em> để tránh chỉ sai.
-    </p>
-
     <h2>Bản đồ lớn</h2>
     <ul>
       <li><strong>Lăn chuột</strong>: phóng to / thu nhỏ · <strong>kéo chuột trái</strong>: di chuyển</li>
@@ -104,21 +96,43 @@
     <h2>Khủng long của bạn (IslePilot)</h2>
     <p>
       Tab <strong>Khủng long</strong> đọc chỉ số dino của chính bạn (growth, máu, đói, khát,
-      Prime progress) từ trang quản lý IslePilot của server. Có 2 cách kết nối — chọn một:
+      thể lực, dinh dưỡng, Prime progress) từ hệ thống IslePilot. Có <strong>2 cách</strong>
+      kết nối:
+    </p>
+    <h3>Cách 1 — Đăng nhập Steam qua IslePilot (khuyên dùng)</h3>
+    <ol>
+      <li>Mở tab <strong>Khủng long</strong> → bấm nút <strong>Đăng nhập Steam</strong>.</li>
+      <li>
+        Cửa sổ đăng nhập của <strong>islepilot.eu</strong> hiện ra — đăng nhập Steam trong
+        đó. Cửa sổ tự đóng khi xong.
+      </li>
+    </ol>
+    <p>
+      Chỉ cần làm <strong>1 lần duy nhất</strong> — không cần nhập link server, dùng được cho
+      <strong>mọi server IslePilot</strong>: đổi server trong game là dữ liệu tự đổi theo.
+      Cách này còn mở thêm <strong>Garage (Gacha)</strong> và lớp <strong>POI server</strong>
+      trên bản đồ. Nếu cửa sổ không tự bắt được token, mở mục
+      <em>"Hoặc dán token thủ công"</em> và dán token (hoặc nguyên link
+      <strong>theisle-overlay://…</strong>) vào → <strong>Kiểm tra &amp; lưu token</strong>.
+    </p>
+    <h3>Cách 2 — Cách cũ: nhập server + cookie</h3>
+    <p>
+      Chỉ dùng khi cách 1 không hoạt động. Cookie lưu riêng cho từng server — đổi server là
+      phải làm lại.
     </p>
     <ol>
       <li>
-        <strong>Đăng nhập Steam (nhanh nhất):</strong> nhập link server → bấm
-        <strong>Đăng nhập Steam</strong> → đăng nhập trong cửa sổ hiện ra. Xong.
+        Mở mục <strong>"Cách cũ: nhập server + cookie"</strong> trong phần đăng nhập, nhập
+        link server (vd https://mixi.islepilot.eu) → bấm <strong>Đăng nhập Steam</strong>
+        trong mục đó.
       </li>
       <li>
-        <strong>Dán cookie thủ công</strong> (khi cách 1 không được): mở trang server trong
-        trình duyệt và đăng nhập Steam ở đó → bấm <strong>F12</strong> (hoặc chuột phải →
-        Inspect) → tab <strong>Application</strong> (Chrome) / <strong>Storage</strong>
-        (Firefox) → <strong>Cookies</strong> → chọn domain server → bấm cookie tên
+        Nếu vẫn không được, dán cookie thủ công: mở trang server trong trình duyệt và đăng
+        nhập Steam ở đó → bấm <strong>F12</strong> (hoặc chuột phải → Inspect) → tab
+        <strong>Application</strong> (Chrome) / <strong>Storage</strong> (Firefox) →
+        <strong>Cookies</strong> → chọn domain server → bấm cookie tên
         <strong>islepilot_player</strong> → copy toàn bộ <strong>Value</strong> → dán vào ô
-        trong app → <strong>Kiểm tra &amp; lưu cookie</strong>. Giữ bí mật chuỗi này như mật
-        khẩu.
+        trong app → <strong>Kiểm tra &amp; lưu cookie</strong>.
         <img src={guideDino1} alt="Chuột phải → Inspect hoặc F12, chọn tab Application" loading="lazy" />
         <img src={guideDino2} alt="Cookies → islepilot_player → copy toàn bộ Value" loading="lazy" />
         <img src={guideDino3} alt="Nhập link server, dán cookie vào app và lưu" loading="lazy" />
@@ -170,15 +184,6 @@
       truly "live". This is a deliberate trade-off.
     </p>
 
-    <h2>How heading works</h2>
-    <p>
-      Heading is computed automatically but needs <strong>two coordinate copies</strong> at
-      least <strong>20 metres</strong> apart. The arrow shows
-      <strong>where you just travelled</strong>, not where you are facing — turning on the spot
-      is invisible to it. Samples older than <strong>10 minutes</strong> expire and the readout
-      returns to <em>"Heading unknown"</em> rather than point wrong.
-    </p>
-
     <h2>Full map</h2>
     <ul>
       <li><strong>Mouse wheel</strong>: zoom · <strong>left-drag</strong>: pan</li>
@@ -210,22 +215,43 @@
     <h2>Your Dino (IslePilot)</h2>
     <p>
       The <strong>Dino</strong> tab reads your own dino's stats (growth, health, hunger,
-      thirst, Prime progress) from the server's IslePilot panel. Two ways to connect — pick
-      one:
+      thirst, stamina, nutrition, Prime progress) from the IslePilot system. There are
+      <strong>2 ways</strong> to connect:
+    </p>
+    <h3>Method 1 — Steam login via IslePilot (recommended)</h3>
+    <ol>
+      <li>Open the <strong>Dino</strong> tab → click <strong>Steam login</strong>.</li>
+      <li>
+        An <strong>islepilot.eu</strong> sign-in window opens — sign in with Steam there.
+        It closes itself when done.
+      </li>
+    </ol>
+    <p>
+      Do this <strong>once</strong> — no server link needed, and it works on
+      <strong>every IslePilot server</strong>: switch servers in game and the data follows.
+      This login also unlocks the <strong>Garage (Gacha)</strong> and the
+      <strong>server POI</strong> map layer. If the window fails to catch the token, open
+      <em>"Or paste the token manually"</em> and paste the token (or the whole
+      <strong>theisle-overlay://…</strong> link) → <strong>Verify &amp; save token</strong>.
+    </p>
+    <h3>Method 2 — Legacy: server link + cookie</h3>
+    <p>
+      Only when method 1 does not work. The cookie is stored per server — switching servers
+      means doing it again.
     </p>
     <ol>
       <li>
-        <strong>Steam login (fastest):</strong> enter the server link → click
-        <strong>Steam login</strong> → sign in in the window that opens. Done.
+        Open the <strong>"Legacy: server URL + cookie"</strong> section of the login card,
+        enter the server link (e.g. https://mixi.islepilot.eu) → click
+        <strong>Steam login</strong> inside that section.
       </li>
       <li>
-        <strong>Paste the cookie manually</strong> (when method 1 fails): open the server
-        page in your browser and sign in with Steam there → press <strong>F12</strong> (or
-        right-click → Inspect) → <strong>Application</strong> tab (Chrome) /
-        <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → pick the server's
-        domain → click the <strong>islepilot_player</strong> cookie → copy the whole
-        <strong>Value</strong> → paste it into the app →
-        <strong>Verify &amp; save cookie</strong>. Treat this string like a password.
+        If that still fails, paste the cookie manually: open the server page in your
+        browser and sign in with Steam there → press <strong>F12</strong> (or right-click →
+        Inspect) → <strong>Application</strong> tab (Chrome) / <strong>Storage</strong>
+        (Firefox) → <strong>Cookies</strong> → pick the server's domain → click the
+        <strong>islepilot_player</strong> cookie → copy the whole <strong>Value</strong> →
+        paste it into the app → <strong>Verify &amp; save cookie</strong>.
         <img src={guideDino1} alt="Right-click → Inspect or F12, open the Application tab" loading="lazy" />
         <img src={guideDino2} alt="Cookies → islepilot_player → copy the whole Value" loading="lazy" />
         <img src={guideDino3} alt="Enter the server link, paste the cookie and save" loading="lazy" />
@@ -279,6 +305,12 @@
     font-size: 1rem;
     font-weight: 600;
     margin: 1.25rem 0 0.4rem;
+  }
+  .guide :global(h3) {
+    color: var(--color-text);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0.9rem 0 0.3rem;
   }
   .guide :global(p),
   .guide :global(ul),
