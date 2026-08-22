@@ -20,12 +20,28 @@
   import DinoTab from "./dino/DinoTab.svelte";
   import Settings from "./settings/Settings.svelte";
   import Guide from "./guide/Guide.svelte";
+  import Donate from "./donate/Donate.svelte";
   import FirstRun from "./firstrun/FirstRun.svelte";
 
-  type Tab = "map" | "dino" | "settings" | "guide";
-  const initialTab = ["map", "dino", "settings", "guide"].includes(location.hash.slice(1))
+  type Tab = "map" | "dino" | "settings" | "guide" | "donate";
+  const initialTab = ["map", "dino", "settings", "guide", "donate"].includes(
+    location.hash.slice(1),
+  )
     ? (location.hash.slice(1) as Tab)
     : "map";
+
+  // Lucide-style tab icons (24x24, stroke = currentColor) as inline path
+  // markup — no icon library, and the color follows the button state.
+  const TAB_ICONS: Record<Tab, string> = {
+    map: '<path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>',
+    dino: '<circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/>',
+    settings:
+      '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    guide:
+      '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
+    donate:
+      '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+  };
   let tab = $state<Tab>(initialTab);
   // Write-back so F5 restores the tab the user was on (the hash was already
   // read above; nothing ever wrote it). replaceState: no history spam.
@@ -118,14 +134,26 @@
     <span class="mr-3 font-semibold" style="color: var(--color-accent)">
       {$t("app.title")}
     </span>
-    {#each [["map", $t("tab.map")], ["dino", $t("tab.dino")], ["settings", $t("tab.settings")], ["guide", $t("tab.guide")]] as [key, label] (key)}
+    {#each [["map", $t("tab.map")], ["dino", $t("tab.dino")], ["settings", $t("tab.settings")], ["guide", $t("tab.guide")], ["donate", $t("tab.donate")]] as [key, label] (key)}
       <button
-        class="cursor-pointer rounded px-3 py-1 text-sm"
+        class="flex cursor-pointer items-center gap-1.5 rounded px-3 py-1 text-sm"
         style={tab === key
           ? "background: var(--color-accent); color: var(--color-bg); font-weight: 600"
           : "color: var(--color-muted)"}
         onclick={() => (tab = key as Tab)}
       >
+        <svg
+          viewBox="0 0 24 24"
+          class="h-4 w-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          {@html TAB_ICONS[key as Tab]}
+        </svg>
         {label}
       </button>
     {/each}
@@ -247,6 +275,8 @@
       </div>
     {:else if tab === "settings"}
       <div class="h-full overflow-y-auto"><Settings /></div>
+    {:else if tab === "donate"}
+      <div class="h-full overflow-y-auto"><Donate /></div>
     {:else}
       <div class="h-full overflow-y-auto"><Guide /></div>
     {/if}

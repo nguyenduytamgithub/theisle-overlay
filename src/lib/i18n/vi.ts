@@ -13,6 +13,7 @@ export const vi = {
   "tab.dino": "Khủng long",
   "tab.settings": "Cài đặt",
   "tab.guide": "Hướng dẫn",
+  "tab.donate": "Ủng hộ",
 
   // --- trạng thái vị trí ---
   "pos.none": "Chưa có vị trí",

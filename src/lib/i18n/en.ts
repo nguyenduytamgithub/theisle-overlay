@@ -12,6 +12,7 @@ export const en: Record<MsgKey, string> = {
   "tab.dino": "Your Dino",
   "tab.settings": "Settings",
   "tab.guide": "Guide",
+  "tab.donate": "Donate",
 
   "pos.none": "No position yet",
   "pos.hint":
