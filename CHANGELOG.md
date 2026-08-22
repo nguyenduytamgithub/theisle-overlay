@@ -4,6 +4,17 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.4.1] — 2026-08-23
+
+### Thêm
+
+- **Hotkey mở bản đồ tự về tab Bản đồ**: bấm Ctrl+Alt+F trong game để hiện cửa
+  sổ là app chuyển ngay sang tab Bản đồ, không dừng ở tab đang mở dở; mở từ
+  icon khay hoặc chạy lần hai vẫn giữ tab cũ. (`75cef13`)
+- **Mục "Lớp bản đồ" thu gọn được**: bấm tiêu đề (mũi tên xoay + chữ Thu
+  gọn/Mở rộng) để gập danh sách lớp — thấy ngay đường đã đi, vị trí, waypoint
+  bên dưới không phải cuộn; trạng thái được nhớ qua các phiên. (`75cef13`)
+
 ## [1.4.0] — 2026-08-23
 
 ### Thêm
