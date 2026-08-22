@@ -20,11 +20,15 @@ export interface DinoBars {
   hp: { current: number | null; max: number | null };
   hunger: { current: number | null; max: number | null };
   thirst: { current: number | null; max: number | null };
+  /** Only the token-mode JSON API provides this; null in cookie mode. */
+  stamina: { current: number | null; max: number | null } | null;
   growthPct: number | null;
 }
 
 /** Must match DINO_PANEL_H in src-tauri/src/minimap.rs. */
 export const PANEL_H = 76;
+/** One extra stats row (stamina). Must match DINO_PANEL_ROW_H in minimap.rs. */
+export const PANEL_ROW_H = 16;
 
 /** Quest-panel geometry. Must match QUEST_HEADER_H / QUEST_ROW_H /
  * QUEST_PAD_H in src-tauri/src/minimap.rs. */
@@ -461,6 +465,17 @@ function drawDinoPanel(ctx: CanvasRenderingContext2D, state: MinimapState, size:
           },
           { label: "\u{1F356}", cur: dino.hunger.current, max: dino.hunger.max, color: "#e8a33d" },
           { label: "\u{1F4A7}", cur: dino.thirst.current, max: dino.thirst.max, color: "#4aa8d8" },
+          // Stamina (token mode only) — the window is one row taller then.
+          ...(dino.stamina
+            ? [
+                {
+                  label: "\u{26A1}",
+                  cur: dino.stamina.current,
+                  max: dino.stamina.max,
+                  color: "#a78bfa",
+                },
+              ]
+            : []),
         ]
       : [];
 

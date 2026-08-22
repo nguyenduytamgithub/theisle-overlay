@@ -9,6 +9,7 @@ import { installGlobalErrorLog } from "../lib/errlog";
 import { ANIMAL_GLYPHS, waypointGlyph } from "../lib/theme";
 import {
   PANEL_H,
+  PANEL_ROW_H,
   QUEST_HEADER_H,
   QUEST_PAD_H,
   QUEST_ROW_H,
@@ -114,8 +115,7 @@ function applySettings(s: Settings) {
   state.showTrail = Boolean(mm.show_trail ?? true);
   state.showWaypoints = Boolean(mm.show_waypoints ?? true);
   state.showFreshwater = Boolean((s.layers ?? {}).freshwater ?? true);
-  const ip = s.islepilot ?? {};
-  state.panelH = ip.enabled && (ip.show_overlay_panel ?? true) ? PANEL_H : 0;
+  recomputePanelH();
   const lang = (s.language === "en" ? "en" : "vi") as keyof typeof STRINGS;
   state.questLang = lang;
   recomputeQuestsH();
@@ -124,6 +124,17 @@ function applySettings(s: Settings) {
   state.headingUnknown = STRINGS[lang].unknown;
   refreshHeadingLabel(lang);
   refreshPoiFilter();
+}
+
+/** Window height for the stats strip is Rust's job (minimap.rs panel_h reads
+ * the same stamina flag from the poller); this only has to agree on the
+ * formula: base height + one row when stamina is present (token mode). */
+function recomputePanelH() {
+  const ip = settings.islepilot ?? {};
+  state.panelH =
+    ip.enabled && (ip.show_overlay_panel ?? true)
+      ? PANEL_H + (state.dino?.stamina ? PANEL_ROW_H : 0)
+      : 0;
 }
 
 /** Window height for the quest card is Rust's job (minimap.rs quests_h reads
@@ -379,6 +390,7 @@ async function init() {
       health: DinoStatBar | null;
       hunger: DinoStatBar | null;
       thirst: DinoStatBar | null;
+      stamina?: DinoStatBar | null;
       primeQuests?: QuestRow[];
     } | null;
   }
@@ -388,6 +400,7 @@ async function init() {
           hp: u.player.health ?? { current: null, max: null },
           hunger: u.player.hunger ?? { current: null, max: null },
           thirst: u.player.thirst ?? { current: null, max: null },
+          stamina: u.player.stamina ?? null,
           growthPct: u.player.growthPct,
         }
       : null;
@@ -398,6 +411,7 @@ async function init() {
     if (u.player) {
       state.quests = u.player.primeQuests ?? [];
       recomputeQuestsH();
+      recomputePanelH();
     }
   };
   await listen<DinoUpdatePayload>("dino://update", (e) => {

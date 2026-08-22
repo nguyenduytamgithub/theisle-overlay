@@ -48,6 +48,9 @@ static LAST_UPDATE: Mutex<Option<DinoUpdate>> = Mutex::new(None);
 /// previous value so a network hiccup can't collapse the overlay panel).
 /// Read by minimap::snapshot each supervisor tick to size the window.
 static QUEST_COUNT: AtomicUsize = AtomicUsize::new(0);
+/// Whether the last GOOD update carried a stamina bar (token mode only) —
+/// the minimap stats strip grows one row for it.
+static HAS_STAMINA: AtomicBool = AtomicBool::new(false);
 /// True while a login window is open and being watched. Cleared the moment
 /// the user closes that window, so the UI never sits on "waiting for login".
 static LOGIN_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -290,6 +293,7 @@ pub fn current_state(app: &AppHandle) -> IslepilotState {
 fn publish(app: &AppHandle, update: DinoUpdate) {
     if let Some(player) = &update.player {
         QUEST_COUNT.store(player.prime_quests.len(), Ordering::SeqCst);
+        HAS_STAMINA.store(player.stamina.is_some(), Ordering::SeqCst);
     }
     *LAST_UPDATE.lock_safe() = Some(update.clone());
     crate::events::emit_all(app, DINO_UPDATE, update);
@@ -299,6 +303,12 @@ fn publish(app: &AppHandle, update: DinoUpdate) {
 /// is sized from this.
 pub fn last_quest_count() -> usize {
     QUEST_COUNT.load(Ordering::SeqCst)
+}
+
+/// Whether the last good update had stamina — the minimap stats strip is
+/// sized from this (one extra row in token mode).
+pub fn last_has_stamina() -> bool {
+    HAS_STAMINA.load(Ordering::SeqCst)
 }
 
 /// Re-send the latest update — part of resync after a webview reload.

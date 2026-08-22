@@ -98,6 +98,9 @@ fn on_ready(app: &AppHandle) {
 /// Height of the dino-stats strip under the map disc, logical px. Must match
 /// PANEL_H in src/minimap/render.ts.
 const DINO_PANEL_H: f64 = 76.0;
+/// One extra stats row (stamina, token mode only). Must match PANEL_ROW_H in
+/// src/minimap/render.ts.
+const DINO_PANEL_ROW_H: f64 = 16.0;
 
 /// Quest-panel geometry, logical px. Must match QUEST_HEADER_H / QUEST_ROW_H /
 /// QUEST_PAD_H in src/minimap/render.ts.
@@ -173,7 +176,13 @@ fn snapshot(app: &AppHandle) -> Snapshot {
         panel_h: if settings::get_bool(&s, &["islepilot", "enabled"], false)
             && settings::get_bool(&s, &["islepilot", "show_overlay_panel"], true)
         {
+            // The 250 ms tick picks up stamina appearing/vanishing via the diff.
             DINO_PANEL_H
+                + if crate::islepilot::last_has_stamina() {
+                    DINO_PANEL_ROW_H
+                } else {
+                    0.0
+                }
         } else {
             0.0
         },
