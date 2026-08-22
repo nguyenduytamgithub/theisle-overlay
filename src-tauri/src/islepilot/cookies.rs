@@ -20,7 +20,7 @@ fn store_path() -> PathBuf {
     settings::local_dir().join("islepilot_cookies.bin")
 }
 
-fn dpapi_protect(plain: &[u8]) -> Result<Vec<u8>, String> {
+pub(crate) fn dpapi_protect(plain: &[u8]) -> Result<Vec<u8>, String> {
     unsafe {
         let input = CRYPT_INTEGER_BLOB {
             cbData: plain.len() as u32,
@@ -36,7 +36,7 @@ fn dpapi_protect(plain: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
-fn dpapi_unprotect(sealed: &[u8]) -> Result<Vec<u8>, String> {
+pub(crate) fn dpapi_unprotect(sealed: &[u8]) -> Result<Vec<u8>, String> {
     unsafe {
         let input = CRYPT_INTEGER_BLOB {
             cbData: sealed.len() as u32,

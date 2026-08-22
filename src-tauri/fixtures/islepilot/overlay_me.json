@@ -1,0 +1,38 @@
+{
+  "hasData": true,
+  "steamId": "76561198000000001",
+  "name": "Survivor",
+  "server": "PVN The Isle Viet Nam 01",
+  "online": true,
+  "lastSeenAt": "2026-08-22T10:55:41.707Z",
+  "species": "Tyrannosaurus",
+  "female": false,
+  "growth": 0.2628,
+  "health": 49.01,
+  "maxHealth": 55.12,
+  "hunger": 11.4,
+  "maxHunger": 18.19,
+  "thirst": 703.73,
+  "maxThirst": 1000,
+  "stamina": 332.94,
+  "maxStamina": 336.52,
+  "nutrition": { "carb": 4.04, "protein": 0, "lipid": 0 },
+  "position": { "x": -263306, "y": 307415.69, "z": 21682.56, "yaw": -19.15 },
+  "mutations": {
+    "active": ["None", "None", "None", "None"],
+    "parent": ["None", "None", "None", "None"],
+    "elderA": ["None", "None", "None", "None"],
+    "elderB": ["None", "None", "None", "None"]
+  },
+  "prime": {
+    "eligible": false,
+    "elder": false,
+    "required": 5,
+    "total": 10,
+    "done": 4,
+    "quests": [
+      { "name": "Visit a Sanctuary as a juvenile", "done": false },
+      { "name": "Never be Infertile", "done": true }
+    ]
+  }
+}

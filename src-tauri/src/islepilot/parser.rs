@@ -23,6 +23,16 @@ pub struct StatBar {
 }
 
 impl StatBar {
+    /// Build from already-numeric values (the JSON overlay API) — `raw` is
+    /// synthesized so every display path that falls back to it keeps working.
+    pub fn from_values(current: f64, max: f64) -> Self {
+        Self {
+            raw: format!("{} / {}", round1(current), round1(max)),
+            current: Some(current),
+            max: Some(max),
+        }
+    }
+
     fn parse(raw: String) -> Self {
         // "96 / 96" -> (96, 96); "874 / 1000" etc. Tolerates thousands
         // separators just in case.
@@ -35,6 +45,16 @@ impl StatBar {
         let current = parts.next().flatten();
         let max = parts.next().flatten();
         Self { raw, current, max }
+    }
+}
+
+/// Trim float noise for synthesized raw text: 49.01 -> "49", 49.5 -> "49.5".
+fn round1(v: f64) -> String {
+    let r = (v * 10.0).round() / 10.0;
+    if r.fract() == 0.0 {
+        format!("{}", r as i64)
+    } else {
+        format!("{r:.1}")
     }
 }
 
@@ -62,6 +82,24 @@ pub struct PlayerStats {
     pub hunger: Option<StatBar>,
     pub thirst: Option<StatBar>,
     pub prime_quests: Vec<QuestStatus>,
+    // -- extras only the JSON overlay API provides (token mode). The HTML
+    // parser leaves them None, so cookie-mode payloads are unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stamina: Option<StatBar>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nutrition: Option<Nutrition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub female: Option<bool>,
+}
+
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Nutrition {
+    pub carb: f64,
+    pub protein: f64,
+    pub lipid: f64,
 }
 
 impl PlayerStats {
@@ -184,6 +222,10 @@ pub fn parse_me(html: &str) -> PlayerStats {
         hunger,
         thirst,
         prime_quests,
+        stamina: None,
+        nutrition: None,
+        server: None,
+        female: None,
     }
 }
 

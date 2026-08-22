@@ -166,14 +166,29 @@ export const en: Record<MsgKey, string> = {
   "dino.manual_cookie_hint":
     "Open the server page in your browser and sign in with Steam. Press F12 → " +
     "Application tab (Chrome) or Storage (Firefox) → Cookies → pick the server domain → " +
-    "find the cookie named islepilot_player and paste its Value here. Keep this string " +
-    "secret like a password.",
+    "find the cookie named islepilot_player and paste its Value here.",
   "dino.cancel_login": "Cancel sign-in",
   "dino.manual_cookie_save": "Verify & save cookie",
   "dino.manual_cookie_checking": "Checking cookie…",
   "dino.manual_cookie_bad":
     "Cookie invalid or session not signed in — double-check the pasted string.",
   "dino.server_settings": "Server settings",
+  "dino.token_login": "Steam login (once, works on every server)",
+  "dino.token_login_hint":
+    "Sign in through islepilot.eu ONCE — the token works on EVERY IslePilot server " +
+    "(mixi, hoho, sdvn…), no server URL or cookie copying needed. Switch servers in game " +
+    "and the data follows automatically.",
+  "dino.token_paste": "Or paste the token manually",
+  "dino.token_paste_hint":
+    "If the login window fails to catch the token: paste the overlay token (or the whole " +
+    "theisle-overlay://… / isle-overlay://… link) here.",
+  "dino.token_save": "Verify & save token",
+  "dino.token_checking": "Checking token…",
+  "dino.token_bad": "Token invalid — double-check the pasted string.",
+  "dino.legacy_section": "Legacy: server URL + cookie (fallback)",
+  "dino.legacy_hint":
+    "Only needed when the new login does not work with your server. Cookies are stored " +
+    "per server.",
   "dino.live_map_yes": "This server has a live map — your position updates automatically",
   "dino.live_map_checking": "Checking whether this server has a live map…",
   "dino.enabled": "Track dino info",
@@ -190,6 +205,14 @@ export const en: Record<MsgKey, string> = {
   "dino.health": "Health",
   "dino.hunger": "Hunger",
   "dino.thirst": "Thirst",
+  "dino.stamina": "Stamina",
+  "dino.nutrition": "Nutrition",
+  "dino.nutrition_carb": "Carbs",
+  "dino.nutrition_protein": "Protein",
+  "dino.nutrition_lipid": "Lipids",
+  "dino.server_playing": "Server",
+  "dino.sex_female": "Female",
+  "dino.sex_male": "Male",
   "dino.prime": "Prime progress",
   "dino.online": "Online",
   "dino.offline": "Offline",

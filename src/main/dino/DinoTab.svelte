@@ -1,15 +1,21 @@
 <script lang="ts">
   // "Your dino" tab: IslePilot login + live stats + Prime progress.
+  //
+  // Two auth modes: TOKEN (primary — one Steam login against islepilot.eu,
+  // works on every IslePilot server) and LEGACY (fallback — per-server URL +
+  // cookie, the original flow, collapsed under <details>).
   import { onMount } from "svelte";
   import {
     getSettings,
-    listenerBag,
     islepilotApply,
     islepilotCancelLogin,
     islepilotLogin,
     islepilotLogout,
     islepilotSetCookie,
+    islepilotSetToken,
     islepilotState,
+    islepilotTokenLogin,
+    listenerBag,
     onDinoAuthExpired,
     onDinoLoginFailed,
     onDinoLoginOk,
@@ -24,8 +30,9 @@
 
   let settings = $state<Settings | null>(null);
   let loggedIn = $state(false);
-  // Server + cookie setup is bulky; once the cookie is in it collapses so
-  // the stats are visible without scrolling. The gear button reopens it.
+  let authMode = $state<"token" | "legacy">("legacy");
+  // Login setup is bulky; once signed in it collapses so the stats are
+  // visible without scrolling. The gear button reopens it.
   let serverOpen = $state(true);
   let update = $state<DinoUpdate | null>(null);
   let loginBusy = $state(false);
@@ -35,6 +42,16 @@
   let cookieInput = $state("");
   let cookieBusy = $state(false);
   let cookieError = $state(false);
+  let tokenInput = $state("");
+  let tokenBusy = $state(false);
+  let tokenError = $state(false);
+
+  async function refreshState() {
+    const st = await islepilotState();
+    loggedIn = st.loggedIn;
+    authMode = st.authMode;
+    update = st.lastUpdate ?? update;
+  }
 
   onMount(() => {
     const bag = listenerBag();
@@ -43,6 +60,7 @@
       domainInput = settings.islepilot.domain;
       const st = await islepilotState();
       loggedIn = st.loggedIn;
+      authMode = st.authMode;
       serverOpen = !st.loggedIn;
       update = st.lastUpdate;
       await bag.add(
@@ -56,9 +74,9 @@
           loginBusy = false;
           loginError = false;
           authExpired = false;
-          loggedIn = true;
           serverOpen = false;
           settings = await getSettings();
+          await refreshState();
         }),
       );
       await bag.add(
@@ -80,6 +98,30 @@
   async function patch(p: object, reapply = false) {
     settings = await patchSettings(p);
     if (reapply) await islepilotApply();
+  }
+
+  async function tokenLogin() {
+    loginBusy = true;
+    loginError = false;
+    try {
+      await islepilotTokenLogin();
+    } catch {
+      loginBusy = false;
+      loginError = true;
+    }
+  }
+
+  async function saveToken() {
+    tokenBusy = true;
+    tokenError = false;
+    try {
+      await islepilotSetToken(tokenInput);
+      tokenInput = "";
+    } catch {
+      tokenError = true;
+    } finally {
+      tokenBusy = false;
+    }
   }
 
   async function login() {
@@ -131,6 +173,7 @@
   const player = $derived(update?.player ?? null);
   /** Server live-map capability: true / false / null while unknown. */
   const liveMap = $derived(update?.liveMapAvailable ?? null);
+  const nutrition = $derived(player?.nutrition ?? null);
 </script>
 
 {#if settings}
@@ -156,22 +199,19 @@
       {/if}
     </section>
 
-    <!-- Server + login (collapsed once the cookie is installed) -->
+    <!-- Login (collapsed once signed in) -->
     {#if serverOpen}
     <section
       class="rounded border p-3"
       style="border-color: var(--color-border); background: var(--color-panel)"
     >
-      <div class="mb-1 text-sm font-semibold">{$t("dino.server")}</div>
-      <p class="mb-2 text-xs" style="color: var(--color-muted)">
-        {$t("dino.supported_servers")}
+      <!-- Primary: token mode — one Steam login for every server -->
+      <div class="mb-1 text-sm font-semibold" style="color: var(--color-accent)">
+        {$t("dino.token_login")}
+      </div>
+      <p class="mb-2 text-xs leading-relaxed" style="color: var(--color-muted)">
+        {$t("dino.token_login_hint")}
       </p>
-      <input
-        class="mb-3 w-full rounded border px-2 py-1 font-mono text-sm"
-        style="border-color: var(--color-border); background: var(--color-bg); color: var(--color-text)"
-        bind:value={domainInput}
-        placeholder="https://…islepilot.eu"
-      />
       {#if authExpired}
         <p class="mb-2 text-sm" style="color: #ff8a80">{$t("dino.auth_expired")}</p>
       {/if}
@@ -179,7 +219,7 @@
         <p class="mb-2 text-sm" style="color: #ff8a80">{$t("dino.login_failed")}</p>
       {/if}
       <div class="flex items-center gap-3">
-        {#if loggedIn && domainInput === settings.islepilot.domain && !authExpired}
+        {#if loggedIn && authMode === "token" && !authExpired}
           <span class="text-sm" style="color: #72d653">✓ {$t("dino.logged_in")}</span>
           <button
             class="cursor-pointer rounded border px-3 py-1 text-sm"
@@ -192,8 +232,8 @@
           <button
             class="cursor-pointer rounded px-3 py-1 text-sm font-medium disabled:opacity-50"
             style="background: var(--color-accent); color: var(--color-bg)"
-            disabled={loginBusy || !domainInput.startsWith("https://")}
-            onclick={() => void login()}
+            disabled={loginBusy}
+            onclick={() => void tokenLogin()}
           >
             {$t("dino.login")}
           </button>
@@ -212,33 +252,114 @@
         {/if}
       </div>
 
-      <!-- Cookie paste: the reliable path, always visible -->
-      <div class="mt-3 border-t pt-3" style="border-color: var(--color-border)">
-        <div class="text-sm font-semibold" style="color: var(--color-accent)">
-          {$t("dino.manual_cookie")}
-        </div>
+      <!-- Manual token paste (escape hatch) -->
+      <details class="mt-3">
+        <summary class="cursor-pointer text-xs" style="color: var(--color-muted)">
+          {$t("dino.token_paste")}
+        </summary>
         <p class="mb-2 mt-1 text-xs leading-relaxed" style="color: var(--color-muted)">
-          {$t("dino.manual_cookie_hint")}
+          {$t("dino.token_paste_hint")}
         </p>
         <textarea
           class="mb-2 w-full rounded border px-2 py-1 font-mono text-xs"
           style="border-color: var(--color-border); background: var(--color-bg); color: var(--color-text)"
-          rows="3"
-          placeholder="islepilot_player=eyJhbGciOi…  (hoặc chỉ dán phần Value)"
-          bind:value={cookieInput}
+          rows="2"
+          placeholder="theisle-overlay://?sid=…&token=…"
+          bind:value={tokenInput}
         ></textarea>
-        {#if cookieError}
-          <p class="mb-2 text-xs" style="color: #ff8a80">{$t("dino.manual_cookie_bad")}</p>
+        {#if tokenError}
+          <p class="mb-2 text-xs" style="color: #ff8a80">{$t("dino.token_bad")}</p>
         {/if}
         <button
           class="cursor-pointer rounded border px-3 py-1 text-sm disabled:opacity-50"
           style="border-color: var(--color-border)"
-          disabled={cookieBusy || !cookieInput.trim() || !domainInput.startsWith("https://")}
-          onclick={() => void saveCookie()}
+          disabled={tokenBusy || !tokenInput.trim()}
+          onclick={() => void saveToken()}
         >
-          {cookieBusy ? $t("dino.manual_cookie_checking") : $t("dino.manual_cookie_save")}
+          {tokenBusy ? $t("dino.token_checking") : $t("dino.token_save")}
         </button>
-      </div>
+      </details>
+
+      <!-- Legacy fallback: per-server URL + cookie -->
+      <details class="mt-3 border-t pt-3" style="border-color: var(--color-border)">
+        <summary class="cursor-pointer text-xs font-semibold" style="color: var(--color-muted)">
+          {$t("dino.legacy_section")}
+        </summary>
+        <p class="mb-2 mt-1 text-xs" style="color: var(--color-muted)">
+          {$t("dino.legacy_hint")}
+        </p>
+        <div class="mb-1 text-sm font-semibold">{$t("dino.server")}</div>
+        <p class="mb-2 text-xs" style="color: var(--color-muted)">
+          {$t("dino.supported_servers")}
+        </p>
+        <input
+          class="mb-3 w-full rounded border px-2 py-1 font-mono text-sm"
+          style="border-color: var(--color-border); background: var(--color-bg); color: var(--color-text)"
+          bind:value={domainInput}
+          placeholder="https://…islepilot.eu"
+        />
+        <div class="flex items-center gap-3">
+          {#if loggedIn && authMode === "legacy" && domainInput === settings.islepilot.domain && !authExpired}
+            <span class="text-sm" style="color: #72d653">✓ {$t("dino.logged_in")}</span>
+            <button
+              class="cursor-pointer rounded border px-3 py-1 text-sm"
+              style="border-color: var(--color-border)"
+              onclick={() => void logout()}
+            >
+              {$t("dino.logout")}
+            </button>
+          {:else}
+            <button
+              class="cursor-pointer rounded px-3 py-1 text-sm font-medium disabled:opacity-50"
+              style="background: var(--color-accent); color: var(--color-bg)"
+              disabled={loginBusy || !domainInput.startsWith("https://")}
+              onclick={() => void login()}
+            >
+              {$t("dino.login")}
+            </button>
+            {#if loginBusy}
+              <span class="text-sm" style="color: var(--color-muted)">
+                {$t("dino.login_wait")}
+              </span>
+              <button
+                class="cursor-pointer rounded border px-2 py-0.5 text-xs"
+                style="border-color: var(--color-border)"
+                onclick={() => void cancelLogin()}
+              >
+                {$t("dino.cancel_login")}
+              </button>
+            {/if}
+          {/if}
+        </div>
+
+        <!-- Cookie paste: the reliable legacy path -->
+        <div class="mt-3 border-t pt-3" style="border-color: var(--color-border)">
+          <div class="text-sm font-semibold" style="color: var(--color-accent)">
+            {$t("dino.manual_cookie")}
+          </div>
+          <p class="mb-2 mt-1 text-xs leading-relaxed" style="color: var(--color-muted)">
+            {$t("dino.manual_cookie_hint")}
+          </p>
+          <textarea
+            class="mb-2 w-full rounded border px-2 py-1 font-mono text-xs"
+            style="border-color: var(--color-border); background: var(--color-bg); color: var(--color-text)"
+            rows="3"
+            placeholder="islepilot_player=eyJhbGciOi…  (hoặc chỉ dán phần Value)"
+            bind:value={cookieInput}
+          ></textarea>
+          {#if cookieError}
+            <p class="mb-2 text-xs" style="color: #ff8a80">{$t("dino.manual_cookie_bad")}</p>
+          {/if}
+          <button
+            class="cursor-pointer rounded border px-3 py-1 text-sm disabled:opacity-50"
+            style="border-color: var(--color-border)"
+            disabled={cookieBusy || !cookieInput.trim() || !domainInput.startsWith("https://")}
+            onclick={() => void saveCookie()}
+          >
+            {cookieBusy ? $t("dino.manual_cookie_checking") : $t("dino.manual_cookie_save")}
+          </button>
+        </div>
+      </details>
     </section>
     {/if}
 
@@ -341,8 +462,13 @@
       style="border-color: var(--color-border); background: var(--color-panel)"
     >
       {#if player}
-        <div class="mb-3 flex items-center gap-2">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
           <span class="text-lg font-semibold">{player.dinoName ?? "?"}</span>
+          {#if player.female !== null && player.female !== undefined}
+            <span class="text-xs" style="color: var(--color-muted)">
+              {player.female ? `♀ ${$t("dino.sex_female")}` : `♂ ${$t("dino.sex_male")}`}
+            </span>
+          {/if}
           {#if player.online !== null}
             <span
               class="rounded-full px-2 py-0.5 text-xs font-medium"
@@ -351,6 +477,11 @@
                 : "background: #3a2222; color: #ff8a80"}
             >
               {player.online ? $t("dino.online") : $t("dino.offline")}
+            </span>
+          {/if}
+          {#if player.server}
+            <span class="text-xs" style="color: var(--color-muted)">
+              {$t("dino.server_playing")}: <span style="color: var(--color-text)">{player.server}</span>
             </span>
           {/if}
           {#if update}
@@ -374,7 +505,7 @@
           </div>
         </div>
 
-        {#each [["dino.health", player.health, hpColor(pct(player.health))], ["dino.hunger", player.hunger, "#e8a33d"], ["dino.thirst", player.thirst, "#4aa8d8"]] as [labelKey, bar, color] (labelKey)}
+        {#each [["dino.health", player.health, hpColor(pct(player.health))], ["dino.hunger", player.hunger, "#e8a33d"], ["dino.thirst", player.thirst, "#4aa8d8"], ...(player.stamina ? [["dino.stamina", player.stamina, "#a78bfa"]] : [])] as [labelKey, bar, color] (labelKey)}
           <div class="mb-2">
             <div class="mb-0.5 flex justify-between text-sm">
               <span>{$t(labelKey as never)}</span>
@@ -388,6 +519,26 @@
             </div>
           </div>
         {/each}
+
+        <!-- Nutrition (token mode only) -->
+        {#if nutrition}
+          <div class="mb-2 mt-3">
+            <div class="mb-1 text-sm font-semibold" style="color: var(--color-accent)">
+              {$t("dino.nutrition")}
+            </div>
+            <div class="flex gap-4 font-mono text-sm">
+              <span title={$t("dino.nutrition_carb")}>
+                🌾 {$t("dino.nutrition_carb")}: {nutrition.carb.toFixed(1)}
+              </span>
+              <span title={$t("dino.nutrition_protein")}>
+                🍖 {$t("dino.nutrition_protein")}: {nutrition.protein.toFixed(1)}
+              </span>
+              <span title={$t("dino.nutrition_lipid")}>
+                🧈 {$t("dino.nutrition_lipid")}: {nutrition.lipid.toFixed(1)}
+              </span>
+            </div>
+          </div>
+        {/if}
 
         <!-- Prime progress -->
         {#if player.primeQuests.length > 0}
@@ -427,5 +578,6 @@
         <p class="text-sm" style="color: var(--color-muted)">{$t("dino.no_data")}</p>
       {/if}
     </section>
+
   </div>
 {/if}

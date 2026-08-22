@@ -622,6 +622,25 @@ pub async fn islepilot_set_cookie(
     .map_err(|e| e.to_string())?
 }
 
+/// One-time Steam login against the CENTRAL overlay API (token mode — one
+/// login works on every IslePilot server). Async for the same webview-
+/// creation deadlock reason as islepilot_login.
+#[tauri::command]
+pub async fn islepilot_token_login(app: AppHandle) -> Result<(), String> {
+    crate::islepilot::start_token_login(&app)
+}
+
+/// Manual fallback for token mode: validate + store a pasted overlay token
+/// (or a whole isle-overlay:// redirect URL).
+#[tauri::command]
+pub async fn islepilot_set_token(app: AppHandle, token: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::islepilot::manual_token(&app, token)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn islepilot_logout(app: AppHandle) -> Result<(), String> {
     crate::islepilot::logout(&app)

@@ -180,13 +180,29 @@ export const vi = {
   "dino.manual_cookie_hint":
     "Mở trang server trong trình duyệt và đăng nhập Steam. Bấm F12 → tab Application " +
     "(Chrome) hoặc Storage (Firefox) → Cookies → chọn domain server → tìm cookie tên " +
-    "islepilot_player rồi copy phần Value dán vào đây. Giữ bí mật chuỗi này như mật khẩu.",
+    "islepilot_player rồi copy phần Value dán vào đây.",
   "dino.cancel_login": "Hủy đăng nhập",
   "dino.manual_cookie_save": "Kiểm tra & lưu cookie",
   "dino.manual_cookie_checking": "Đang kiểm tra cookie…",
   "dino.manual_cookie_bad":
     "Cookie không hợp lệ hoặc phiên chưa đăng nhập — kiểm tra lại chuỗi đã dán.",
   "dino.server_settings": "Cài đặt server",
+  "dino.token_login": "Đăng nhập Steam (1 lần, dùng cho mọi server)",
+  "dino.token_login_hint":
+    "Đăng nhập qua islepilot.eu một lần duy nhất — token dùng chung cho MỌI server IslePilot " +
+    "(mixi, hoho, sdvn…), không cần nhập server hay copy cookie nữa. Đổi server trong game " +
+    "là dữ liệu tự đổi theo.",
+  "dino.token_paste": "Hoặc dán token thủ công",
+  "dino.token_paste_hint":
+    "Nếu cửa sổ đăng nhập không tự bắt được token: dán token overlay (hoặc nguyên link " +
+    "theisle-overlay://… / isle-overlay://…) vào đây.",
+  "dino.token_save": "Kiểm tra & lưu token",
+  "dino.token_checking": "Đang kiểm tra token…",
+  "dino.token_bad": "Token không hợp lệ — kiểm tra lại chuỗi đã dán.",
+  "dino.legacy_section": "Cách cũ: nhập server + cookie (dự phòng)",
+  "dino.legacy_hint":
+    "Chỉ cần khi cách đăng nhập mới không hoạt động với server của bạn. Cookie lưu riêng " +
+    "cho từng server.",
   "dino.live_map_yes": "Server có live map — vị trí sẽ tự cập nhật",
   "dino.live_map_checking": "Đang kiểm tra live map của server…",
   "dino.enabled": "Theo dõi thông tin khủng long",
@@ -202,6 +218,14 @@ export const vi = {
   "dino.health": "Máu",
   "dino.hunger": "Đói",
   "dino.thirst": "Khát",
+  "dino.stamina": "Thể lực",
+  "dino.nutrition": "Dinh dưỡng",
+  "dino.nutrition_carb": "Carb",
+  "dino.nutrition_protein": "Đạm",
+  "dino.nutrition_lipid": "Béo",
+  "dino.server_playing": "Server",
+  "dino.sex_female": "Cái",
+  "dino.sex_male": "Đực",
   "dino.prime": "Prime progress",
   "dino.online": "Online",
   "dino.offline": "Offline",
@@ -212,8 +236,8 @@ export const vi = {
     "IslePilot vừa cập nhật phiên bản mới — nếu số liệu trông sai, giao diện của họ có thể " +
     "đã đổi và app cần cập nhật theo.",
   "dino.map_disabled": "Server này tắt live map.",
-  "dino.crashed":
-    "Phần Khủng long gặp lỗi và đã được cách ly — bản đồ và các tính năng khác không bị ảnh hưởng.",
+  “dino.crashed”:
+    “Phần Khủng long gặp lỗi và đã được cách ly — bản đồ và các tính năng khác không bị ảnh hưởng.”,
   "map.crashed":
     "Bản đồ gặp lỗi hiển thị. Bấm Thử lại, hoặc nhấn F5 để tải lại toàn bộ ứng dụng.",
   "btn.retry": "Thử lại",

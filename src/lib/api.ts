@@ -51,6 +51,8 @@ export type Settings = Record<string, unknown> & {
   language: "vi" | "en";
   islepilot: {
     enabled: boolean;
+    /** "token" = one Steam login for every server; "legacy" = per-server cookie. */
+    auth_mode: "token" | "legacy";
     domain: string;
     poll_interval_s: number;
     use_map_position: boolean;
@@ -319,6 +321,12 @@ export interface DinoQuest {
   completed: boolean;
 }
 
+export interface DinoNutrition {
+  carb: number;
+  protein: number;
+  lipid: number;
+}
+
 export interface DinoPlayer {
   dinoName: string | null;
   online: boolean | null;
@@ -328,6 +336,11 @@ export interface DinoPlayer {
   hunger: DinoStatBar | null;
   thirst: DinoStatBar | null;
   primeQuests: DinoQuest[];
+  // Extras only the token-mode JSON API provides (absent in cookie mode).
+  stamina?: DinoStatBar | null;
+  nutrition?: DinoNutrition | null;
+  server?: string | null;
+  female?: boolean | null;
 }
 
 export interface DinoMap {
@@ -353,6 +366,8 @@ export interface DinoUpdate {
 
 export interface IslepilotState {
   loggedIn: boolean;
+  authMode: "token" | "legacy";
+  tokenPresent: boolean;
   lastUpdate: DinoUpdate | null;
 }
 
@@ -361,6 +376,11 @@ export const islepilotLogin = (domain: string) =>
 /** Manual fallback: validate + store a pasted Cookie header. */
 export const islepilotSetCookie = (domain: string, cookie: string) =>
   invoke("islepilot_set_cookie", { domain, cookie });
+/** Token mode: one Steam login, works on every IslePilot server. */
+export const islepilotTokenLogin = () => invoke("islepilot_token_login");
+/** Manual fallback for token mode: paste the overlay token (or redirect URL). */
+export const islepilotSetToken = (token: string) =>
+  invoke("islepilot_set_token", { token });
 export const islepilotCancelLogin = () => invoke("islepilot_cancel_login");
 export const islepilotLogout = () => invoke("islepilot_logout");
 export const islepilotApply = () => invoke("islepilot_apply");

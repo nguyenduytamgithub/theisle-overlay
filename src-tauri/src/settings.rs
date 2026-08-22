@@ -151,6 +151,7 @@ pub fn default_settings() -> Value {
         // "Your dino" — IslePilot server-panel integration.
         "islepilot": {
             "enabled": false,
+            "auth_mode": "legacy",       // token (one login, every server) | legacy (per-server cookie)
             "domain": "https://mixi.islepilot.eu",
             "poll_interval_s": 10,
             "use_map_position": false,   // auto-managed: on when the server has a live map

@@ -99,6 +99,8 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::islepilot_login,
             commands::islepilot_set_cookie,
             commands::islepilot_cancel_login,
+            commands::islepilot_token_login,
+            commands::islepilot_set_token,
             commands::islepilot_logout,
             commands::islepilot_apply,
             commands::islepilot_state,

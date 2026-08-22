@@ -11,8 +11,10 @@
 //! native cookie manager (`cookies_for_url`, includes httpOnly), then stored
 //! DPAPI-encrypted. No manual devtools cookie copying.
 
+pub mod api;
 pub mod cookies;
 pub mod parser;
+pub mod token;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -49,6 +51,9 @@ static QUEST_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// True while a login window is open and being watched. Cleared the moment
 /// the user closes that window, so the UI never sits on "waiting for login".
 static LOGIN_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// (steamId, overlayToken) captured by the token-login window's navigation
+/// hook; consumed by its watcher thread.
+static CAPTURED_TOKEN: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +75,10 @@ pub struct DinoUpdate {
 #[serde(rename_all = "camelCase")]
 pub struct IslepilotState {
     pub logged_in: bool,
+    /// "token" (central overlay API, one login for every server) or
+    /// "legacy" (per-server cookie).
+    pub auth_mode: String,
+    pub token_present: bool,
     pub last_update: Option<DinoUpdate>,
 }
 
@@ -80,7 +89,7 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-fn http_client() -> Result<reqwest::blocking::Client, String> {
+pub(crate) fn http_client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .user_agent("theisle-overlay/2.0 (your-dino panel reader; personal use)")
         .timeout(Duration::from_secs(30))
@@ -243,6 +252,7 @@ fn build_id(client: &reqwest::blocking::Client, domain: &str) -> Option<String> 
 
 struct PollConfig {
     enabled: bool,
+    auth_mode: String,
     domain: String,
     interval_s: f64,
     use_map_position: bool,
@@ -253,6 +263,7 @@ fn read_config(app: &AppHandle) -> PollConfig {
     let s = state.settings.lock_safe();
     PollConfig {
         enabled: settings::get_bool(&s, &["islepilot", "enabled"], false),
+        auth_mode: settings::get_str(&s, &["islepilot", "auth_mode"], "legacy").to_string(),
         domain: settings::get_str(&s, &["islepilot", "domain"], "").to_string(),
         interval_s: settings::get_f64(&s, &["islepilot", "poll_interval_s"], 10.0)
             .max(MIN_INTERVAL_S),
@@ -262,8 +273,16 @@ fn read_config(app: &AppHandle) -> PollConfig {
 
 pub fn current_state(app: &AppHandle) -> IslepilotState {
     let config = read_config(app);
+    let token_present = token::get().is_some();
+    let logged_in = if config.auth_mode == "token" {
+        token_present
+    } else {
+        !config.domain.is_empty() && cookies::get(&config.domain).is_some()
+    };
     IslepilotState {
-        logged_in: !config.domain.is_empty() && cookies::get(&config.domain).is_some(),
+        logged_in,
+        auth_mode: config.auth_mode,
+        token_present,
         last_update: LAST_UPDATE.lock_safe().clone(),
     }
 }
@@ -348,7 +367,17 @@ fn sync_map_pref(app: &AppHandle, available: bool) {
 pub fn restart_poller(app: &AppHandle) {
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let config = read_config(app);
-    if !config.enabled || config.domain.is_empty() {
+    if !config.enabled {
+        return;
+    }
+    if config.auth_mode == "token" {
+        let Some(tok) = token::get() else {
+            return; // not logged in yet — the login flow will restart us
+        };
+        run_token_poll(app.clone(), generation, tok);
+        return;
+    }
+    if config.domain.is_empty() {
         return;
     }
     let Some(cookie) = cookies::get(&config.domain) else {
@@ -540,6 +569,133 @@ pub fn restart_poller(app: &AppHandle) {
     });
 }
 
+/// Token-mode poll loop: the CENTRAL overlay API (`islepilot.eu`), one token
+/// for every server — no domain, no HTML, no buildId watching. Same
+/// generation/backoff skeleton as the cookie loop.
+fn run_token_poll(app: AppHandle, generation: u64, tok: token::OverlayToken) {
+    std::thread::spawn(move || {
+        let client = loop {
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            match http_client() {
+                Ok(c) => break c,
+                Err(e) => {
+                    log::warn!("islepilot http client: {e}");
+                    std::thread::sleep(Duration::from_secs(5));
+                }
+            }
+        };
+        let mut failures: u32 = 0;
+        let mut auth_warned = false;
+        let mut live_map: Option<bool> = None;
+
+        loop {
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return; // superseded
+            }
+            let config = read_config(&app);
+            if !config.enabled || config.auth_mode != "token" {
+                return;
+            }
+
+            match api::get_me(&client, &tok.token) {
+                Ok(me) => {
+                    auth_warned = false;
+                    failures = 0;
+                    let mut player = api::to_player_stats(&me);
+                    let lang_vi = {
+                        let state = app.state::<AppState>();
+                        let s = state.settings.lock_safe();
+                        settings::get_str(&s, &["language"], "vi") != "en"
+                    };
+                    if lang_vi && !player.prime_quests.is_empty() {
+                        crate::translate::translate_quests(&mut player.prime_quests, &client);
+                    }
+                    let position = api::position_cm(&me);
+                    // Position availability doubles as the live-map probe.
+                    // Only trust it while the API actually has data.
+                    if me.has_data {
+                        let available = position.is_some();
+                        if live_map != Some(available) {
+                            live_map = Some(available);
+                            sync_map_pref(&app, available);
+                        }
+                    }
+                    // Never move the marker from cached (offline) data.
+                    if config.use_map_position && me.online == Some(true) {
+                        if let Some((x_cm, y_cm)) = position {
+                            log::debug!("islepilot overlay api: {x_cm:.0},{y_cm:.0} cm");
+                            pipeline::ingest_sample(&app, x_cm, y_cm, 0.0);
+                        }
+                    }
+                    publish(
+                        &app,
+                        DinoUpdate {
+                            domain: api::API_ORIGIN.to_string(),
+                            fetched_at_ms: now_ms(),
+                            player: Some(player),
+                            map: None,
+                            layout_changed: false,
+                            live_map_available: live_map,
+                            error: None,
+                        },
+                    );
+                }
+                // Never been on an IslePilot server: an empty-stats update,
+                // NOT an error (mirrors the cookie flow's "No dino" page).
+                Err(api::ApiError::NotFound) => {
+                    auth_warned = false;
+                    failures = 0;
+                    publish(
+                        &app,
+                        DinoUpdate {
+                            domain: api::API_ORIGIN.to_string(),
+                            fetched_at_ms: now_ms(),
+                            player: Some(api::to_player_stats(&api::OverlayMe::default())),
+                            map: None,
+                            layout_changed: false,
+                            live_map_available: live_map,
+                            error: None,
+                        },
+                    );
+                }
+                Err(api::ApiError::Unauthorized) => {
+                    failures = failures.saturating_add(1);
+                    if !auth_warned {
+                        auth_warned = true;
+                        let _ = app.emit(DINO_AUTH_EXPIRED, api::API_ORIGIN.to_string());
+                    }
+                }
+                Err(api::ApiError::Http(e)) => {
+                    failures = failures.saturating_add(1);
+                    publish(
+                        &app,
+                        DinoUpdate {
+                            domain: api::API_ORIGIN.to_string(),
+                            fetched_at_ms: now_ms(),
+                            player: None,
+                            map: None,
+                            layout_changed: false,
+                            live_map_available: live_map,
+                            error: Some(e),
+                        },
+                    );
+                }
+            }
+
+            let mut remaining = backoff_s(config.interval_s.max(MIN_INTERVAL_S), failures);
+            while remaining > 0.0 {
+                if GENERATION.load(Ordering::SeqCst) != generation {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+                remaining -= 0.5;
+            }
+        }
+    });
+}
+
 /// Exponential backoff for consecutive poll failures, capped at 5 minutes:
 /// a long outage costs one request per 5 min and recovery stays automatic.
 pub(crate) fn backoff_s(base: f64, failures: u32) -> f64 {
@@ -650,6 +806,174 @@ pub fn start_login(app: &AppHandle, domain: String) -> Result<(), String> {
     Ok(())
 }
 
+/// One-time Steam login against the CENTRAL overlay API. The backend
+/// redirects to `isle-overlay://?sid=..&token=..` after Steam sign-in; we
+/// intercept that navigation INSIDE our login webview (`on_navigation`
+/// returning false) instead of registering the protocol system-wide — so the
+/// official overlay app's handler, if installed, is never hijacked.
+pub fn start_token_login(app: &AppHandle) -> Result<(), String> {
+    if let Some(existing) = app.get_webview_window(LOGIN_WINDOW) {
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    let url: tauri::Url = format!("{}/api/overlay/auth/steam", api::API_ORIGIN)
+        .parse()
+        .map_err(|e| format!("URL: {e}"))?;
+    *CAPTURED_TOKEN.lock_safe() = None;
+
+    let window = WebviewWindowBuilder::new(app, LOGIN_WINDOW, WebviewUrl::External(url))
+        .title("IslePilot — Steam")
+        .inner_size(520.0, 760.0)
+        .on_navigation(|nav_url| {
+            if nav_url.scheme() == "isle-overlay" {
+                let (mut sid, mut tok) = (None, None);
+                for (k, v) in nav_url.query_pairs() {
+                    match k.as_ref() {
+                        "sid" => sid = Some(v.to_string()),
+                        "token" => tok = Some(v.to_string()),
+                        _ => {}
+                    }
+                }
+                if let (Some(sid), Some(tok)) = (sid, tok) {
+                    *CAPTURED_TOKEN.lock_safe() = Some((sid, tok));
+                }
+                // NOTE: if some WebView2 build ever stops surfacing custom-
+                // scheme navigations here, the timeout + manual token paste
+                // is the escape hatch.
+                return false; // never let the OS resolve the custom scheme
+            }
+            true
+        })
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    LOGIN_ACTIVE.store(true, Ordering::SeqCst);
+
+    let close_app = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(
+            event,
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+        ) && LOGIN_ACTIVE.swap(false, Ordering::SeqCst)
+        {
+            let _ = close_app.emit(DINO_LOGIN_FAILED, "cancelled");
+        }
+    });
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Ok(client) = http_client() else { return };
+        // ~3 minutes at 500 ms per check.
+        for _ in 0..360 {
+            std::thread::sleep(Duration::from_millis(500));
+            if !LOGIN_ACTIVE.load(Ordering::SeqCst) {
+                return; // window closed or cancelled from the UI
+            }
+            if app.get_webview_window(LOGIN_WINDOW).is_none() {
+                if LOGIN_ACTIVE.swap(false, Ordering::SeqCst) {
+                    let _ = app.emit(DINO_LOGIN_FAILED, "cancelled");
+                }
+                return;
+            }
+            let Some((sid, tok)) = CAPTURED_TOKEN.lock_safe().take() else {
+                continue;
+            };
+            match api::get_me(&client, &tok) {
+                // A fresh account (never on an IslePilot server) is 404 —
+                // still a perfectly valid login.
+                Ok(_) | Err(api::ApiError::NotFound) => {
+                    if let Err(e) = token::set(&token::OverlayToken {
+                        token: tok,
+                        steam_id: sid,
+                    }) {
+                        log::warn!("saving overlay token failed: {e}");
+                    }
+                    // Claim the flag first so closing the window does not
+                    // fire the "cancelled" path over a successful login.
+                    LOGIN_ACTIVE.store(false, Ordering::SeqCst);
+                    if let Some(window) = app.get_webview_window(LOGIN_WINDOW) {
+                        let _ = window.close();
+                    }
+                    crate::commands::apply_settings_patch(
+                        &app,
+                        serde_json::json!({
+                            "islepilot": { "enabled": true, "auth_mode": "token" }
+                        }),
+                    );
+                    let _ = app.emit(DINO_LOGIN_OK, api::API_ORIGIN.to_string());
+                    restart_poller(&app);
+                    return;
+                }
+                Err(api::ApiError::Unauthorized) => {
+                    LOGIN_ACTIVE.store(false, Ordering::SeqCst);
+                    if let Some(window) = app.get_webview_window(LOGIN_WINDOW) {
+                        let _ = window.close();
+                    }
+                    let _ = app.emit(DINO_LOGIN_FAILED, "invalid-token");
+                    return;
+                }
+                Err(e) => {
+                    // Transient network failure validating: keep the capture
+                    // and retry on the next tick.
+                    log::warn!("overlay token validation failed: {e}");
+                    *CAPTURED_TOKEN.lock_safe() = Some((sid, tok));
+                }
+            }
+        }
+        if LOGIN_ACTIVE.swap(false, Ordering::SeqCst) {
+            if let Some(window) = app.get_webview_window(LOGIN_WINDOW) {
+                let _ = window.close();
+            }
+            let _ = app.emit(DINO_LOGIN_FAILED, "timeout");
+        }
+    });
+
+    Ok(())
+}
+
+/// Manual fallback for token mode: paste either the bare overlay token or
+/// the whole `isle-overlay://?sid=..&token=..` redirect URL. Validated
+/// against the API before being stored.
+pub fn manual_token(app: &AppHandle, raw: String) -> Result<(), String> {
+    let raw = raw.trim().trim_matches('"').trim().to_string();
+    if raw.is_empty() {
+        return Err("invalid-token".into());
+    }
+    let (mut sid, tok) = if raw.contains("token=") {
+        let url: tauri::Url = raw.parse().map_err(|_| "invalid-token".to_string())?;
+        let (mut sid, mut tok) = (String::new(), None);
+        for (k, v) in url.query_pairs() {
+            match k.as_ref() {
+                "sid" => sid = v.to_string(),
+                "token" => tok = Some(v.to_string()),
+                _ => {}
+            }
+        }
+        (sid, tok.ok_or_else(|| "invalid-token".to_string())?)
+    } else {
+        (String::new(), raw)
+    };
+    let client = http_client()?;
+    match api::get_me(&client, &tok) {
+        Ok(me) => {
+            if sid.is_empty() {
+                sid = me.steam_id.unwrap_or_default();
+            }
+        }
+        Err(api::ApiError::NotFound) => {} // valid token, fresh account
+        Err(api::ApiError::Unauthorized) => return Err("invalid-token".into()),
+        Err(e) => return Err(e.to_string()),
+    }
+    token::set(&token::OverlayToken { token: tok, steam_id: sid })?;
+    crate::commands::apply_settings_patch(
+        app,
+        serde_json::json!({ "islepilot": { "enabled": true, "auth_mode": "token" } }),
+    );
+    let _ = app.emit(DINO_LOGIN_OK, api::API_ORIGIN.to_string());
+    restart_poller(app);
+    Ok(())
+}
+
 /// UI "cancel" button: stop waiting and close the login window if it is
 /// still around.
 pub fn cancel_login(app: &AppHandle) {
@@ -711,10 +1035,14 @@ pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<
     Ok(())
 }
 
+/// Log out of the ACTIVE mode only: token mode drops the central token,
+/// legacy mode drops the current domain's cookie (others stay stored).
 pub fn logout(app: &AppHandle) -> Result<(), String> {
     let config = read_config(app);
     stop_poller();
-    if !config.domain.is_empty() {
+    if config.auth_mode == "token" {
+        token::clear()?;
+    } else if !config.domain.is_empty() {
         cookies::remove(&config.domain)?;
     }
     crate::commands::apply_settings_patch(
@@ -851,6 +1179,42 @@ mod tests {
             stats.prime_quests.len()
         );
         assert!(stats.looks_logged_in(), "cookie should authenticate");
+    }
+
+    /// Live check of the CENTRAL overlay API through the exact production
+    /// path (our client/UA, headers, mapping, axis swap):
+    ///   THEISLE_TEST_TOKEN=... cargo test -- --ignored live_overlay_me
+    /// Verifies the two assumptions fixtures cannot prove: the growth scale
+    /// (fraction vs percent) and the position axis swap.
+    #[test]
+    #[ignore]
+    fn live_overlay_me() {
+        let Ok(tok) = std::env::var("THEISLE_TEST_TOKEN") else {
+            eprintln!("set THEISLE_TEST_TOKEN to run");
+            return;
+        };
+        let client = http_client().unwrap();
+        let me = api::get_me(&client, &tok).expect("GET /api/overlay/me");
+        eprintln!(
+            "hasData={} online={:?} server={:?} species={:?} growth={:?}",
+            me.has_data, me.online, me.server, me.species, me.growth
+        );
+        let stats = api::to_player_stats(&me);
+        eprintln!(
+            "mapped: growth={:?} hp={:?} quests={}",
+            stats.growth,
+            stats.health.as_ref().map(|h| h.raw.clone()),
+            stats.prime_quests.len()
+        );
+        if let Some((x, y)) = api::position_cm(&me) {
+            let cal = overlay_core::Calibration::gateway();
+            let (px, py) = overlay_core::world_to_pixel(x, y, cal);
+            eprintln!(
+                "position (our axes): {x:.0},{y:.0} cm -> vulnona px=({px:.0},{py:.0}) of {}x{}",
+                cal.image_width_px, cal.image_height_px
+            );
+        }
+        assert!(me.has_data, "token should resolve to an account with data");
     }
 
     /// Dev helper: seed the DPAPI cookie store exactly like the UI's paste
