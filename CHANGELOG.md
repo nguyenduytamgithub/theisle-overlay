@@ -4,6 +4,30 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.3.0] — 2026-08-22
+
+### Thêm
+
+- **Bảng nhiệm vụ Prime trên overlay**: panel mới dưới thanh chỉ số của bản đồ
+  nhỏ, liệt kê 10 nhiệm vụ Prime kèm ✓/○ và bộ đếm "Prime 2/10"; nhiệm vụ xong
+  tô xanh, dòng dài tự cắt "…". Bật/tắt bằng checkbox trong tab Khủng long hoặc
+  **hotkey Ctrl+Alt+Q** (đổi được trong Cài đặt); cửa sổ overlay tự co giãn
+  theo số nhiệm vụ, mất mạng tạm thời không làm panel co giật. (`ec5da8a`)
+- **Dịch nhiệm vụ sang tiếng Việt**: từ điển dịch tay cho toàn bộ pool nhiệm
+  vụ đã biết + mẫu theo số ("Visit 3 Patrol zones" → "Ghé 3 khu Tuần tra");
+  câu lạ dịch qua API miễn phí MyMemory **đúng một lần** rồi lưu vĩnh viễn tại
+  `%LOCALAPPDATA%\TheIsleOverlay\quest_translations.json` (hết quota tự nghỉ
+  6 giờ và hiện tiếng Anh; UI tiếng Anh bỏ qua API hoàn toàn). Tab Khủng long
+  hiện câu tiếng Việt, rê chuột thấy câu gốc tiếng Anh. (`ec5da8a`)
+
+### Thay đổi
+
+- **Vị trí từ IslePilot chính xác hơn**: đọc thẳng JSON markers API của panel
+  (`/api/p/{slug}/map/markers` — đúng nguồn panel tự dùng, tọa độ UE cm chuẩn
+  xác, không sợ panel đổi giao diện), tự nhận marker của bạn qua steamId trong
+  cookie phiên; trang HTML `/map` giữ làm nguồn dự phòng và để dò khả năng
+  live map. (`ec5da8a`)
+
 ## [1.2.0] — 2026-08-22
 
 ### Thêm
