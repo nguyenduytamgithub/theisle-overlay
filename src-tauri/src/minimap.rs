@@ -27,11 +27,11 @@ use crate::settings::{self, GAME_PROCESS_NAME};
 use crate::state::{AppState, LockExt};
 use crate::win::{game_window, overlay, vis};
 
-pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    // Include the dino strip in the initial size, not just on later changes.
-    let snap = snapshot(app);
-    let (size, height) = (snap.size_px, snap.window_h());
-
+/// Build the (hidden) minimap window. Shared by startup and by the
+/// supervisor's self-heal when the window died mid-session (e.g. a WebView2
+/// crash) — before that heal existed, a dead minimap stayed dead until the
+/// app was restarted (field report).
+fn build_window(app: &AppHandle, size: f64, height: f64) -> tauri::Result<tauri::WebviewWindow> {
     let window = WebviewWindowBuilder::new(app, "minimap", WebviewUrl::App("minimap.html".into()))
         .title("minimap")
         .inner_size(size, height)
@@ -53,6 +53,13 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         vis::register("minimap", raw);
         overlay::assert_overlay_styles(raw);
     }
+    Ok(window)
+}
+
+pub fn create(app: &AppHandle) -> tauri::Result<()> {
+    // Include the dino strip in the initial size, not just on later changes.
+    let snap = snapshot(app);
+    build_window(app, snap.size_px, snap.window_h())?;
 
     let app_handle = app.clone();
     let shown = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -247,13 +254,32 @@ fn spawn_supervisor(app: AppHandle) {
         let mut last_rect: Option<(i32, i32, i32, i32)> = None;
         let mut since_rect: u64 = u64::MAX / 2; // fire immediately
         let mut since_topmost: u64 = 0;
+        // Recreate a DEAD minimap window (WebView2 crash closes it) instead
+        // of looping no-op forever — throttled so a persistent failure does
+        // not spin the builder.
+        let mut since_recreate: u64 = u64::MAX / 2; // first attempt immediate
+        const RECREATE_MS: u64 = 5000;
 
         loop {
             std::thread::sleep(Duration::from_millis(TICK_MS));
             let cur = snapshot(&app);
             let Some(window) = app.get_webview_window("minimap") else {
+                since_recreate = since_recreate.saturating_add(TICK_MS);
+                if since_recreate >= RECREATE_MS {
+                    since_recreate = 0;
+                    log::warn!("minimap window is gone — recreating");
+                    match build_window(&app, cur.size_px, cur.window_h()) {
+                        Ok(w) => {
+                            let _ = w.set_ignore_cursor_events(cur.click_through);
+                            effective_prev = false; // next tick decides show
+                            last_rect = None;
+                        }
+                        Err(e) => log::warn!("minimap recreate failed: {e}"),
+                    }
+                }
                 continue;
             };
+            since_recreate = u64::MAX / 2;
 
             since_rect += TICK_MS;
             since_topmost += TICK_MS;

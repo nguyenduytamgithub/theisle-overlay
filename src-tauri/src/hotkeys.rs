@@ -192,8 +192,24 @@ impl HotkeyManager {
             let (work_tx, work_rx) = std::sync::mpsc::channel::<String>();
             let worker_app = thread_app.clone();
             std::thread::spawn(move || {
+                // WM_HOTKEY auto-repeats while the keys stay held. For a
+                // toggle that means fire-twice = toggle right back (field
+                // report: "the minimap unticked itself"). Repeats only make
+                // sense for the stepped actions, so everything else gets a
+                // sliding debounce: held keys fire once, not per repeat.
+                const DEBOUNCE_MS: u128 = 350;
+                const REPEATABLE: [&str; 4] =
+                    ["opacity_up", "opacity_down", "zoom_in", "zoom_out"];
+                let mut last: Option<(String, Instant)> = None;
                 while let Ok(action) = work_rx.recv() {
-                    dispatch(&worker_app, &action);
+                    let is_repeat = !REPEATABLE.contains(&action.as_str())
+                        && last.as_ref().is_some_and(|(prev, at)| {
+                            *prev == action && at.elapsed().as_millis() < DEBOUNCE_MS
+                        });
+                    last = Some((action.clone(), Instant::now()));
+                    if !is_repeat {
+                        dispatch(&worker_app, &action);
+                    }
                 }
             });
 
