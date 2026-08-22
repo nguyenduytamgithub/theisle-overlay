@@ -6,7 +6,9 @@
 //! headers were verified against the official overlay app (see
 //! rv/TheIsleVN-Gacha-HUD-integration-guide.md).
 
-use serde::Deserialize;
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::parser::{Nutrition, PlayerStats, QuestStatus, StatBar};
@@ -205,6 +207,86 @@ pub fn position_cm(me: &OverlayMe) -> Option<(f64, f64)> {
     Some((pos.y?, pos.x?))
 }
 
+// ---------------------------------------------------------------------------
+// /api/overlay/garage — gacha park/restore/sell/rename
+// ---------------------------------------------------------------------------
+
+pub fn garage_list(
+    client: &reqwest::blocking::Client,
+    token: &str,
+) -> Result<Value, ApiError> {
+    get(client, "/api/overlay/garage", token)
+}
+
+/// POST a garage command and, when it is asynchronous (`commandId` in the
+/// response), poll its status to completion: 1.5 s x 40 tries (~60 s), the
+/// exact pattern the official app uses.
+pub fn garage_command(
+    client: &reqwest::blocking::Client,
+    token: &str,
+    path: &str,
+    body: Value,
+) -> Result<Value, String> {
+    let res = post(client, path, token, &body).map_err(|e| e.to_string())?;
+    if let Some(err) = res.get("error").and_then(|e| e.as_str()) {
+        return Err(err.to_string());
+    }
+    let Some(command_id) = res.get("commandId").and_then(|c| c.as_str()).map(String::from)
+    else {
+        return Ok(res); // synchronous command (e.g. rename, sell)
+    };
+    for _ in 0..40 {
+        std::thread::sleep(Duration::from_millis(1500));
+        let s = get(
+            client,
+            &format!("/api/overlay/garage/status?id={command_id}"),
+            token,
+        )
+        .map_err(|e| e.to_string())?;
+        match s.get("status").and_then(|st| st.as_str()) {
+            Some("done") => return Ok(s),
+            Some("failed") => {
+                return Err(s
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .unwrap_or("failed")
+                    .to_string())
+            }
+            _ => {} // pending — keep waiting
+        }
+    }
+    Err("timeout".to_string())
+}
+
+/// Serialized state for the frontend garage panel.
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GarageState {
+    pub dinos: Value,
+    pub selling_enabled: bool,
+    pub live_swap: bool,
+    pub currency_name: Option<String>,
+}
+
+pub fn garage_state(raw: &Value) -> GarageState {
+    let settings = raw.get("settings").cloned().unwrap_or(Value::Null);
+    GarageState {
+        dinos: raw.get("dinos").cloned().unwrap_or_else(|| Value::Array(vec![])),
+        selling_enabled: settings
+            .get("sellingEnabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        live_swap: settings
+            .get("liveSwap")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        currency_name: settings
+            .get("currencyName")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,4 +338,16 @@ mod tests {
         assert!(!stats.looks_logged_in());
     }
 
+    #[test]
+    fn garage_state_reads_settings_flags() {
+        let raw: Value = serde_json::json!({
+            "dinos": [{"id": "d1", "species": "Carnotaurus"}],
+            "settings": {"liveSwap": true, "sellingEnabled": false, "currencyName": "Points"}
+        });
+        let g = garage_state(&raw);
+        assert!(g.live_swap);
+        assert!(!g.selling_enabled);
+        assert_eq!(g.currency_name.as_deref(), Some("Points"));
+        assert_eq!(g.dinos.as_array().unwrap().len(), 1);
+    }
 }

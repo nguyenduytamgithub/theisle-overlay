@@ -382,6 +382,26 @@ export const islepilotTokenLogin = () => invoke("islepilot_token_login");
 export const islepilotSetToken = (token: string) =>
   invoke("islepilot_set_token", { token });
 export const islepilotCancelLogin = () => invoke("islepilot_cancel_login");
+
+/** Parked-dino record — backend shape, read defensively in the UI. */
+export type GarageDino = Record<string, unknown> & { id?: string };
+
+export interface GarageState {
+  dinos: GarageDino[];
+  sellingEnabled: boolean;
+  liveSwap: boolean;
+  currencyName: string | null;
+}
+
+export const islepilotGarage = () => invoke<GarageState>("islepilot_garage");
+/** Park the CURRENT dino (blocks through the server's async command, ~60 s max). */
+export const islepilotGaragePark = () => invoke("islepilot_garage_park");
+export const islepilotGarageRestore = (id: string) =>
+  invoke("islepilot_garage_restore", { id });
+export const islepilotGarageSell = (id: string) =>
+  invoke("islepilot_garage_sell", { id });
+export const islepilotGarageRename = (id: string, name: string) =>
+  invoke("islepilot_garage_rename", { id, name });
 export const islepilotLogout = () => invoke("islepilot_logout");
 export const islepilotApply = () => invoke("islepilot_apply");
 export const islepilotState = () => invoke<IslepilotState>("islepilot_state");

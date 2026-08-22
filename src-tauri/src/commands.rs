@@ -641,6 +641,65 @@ pub async fn islepilot_set_token(app: AppHandle, token: String) -> Result<(), St
     .map_err(|e| e.to_string())?
 }
 
+/// Garage (gacha) listing: parked dinos + server flags. Token mode only.
+#[tauri::command]
+pub async fn islepilot_garage(
+) -> Result<crate::islepilot::api::GarageState, String> {
+    tauri::async_runtime::spawn_blocking(crate::islepilot::garage_fetch)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Park the CURRENT dino into the garage. Blocks through the async-command
+/// status poll (up to ~60 s), so the frontend should show a busy state.
+#[tauri::command]
+pub async fn islepilot_garage_park() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        crate::islepilot::garage_action(
+            "/api/overlay/garage/park",
+            serde_json::json!({ "step": "start" }),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn islepilot_garage_restore(id: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::islepilot::garage_action(
+            &format!("/api/overlay/garage/{id}/restore"),
+            serde_json::json!({}),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn islepilot_garage_sell(id: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::islepilot::garage_action(
+            &format!("/api/overlay/garage/{id}/sell"),
+            serde_json::json!({}),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn islepilot_garage_rename(id: String, name: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::islepilot::garage_action(
+            &format!("/api/overlay/garage/{id}/rename"),
+            serde_json::json!({ "name": name }),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn islepilot_logout(app: AppHandle) -> Result<(), String> {
     crate::islepilot::logout(&app)

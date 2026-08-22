@@ -225,6 +225,25 @@ export const en: Record<MsgKey, string> = {
   "dino.map_disabled": "The live map is disabled on this server.",
   "dino.crashed":
     "The Your Dino section hit an error and was isolated — the map and other features are unaffected.",
+
+  "garage.title": "Garage (Gacha)",
+  "garage.hint":
+    "Dinos parked in the server's garage. Park/Restore can take up to ~60 seconds — the " +
+    "server processes commands asynchronously.",
+  "garage.refresh": "Refresh",
+  "garage.park": "Park current dino",
+  "garage.restore": "Restore",
+  "garage.sell": "Sell",
+  "garage.rename": "Rename",
+  "garage.rename_prompt": "New name for this dino:",
+  "garage.confirm_restore": "Restore “{name}”? Your current dino may be replaced.",
+  "garage.confirm_sell": "Sell “{name}”? This cannot be undone.",
+  "garage.empty": "The garage is empty.",
+  "garage.busy": "Sending command to the server… (up to ~60 s)",
+  "garage.error": "Command failed:",
+  "garage.sold": "Sold — received {amount} {currency}",
+  "garage.done": "Done!",
+
   "map.crashed":
     "The map hit a display error. Click Retry, or press F5 to reload the whole app.",
   "btn.retry": "Retry",

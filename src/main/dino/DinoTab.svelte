@@ -5,10 +5,16 @@
   // works on every IslePilot server) and LEGACY (fallback — per-server URL +
   // cookie, the original flow, collapsed under <details>).
   import { onMount } from "svelte";
+  import { ask } from "@tauri-apps/plugin-dialog";
   import {
     getSettings,
     islepilotApply,
     islepilotCancelLogin,
+    islepilotGarage,
+    islepilotGaragePark,
+    islepilotGarageRename,
+    islepilotGarageRestore,
+    islepilotGarageSell,
     islepilotLogin,
     islepilotLogout,
     islepilotSetCookie,
@@ -23,9 +29,11 @@
     patchSettings,
     type DinoStatBar,
     type DinoUpdate,
+    type GarageDino,
+    type GarageState,
     type Settings,
   } from "$lib/api";
-  import { locale, t } from "$lib/i18n";
+  import { locale, t, tNow } from "$lib/i18n";
 
 
   let settings = $state<Settings | null>(null);
@@ -46,6 +54,14 @@
   let tokenBusy = $state(false);
   let tokenError = $state(false);
 
+  // Garage (gacha) — token mode only.
+  let garage = $state<GarageState | null>(null);
+  let garageBusy = $state(false);
+  let garageError = $state<string | null>(null);
+  let garageNote = $state<string | null>(null);
+  let renamingId = $state<string | null>(null);
+  let renameInput = $state("");
+
   async function refreshState() {
     const st = await islepilotState();
     loggedIn = st.loggedIn;
@@ -63,6 +79,7 @@
       authMode = st.authMode;
       serverOpen = !st.loggedIn;
       update = st.lastUpdate;
+      if (st.loggedIn && st.authMode === "token") void loadGarage();
       await bag.add(
         onDinoUpdate((u) => {
           update = u;
@@ -77,6 +94,7 @@
           serverOpen = false;
           settings = await getSettings();
           await refreshState();
+          if (authMode === "token") void loadGarage();
         }),
       );
       await bag.add(
@@ -140,6 +158,7 @@
     loggedIn = false;
     serverOpen = true;
     update = null;
+    garage = null;
     settings = await getSettings();
   }
 
@@ -160,6 +179,70 @@
       cookieBusy = false;
     }
   }
+
+  // ------------------------------------------------------------- garage ---
+
+  async function loadGarage() {
+    try {
+      garage = await islepilotGarage();
+      garageError = null;
+    } catch (e) {
+      garageError = String(e);
+    }
+  }
+
+  async function garageDo(fn: () => Promise<unknown>, confirmMsg?: string) {
+    if (confirmMsg) {
+      const yes = await ask(confirmMsg, { title: tNow("garage.title"), kind: "warning" });
+      if (!yes) return;
+    }
+    garageBusy = true;
+    garageError = null;
+    garageNote = null;
+    try {
+      await fn();
+      garageNote = tNow("garage.done");
+      await loadGarage();
+    } catch (e) {
+      garageError = String(e);
+    } finally {
+      garageBusy = false;
+    }
+  }
+
+  async function submitRename(id: string) {
+    const name = renameInput.trim();
+    renamingId = null;
+    if (!name) return;
+    await garageDo(() => islepilotGarageRename(id, name));
+  }
+
+  // The garage record shape is the backend's own — read it defensively so a
+  // field rename over there degrades to "—" instead of crashing the tab.
+  const dStr = (d: GarageDino, keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = d[k];
+      if (typeof v === "string" && v) return v;
+    }
+    return null;
+  };
+  const dNum = (d: GarageDino, keys: string[]): number | null => {
+    for (const k of keys) {
+      const v = d[k];
+      if (typeof v === "number" && isFinite(v)) return v;
+    }
+    return null;
+  };
+  const dinoId = (d: GarageDino): string | null =>
+    dStr(d, ["id", "_id", "dinoId"]) ?? (typeof d.id === "number" ? String(d.id) : null);
+  const dinoName = (d: GarageDino): string =>
+    dStr(d, ["name", "label"]) ?? dStr(d, ["species", "dino"]) ?? "?";
+  const dinoSpecies = (d: GarageDino): string | null => dStr(d, ["species", "dino"]);
+  const dinoGrowthPct = (d: GarageDino): number | null => {
+    const g = dNum(d, ["growth", "growthPct"]);
+    if (g === null) return null;
+    return g <= 1.5 ? g * 100 : g;
+  };
 
   const pct = (bar: DinoStatBar | null): number | null =>
     bar && bar.current !== null && bar.max ? (bar.current / bar.max) * 100 : null;
@@ -579,5 +662,147 @@
       {/if}
     </section>
 
+    <!-- Garage (gacha) — token mode only -->
+    {#if authMode === "token" && loggedIn}
+      <section
+        class="rounded border p-4"
+        style="border-color: var(--color-border); background: var(--color-panel)"
+      >
+        <div class="mb-1 flex items-center justify-between">
+          <h3 class="text-sm font-semibold" style="color: var(--color-accent)">
+            {$t("garage.title")}
+            {#if garage}
+              <span class="font-normal" style="color: var(--color-muted)">
+                ({garage.dinos.length})
+              </span>
+            {/if}
+          </h3>
+          <div class="flex gap-2">
+            <button
+              class="cursor-pointer rounded border px-2 py-1 text-xs disabled:opacity-50"
+              style="border-color: var(--color-border)"
+              disabled={garageBusy}
+              onclick={() => void loadGarage()}
+            >
+              {$t("garage.refresh")}
+            </button>
+            <button
+              class="cursor-pointer rounded px-2 py-1 text-xs font-medium disabled:opacity-50"
+              style="background: var(--color-accent); color: var(--color-bg)"
+              disabled={garageBusy}
+              onclick={() => void garageDo(() => islepilotGaragePark())}
+            >
+              {$t("garage.park")}
+            </button>
+          </div>
+        </div>
+        <p class="mb-2 text-xs" style="color: var(--color-muted)">{$t("garage.hint")}</p>
+
+        {#if garageBusy}
+          <p class="mb-2 text-sm" style="color: #ffd591">{$t("garage.busy")}</p>
+        {/if}
+        {#if garageError}
+          <p class="mb-2 text-sm" style="color: #ff8a80">
+            {$t("garage.error")} <span class="font-mono text-xs">{garageError}</span>
+          </p>
+        {/if}
+        {#if garageNote && !garageBusy && !garageError}
+          <p class="mb-2 text-sm" style="color: #72d653">{garageNote}</p>
+        {/if}
+
+        {#if garage}
+          {#if garage.dinos.length === 0}
+            <p class="text-sm" style="color: var(--color-muted)">{$t("garage.empty")}</p>
+          {:else}
+            <ul class="space-y-2">
+              {#each garage.dinos as dino, i (dinoId(dino) ?? i)}
+                {@const id = dinoId(dino)}
+                {@const growth = dinoGrowthPct(dino)}
+                <li
+                  class="rounded border p-2"
+                  style="border-color: var(--color-border); background: var(--color-bg)"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-semibold">{dinoName(dino)}</span>
+                    {#if dinoSpecies(dino) && dinoSpecies(dino) !== dinoName(dino)}
+                      <span class="text-xs" style="color: var(--color-muted)">
+                        {dinoSpecies(dino)}
+                      </span>
+                    {/if}
+                    {#if growth !== null}
+                      <span class="font-mono text-xs" style="color: var(--color-muted)">
+                        {$t("dino.growth")} {growth.toFixed(0)}%
+                      </span>
+                    {/if}
+                    {#if id}
+                      <span class="ml-auto flex gap-1.5">
+                        <button
+                          class="cursor-pointer rounded px-2 py-0.5 text-xs font-medium disabled:opacity-50"
+                          style="background: var(--color-accent); color: var(--color-bg)"
+                          disabled={garageBusy}
+                          onclick={() =>
+                            void garageDo(
+                              () => islepilotGarageRestore(id),
+                              tNow("garage.confirm_restore", { name: dinoName(dino) }),
+                            )}
+                        >
+                          {$t("garage.restore")}
+                        </button>
+                        <button
+                          class="cursor-pointer rounded border px-2 py-0.5 text-xs disabled:opacity-50"
+                          style="border-color: var(--color-border)"
+                          disabled={garageBusy}
+                          onclick={() => {
+                            renamingId = renamingId === id ? null : id;
+                            renameInput = dinoName(dino);
+                          }}
+                        >
+                          {$t("garage.rename")}
+                        </button>
+                        {#if garage.sellingEnabled}
+                          <button
+                            class="cursor-pointer rounded border px-2 py-0.5 text-xs disabled:opacity-50"
+                            style="border-color: #e2664a; color: #e2664a"
+                            disabled={garageBusy}
+                            onclick={() =>
+                              void garageDo(
+                                () => islepilotGarageSell(id),
+                                tNow("garage.confirm_sell", { name: dinoName(dino) }),
+                              )}
+                          >
+                            {$t("garage.sell")}
+                          </button>
+                        {/if}
+                      </span>
+                    {/if}
+                  </div>
+                  {#if id && renamingId === id}
+                    <div class="mt-2 flex gap-2">
+                      <input
+                        class="w-full rounded border px-2 py-1 text-xs"
+                        style="border-color: var(--color-border); background: var(--color-panel); color: var(--color-text)"
+                        placeholder={$t("garage.rename_prompt")}
+                        bind:value={renameInput}
+                        onkeydown={(e) => {
+                          if (e.key === "Enter") void submitRename(id);
+                          if (e.key === "Escape") renamingId = null;
+                        }}
+                      />
+                      <button
+                        class="cursor-pointer rounded border px-2 py-0.5 text-xs"
+                        style="border-color: var(--color-border)"
+                        onclick={() => void submitRename(id)}
+                      >
+                        {$t("btn.save")}
+                      </button>
+                    </div>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        {/if}
+      </section>
+    {/if}
   </div>
 {/if}

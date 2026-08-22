@@ -1035,6 +1035,26 @@ pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<
     Ok(())
 }
 
+fn token_or_err() -> Result<token::OverlayToken, String> {
+    token::get().ok_or_else(|| "not-logged-in".to_string())
+}
+
+/// GET the garage (parked dinos + server flags). Token mode only.
+pub fn garage_fetch() -> Result<api::GarageState, String> {
+    let tok = token_or_err()?;
+    let client = http_client()?;
+    let raw = api::garage_list(&client, &tok.token).map_err(|e| e.to_string())?;
+    Ok(api::garage_state(&raw))
+}
+
+/// Run a garage command (park/restore/sell/rename); blocks through the
+/// async-command status poll, so call it from spawn_blocking.
+pub fn garage_action(path: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    let tok = token_or_err()?;
+    let client = http_client()?;
+    api::garage_command(&client, &tok.token, path, body)
+}
+
 /// Log out of the ACTIVE mode only: token mode drops the central token,
 /// legacy mode drops the current domain's cookie (others stay stored).
 pub fn logout(app: &AppHandle) -> Result<(), String> {

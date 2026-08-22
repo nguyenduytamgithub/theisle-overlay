@@ -236,8 +236,28 @@ export const vi = {
     "IslePilot vừa cập nhật phiên bản mới — nếu số liệu trông sai, giao diện của họ có thể " +
     "đã đổi và app cần cập nhật theo.",
   "dino.map_disabled": "Server này tắt live map.",
-  “dino.crashed”:
-    “Phần Khủng long gặp lỗi và đã được cách ly — bản đồ và các tính năng khác không bị ảnh hưởng.”,
+  "dino.crashed":
+    "Phần Khủng long gặp lỗi và đã được cách ly — bản đồ và các tính năng khác không bị ảnh hưởng.",
+
+  // --- garage (gacha) — chỉ có ở chế độ đăng nhập token ---
+  "garage.title": "Garage (Gacha)",
+  "garage.hint":
+    "Danh sách khủng long đã gửi vào garage của server. Park/Restore mất tới ~60 giây " +
+    "vì server xử lý bất đồng bộ.",
+  "garage.refresh": "Làm mới",
+  "garage.park": "Park dino hiện tại",
+  "garage.restore": "Restore",
+  "garage.sell": "Bán",
+  "garage.rename": "Đổi tên",
+  "garage.rename_prompt": "Tên mới cho dino:",
+  "garage.confirm_restore": "Restore dino “{name}”? Dino đang chơi có thể bị thay thế.",
+  "garage.confirm_sell": "Bán dino “{name}”? Không thể hoàn tác.",
+  "garage.empty": "Garage trống.",
+  "garage.busy": "Đang gửi lệnh tới server… (tối đa ~60 giây)",
+  "garage.error": "Lệnh thất bại:",
+  "garage.sold": "Đã bán — nhận {amount} {currency}",
+  "garage.done": "Xong!",
+
   "map.crashed":
     "Bản đồ gặp lỗi hiển thị. Bấm Thử lại, hoặc nhấn F5 để tải lại toàn bộ ứng dụng.",
   "btn.retry": "Thử lại",
