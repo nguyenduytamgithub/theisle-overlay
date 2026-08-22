@@ -277,7 +277,9 @@ fn bearing_cardinals() {
 /// the transform but forgets the compass (or vice versa) it fails.
 #[test]
 fn bearing_matches_map_screen_directions() {
-    let cases: &[(f64, &str, (f64, f64), fn((f64, f64), (f64, f64)) -> bool)] = &[
+    /// (expected bearing, name, world delta, screen-movement check).
+    type ScreenCase = (f64, &'static str, (f64, f64), fn((f64, f64), (f64, f64)) -> bool);
+    let cases: &[ScreenCase] = &[
         (0.0, "north", (-1000.0, 0.0), |p0, p1| p1.1 < p0.1), // north -> py down
         (90.0, "east", (0.0, 1000.0), |p0, p1| p1.0 > p0.0),  // east  -> px up
         (180.0, "south", (1000.0, 0.0), |p0, p1| p1.1 > p0.1), // south -> py up

@@ -138,10 +138,7 @@ fn api_allowed(text: &str) -> bool {
     }
     let mut failed = FAILED.lock_safe();
     let map = failed.get_or_insert_with(HashMap::new);
-    match map.get(text) {
-        Some(at) if at.elapsed() < RETRY_AFTER => false,
-        _ => true,
-    }
+    !matches!(map.get(text), Some(at) if at.elapsed() < RETRY_AFTER)
 }
 
 fn note_failure(text: &str, failure: ApiFailure) {

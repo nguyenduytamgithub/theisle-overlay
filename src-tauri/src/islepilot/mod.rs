@@ -650,6 +650,80 @@ pub fn start_login(app: &AppHandle, domain: String) -> Result<(), String> {
     Ok(())
 }
 
+/// UI "cancel" button: stop waiting and close the login window if it is
+/// still around.
+pub fn cancel_login(app: &AppHandle) {
+    LOGIN_ACTIVE.store(false, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window(LOGIN_WINDOW) {
+        let _ = window.close();
+    }
+}
+
+/// Manual fallback: the user pastes a Cookie header copied from their
+/// browser devtools (the prototype's original flow). Validated against /me
+/// before being stored, so a bad paste is rejected with a clear error.
+pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<(), String> {
+    // Normalize: a trailing slash would silently split the cookie-store key
+    // from a later slash-less entry of the same server.
+    let domain = domain.trim().trim_end_matches('/').to_string();
+    let url: tauri::Url = domain.parse().map_err(|e| format!("URL: {e}"))?;
+    if url.scheme() != "https" {
+        return Err("invalid-url".into());
+    }
+    // Accept either a full Cookie header ("a=1; b=2") or just the bare
+    // islepilot_player VALUE, which is what devtools' "Value" column gives.
+    let raw = cookie.trim().trim_matches('"').trim_matches(';').trim();
+    if raw.is_empty() {
+        return Err("invalid-cookie".into());
+    }
+    // A real header starts with a cookie NAME before the first '=';
+    // a bare JWT value has no '=' before its first '.' (it is base64url,
+    // whose padding, if any, only appears at the end).
+    let looks_like_header = raw
+        .split_once('=')
+        .is_some_and(|(name, _)| {
+            !name.is_empty()
+                && name.len() < 64
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        });
+    let cookie = if looks_like_header {
+        raw.to_string()
+    } else {
+        format!("islepilot_player={raw}")
+    };
+    let client = http_client()?;
+    let html = get_page(&client, &domain, "/me", &cookie)?;
+    // Session check, NOT a stats check: a player with no dino on this
+    // server is still logged in (field case: valid cookie rejected because
+    // /me said "No dino" and no stat parsed).
+    if !parser::looks_authenticated(&html) {
+        return Err("invalid-cookie".into());
+    }
+    cookies::set(&domain, &cookie)?;
+    crate::commands::apply_settings_patch(
+        app,
+        serde_json::json!({ "islepilot": { "enabled": true, "domain": domain } }),
+    );
+    let _ = app.emit(DINO_LOGIN_OK, domain);
+    restart_poller(app);
+    Ok(())
+}
+
+pub fn logout(app: &AppHandle) -> Result<(), String> {
+    let config = read_config(app);
+    stop_poller();
+    if !config.domain.is_empty() {
+        cookies::remove(&config.domain)?;
+    }
+    crate::commands::apply_settings_patch(
+        app,
+        serde_json::json!({ "islepilot": { "enabled": false } }),
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -798,76 +872,4 @@ mod tests {
     }
 }
 
-/// UI "cancel" button: stop waiting and close the login window if it is
-/// still around.
-pub fn cancel_login(app: &AppHandle) {
-    LOGIN_ACTIVE.store(false, Ordering::SeqCst);
-    if let Some(window) = app.get_webview_window(LOGIN_WINDOW) {
-        let _ = window.close();
-    }
-}
 
-/// Manual fallback: the user pastes a Cookie header copied from their
-/// browser devtools (the prototype's original flow). Validated against /me
-/// before being stored, so a bad paste is rejected with a clear error.
-pub fn manual_cookie(app: &AppHandle, domain: String, cookie: String) -> Result<(), String> {
-    // Normalize: a trailing slash would silently split the cookie-store key
-    // from a later slash-less entry of the same server.
-    let domain = domain.trim().trim_end_matches('/').to_string();
-    let url: tauri::Url = domain.parse().map_err(|e| format!("URL: {e}"))?;
-    if url.scheme() != "https" {
-        return Err("invalid-url".into());
-    }
-    // Accept either a full Cookie header ("a=1; b=2") or just the bare
-    // islepilot_player VALUE, which is what devtools' "Value" column gives.
-    let raw = cookie.trim().trim_matches('"').trim_matches(';').trim();
-    if raw.is_empty() {
-        return Err("invalid-cookie".into());
-    }
-    // A real header starts with a cookie NAME before the first '=';
-    // a bare JWT value has no '=' before its first '.' (it is base64url,
-    // whose padding, if any, only appears at the end).
-    let looks_like_header = raw
-        .split_once('=')
-        .is_some_and(|(name, _)| {
-            !name.is_empty()
-                && name.len() < 64
-                && name
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        });
-    let cookie = if looks_like_header {
-        raw.to_string()
-    } else {
-        format!("islepilot_player={raw}")
-    };
-    let client = http_client()?;
-    let html = get_page(&client, &domain, "/me", &cookie)?;
-    // Session check, NOT a stats check: a player with no dino on this
-    // server is still logged in (field case: valid cookie rejected because
-    // /me said "No dino" and no stat parsed).
-    if !parser::looks_authenticated(&html) {
-        return Err("invalid-cookie".into());
-    }
-    cookies::set(&domain, &cookie)?;
-    crate::commands::apply_settings_patch(
-        app,
-        serde_json::json!({ "islepilot": { "enabled": true, "domain": domain } }),
-    );
-    let _ = app.emit(DINO_LOGIN_OK, domain);
-    restart_poller(app);
-    Ok(())
-}
-
-pub fn logout(app: &AppHandle) -> Result<(), String> {
-    let config = read_config(app);
-    stop_poller();
-    if !config.domain.is_empty() {
-        cookies::remove(&config.domain)?;
-    }
-    crate::commands::apply_settings_patch(
-        app,
-        serde_json::json!({ "islepilot": { "enabled": false } }),
-    );
-    Ok(())
-}
