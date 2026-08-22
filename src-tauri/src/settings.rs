@@ -117,6 +117,7 @@ pub fn default_settings() -> Value {
             "opacity_down": "Ctrl+Alt+Down",
             "zoom_in": "Ctrl+Alt+Right",
             "zoom_out": "Ctrl+Alt+Left",
+            "toggle_quests": "Ctrl+Alt+Q",
             "reload_ui": "Ctrl+Alt+R",   // rescue: works even when clicks are dead
         },
         // The map starts CLEAN: only the big region-name labels are on, so a
@@ -155,6 +156,7 @@ pub fn default_settings() -> Value {
             "use_map_position": false,   // auto-managed: on when the server has a live map
             "map_pref_user_set": false,  // true once the USER touches the toggle — stops auto-on
             "show_overlay_panel": true,  // compact stats under the minimap
+            "show_quests_panel": false,  // Prime quest list under the stats strip
         },
         "poll": {
             "clipboard_ms": 400,

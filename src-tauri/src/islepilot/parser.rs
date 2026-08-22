@@ -42,6 +42,10 @@ impl StatBar {
 #[serde(rename_all = "camelCase")]
 pub struct QuestStatus {
     pub text: String,
+    /// Vietnamese translation, filled AFTER parsing (translate.rs) — the
+    /// parser only ever sees the panel's English prose.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_vi: Option<String>,
     pub completed: bool,
 }
 
@@ -164,6 +168,7 @@ pub fn parse_me(html: &str) -> PlayerStats {
                     .unwrap_or(false);
                 prime_quests.push(QuestStatus {
                     text: text_of(li),
+                    text_vi: None,
                     completed,
                 });
             }

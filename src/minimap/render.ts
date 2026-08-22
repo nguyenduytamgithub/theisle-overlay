@@ -26,6 +26,19 @@ export interface DinoBars {
 /** Must match DINO_PANEL_H in src-tauri/src/minimap.rs. */
 export const PANEL_H = 76;
 
+/** Quest-panel geometry. Must match QUEST_HEADER_H / QUEST_ROW_H /
+ * QUEST_PAD_H in src-tauri/src/minimap.rs. */
+export const QUEST_HEADER_H = 18;
+export const QUEST_ROW_H = 14;
+export const QUEST_PAD_H = 8;
+
+export interface QuestRow {
+  text: string;
+  /** Vietnamese translation from the backend; absent when untranslated. */
+  textVi?: string | null;
+  completed: boolean;
+}
+
 export interface MinimapState {
   /** Player position (cm + basemap px) and heading, or null before first sample. */
   position: { xCm: number; yCm: number; px: number; py: number; headingDeg: number | null } | null;
@@ -68,6 +81,11 @@ export interface MinimapState {
   /** Extra height for the dino-stats strip; 0 = strip off. */
   panelH: number;
   dino: DinoBars | null;
+  /** Extra height for the Prime-quests panel; 0 = panel off or no quests. */
+  questsH: number;
+  quests: QuestRow[];
+  /** Quest text language: "vi" shows textVi (fallback English). */
+  questLang: "vi" | "en";
   /** Localised strings: compass letters clockwise from north, hint, unknown. */
   compassLetters: [string, string, string, string];
   hintText: string;
@@ -94,7 +112,7 @@ const COLORS = {
 
 export function render(canvas: HTMLCanvasElement, state: MinimapState): void {
   const size = state.sizePx;
-  const totalH = size + state.panelH;
+  const totalH = size + state.panelH + state.questsH;
   const dpr = window.devicePixelRatio || 1;
   if (
     canvas.width !== Math.round(size * dpr) ||
@@ -112,6 +130,9 @@ export function render(canvas: HTMLCanvasElement, state: MinimapState): void {
 
   if (state.panelH > 0) {
     drawDinoPanel(ctx, state, size);
+  }
+  if (state.questsH > 0) {
+    drawQuestPanel(ctx, state, size);
   }
 
   const c = size / 2;
@@ -496,6 +517,50 @@ function drawDinoPanel(ctx: CanvasRenderingContext2D, state: MinimapState, size:
     gy,
   );
   ctx.restore();
+}
+
+/// Prime-quests card under the stats strip (or directly under the disc when
+/// the strip is off). Same backing-card language as drawDinoPanel; one line
+/// per quest, ellipsised — 10 rows must stay glanceable, not a wall of text.
+function drawQuestPanel(ctx: CanvasRenderingContext2D, state: MinimapState, size: number): void {
+  const top = size + state.panelH + 2;
+  const h = state.questsH - 4;
+  ctx.save();
+  ctx.globalAlpha = Math.max(state.opacity, 0.55);
+
+  ctx.beginPath();
+  ctx.roundRect(4, top, size - 8, h, 8);
+  ctx.fillStyle = "rgba(10, 13, 9, 0.78)";
+  ctx.fill();
+
+  const done = state.quests.filter((q) => q.completed).length;
+  ctx.font = "600 10px 'Segoe UI', sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLORS.accent;
+  ctx.fillText(`Prime ${done}/${state.quests.length}`, 10, top + 4 + QUEST_HEADER_H / 2);
+
+  const maxW = size - 8 - 24 - 8; // card minus glyph column minus right pad
+  state.quests.forEach((quest, i) => {
+    const y = top + 4 + QUEST_HEADER_H + i * QUEST_ROW_H + QUEST_ROW_H / 2;
+    ctx.font = "10px 'Segoe UI', sans-serif";
+    ctx.fillStyle = quest.completed ? "#72d653" : COLORS.textMuted;
+    ctx.fillText(quest.completed ? "✓" : "○", 10, y);
+    const text = state.questLang === "vi" ? (quest.textVi ?? quest.text) : quest.text;
+    ctx.fillStyle = quest.completed ? "#72d653" : COLORS.text;
+    ctx.fillText(truncate(ctx, text, maxW), 24, y);
+  });
+  ctx.restore();
+}
+
+/** Single-line ellipsis via measureText — canvas has no text-overflow. */
+function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(`${t}…`).width > maxW) {
+    t = t.slice(0, -1);
+  }
+  return `${t.trimEnd()}…`;
 }
 
 function drawHint(

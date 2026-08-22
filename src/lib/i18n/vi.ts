@@ -98,6 +98,7 @@ export const vi = {
   "hotkey.opacity_down": "Bản đồ nhỏ nhạt hơn",
   "hotkey.zoom_in": "Thu gần vùng nhìn",
   "hotkey.zoom_out": "Nhìn xa hơn",
+  "hotkey.toggle_quests": "Hiện/ẩn bảng nhiệm vụ Prime",
   "hotkey.reload_ui": "Tải lại giao diện (khi bị đơ)",
 
   // --- cài đặt ---
@@ -191,6 +192,7 @@ export const vi = {
   "dino.enabled": "Theo dõi thông tin khủng long",
   "dino.interval": "Tần suất cập nhật",
   "dino.overlay_panel": "Hiện thanh chỉ số dưới bản đồ nhỏ",
+  "dino.quests_panel": "Hiện nhiệm vụ Prime dưới bản đồ nhỏ",
   "dino.use_map_position":
     "Lấy vị trí tự động từ live map của server (thay cho copy tọa độ thủ công)",
   "dino.rules_note":

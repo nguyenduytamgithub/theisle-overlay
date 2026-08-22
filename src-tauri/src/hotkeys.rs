@@ -253,6 +253,19 @@ fn dispatch(app: &AppHandle, action: &str) {
     match action {
         "toggle_minimap" => toggle_setting(app, "visible"),
         "toggle_click_through" => toggle_setting(app, "click_through"),
+        // Lives under "islepilot", not "minimap", so toggle_setting can't
+        // serve it. Default false must match settings.rs.
+        "toggle_quests" => {
+            let current = {
+                let state = app.state::<AppState>();
+                let s = state.settings.lock_safe();
+                settings::get_bool(&s, &["islepilot", "show_quests_panel"], false)
+            };
+            apply_settings_patch(
+                app,
+                serde_json::json!({ "islepilot": { "show_quests_panel": !current } }),
+            );
+        }
         "toggle_fullmap" => match app.get_webview_window("main") {
             Some(window) => {
                 // A minimized window reports visible == true, but the user

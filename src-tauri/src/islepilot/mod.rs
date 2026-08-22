@@ -14,7 +14,7 @@
 pub mod cookies;
 pub mod parser;
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -42,6 +42,10 @@ const BUILD_ID_CHECK_S: f64 = 600.0;
 /// next tick. This is how login/logout/settings changes restart cleanly.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 static LAST_UPDATE: Mutex<Option<DinoUpdate>> = Mutex::new(None);
+/// Prime-quest count of the last GOOD update (error publishes keep the
+/// previous value so a network hiccup can't collapse the overlay panel).
+/// Read by minimap::snapshot each supervisor tick to size the window.
+static QUEST_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// True while a login window is open and being watched. Cleared the moment
 /// the user closes that window, so the UI never sits on "waiting for login".
 static LOGIN_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -99,6 +103,134 @@ fn get_page(client: &reqwest::blocking::Client, domain: &str, path: &str, cookie
     Ok(body)
 }
 
+/// Server slug for the JSON API (`/api/p/{slug}/...`):
+/// "https://sdvn2.islepilot.eu" -> "sdvn2", "https://islepilot.eu/p/name" ->
+/// "name". None -> the HTML fallback carries the feature alone.
+fn server_slug(domain: &str) -> Option<String> {
+    let url: tauri::Url = domain.trim_end_matches('/').parse().ok()?;
+    if let Some(segs) = url.path_segments() {
+        let segs: Vec<_> = segs.filter(|s| !s.is_empty()).collect();
+        if segs.len() >= 2 && segs[0] == "p" {
+            return Some(segs[1].to_string());
+        }
+    }
+    // Subdomain form: first label of a host with at least 3 labels.
+    let host = url.host_str()?;
+    let label = host.split('.').next()?;
+    if host.matches('.').count() >= 2 && label != "www" {
+        return Some(label.to_string());
+    }
+    None
+}
+
+/// The API lives at the ORIGIN root even for path-form panels
+/// (islepilot.eu/p/name -> https://islepilot.eu/api/p/name/...).
+fn origin_of(domain: &str) -> Option<String> {
+    let url: tauri::Url = domain.trim_end_matches('/').parse().ok()?;
+    let host = url.host_str()?;
+    Some(match url.port() {
+        Some(p) => format!("{}://{}:{}", url.scheme(), host, p),
+        None => format!("{}://{}", url.scheme(), host),
+    })
+}
+
+/// Minimal base64url decoder — enough to read our own JWT payload without a
+/// new dependency (no verification: we are the client reading our own token).
+fn b64url_decode(s: &str) -> Option<Vec<u8>> {
+    const TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut idx = [255u8; 256];
+    for (i, &c) in TABLE.iter().enumerate() {
+        idx[c as usize] = i as u8;
+    }
+    let mut out = Vec::with_capacity(s.len() * 3 / 4);
+    let (mut buf, mut bits) = (0u32, 0u32);
+    for &c in s.as_bytes() {
+        if c == b'=' {
+            break;
+        }
+        let v = idx[c as usize];
+        if v == 255 {
+            return None;
+        }
+        buf = (buf << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+        }
+    }
+    Some(out)
+}
+
+/// Our steamId out of the islepilot_player session JWT — the robust way to
+/// pick "our" marker out of the markers list (group members can appear too).
+fn steam_id_from_cookie(cookie: &str) -> Option<String> {
+    let token = cookie.split(';').find_map(|kv| {
+        let (k, v) = kv.trim().split_once('=')?;
+        (k == "islepilot_player").then(|| v.to_string())
+    })?;
+    let payload = token.split('.').nth(1)?;
+    let json = String::from_utf8(b64url_decode(payload)?).ok()?;
+    serde_json::from_str::<serde_json::Value>(&json)
+        .ok()?
+        .get("steamId")?
+        .as_str()
+        .map(String::from)
+}
+
+/// Own position from the markers JSON, converted to OUR axis convention.
+///
+/// AXIS SWAP — verified against named landmarks in the panel's own map SVG
+/// (Mudflats/South Plains/Swamp/EastLake all agree): islepilot `x` is game
+/// Long (our y, horizontal), islepilot `y` is game Lat (our x, vertical) —
+/// the same swap myislemap uses. Values are raw UE cm.
+///
+/// Ok(None) = endpoint answered but carries no usable position (`ok:false`,
+/// empty list, ...) — the caller falls back to the HTML page.
+fn parse_own_marker(body: &str, own_steam_id: Option<&str>) -> Result<Option<(f64, f64)>, String> {
+    let v: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    if v.get("ok").and_then(|b| b.as_bool()) != Some(true) {
+        return Ok(None);
+    }
+    let markers = v
+        .get("markers")
+        .and_then(|m| m.as_array())
+        .ok_or("no markers array")?;
+    let own = markers
+        .iter()
+        .find(|m| {
+            own_steam_id.is_some() && m.get("steamId").and_then(|s| s.as_str()) == own_steam_id
+        })
+        .or_else(|| {
+            markers
+                .iter()
+                .find(|m| m.get("label").and_then(|l| l.as_str()) == Some("You"))
+        })
+        .or_else(|| if markers.len() == 1 { markers.first() } else { None });
+    let Some(m) = own else { return Ok(None) };
+    let (Some(long_cm), Some(lat_cm)) = (
+        m.get("x").and_then(|x| x.as_f64()),
+        m.get("y").and_then(|y| y.as_f64()),
+    ) else {
+        return Ok(None);
+    };
+    Ok(Some((lat_cm, long_cm)))
+}
+
+/// GET /api/p/{slug}/map/markers and extract our own position (game cm, our
+/// axis convention).
+fn fetch_own_marker(
+    client: &reqwest::blocking::Client,
+    origin: &str,
+    slug: &str,
+    cookie: &str,
+    own_steam_id: Option<&str>,
+) -> Result<Option<(f64, f64)>, String> {
+    let body = get_page(client, origin, &format!("/api/p/{slug}/map/markers"), cookie)?;
+    parse_own_marker(&body, own_steam_id)
+}
+
 fn build_id(client: &reqwest::blocking::Client, domain: &str) -> Option<String> {
     let url = format!("{}/api/version", domain.trim_end_matches('/'));
     let body = client.get(&url).send().ok()?.text().ok()?;
@@ -137,8 +269,17 @@ pub fn current_state(app: &AppHandle) -> IslepilotState {
 }
 
 fn publish(app: &AppHandle, update: DinoUpdate) {
+    if let Some(player) = &update.player {
+        QUEST_COUNT.store(player.prime_quests.len(), Ordering::SeqCst);
+    }
     *LAST_UPDATE.lock_safe() = Some(update.clone());
     crate::events::emit_all(app, DINO_UPDATE, update);
+}
+
+/// Quest count of the last good update — the minimap window's quests panel
+/// is sized from this.
+pub fn last_quest_count() -> usize {
+    QUEST_COUNT.load(Ordering::SeqCst)
 }
 
 /// Re-send the latest update — part of resync after a webview reload.
@@ -237,6 +378,9 @@ pub fn restart_poller(app: &AppHandle) {
         // Probed lazily from /map (even when position use is off) so the UI
         // can tell the user up front whether this server has a live map.
         let mut live_map: Option<bool> = None;
+        // Our steamId (from the session JWT) picks "our" marker out of the
+        // markers API response; None just weakens the match to label=="You".
+        let own_steam_id = steam_id_from_cookie(&cookie);
 
         loop {
             if GENERATION.load(Ordering::SeqCst) != generation {
@@ -258,7 +402,7 @@ pub fn restart_poller(app: &AppHandle) {
 
             match get_page(&client, &config.domain, "/me", &cookie) {
                 Ok(html) => {
-                    let player = parser::parse_me(&html);
+                    let mut player = parser::parse_me(&html);
                     // Missing stats alone is NOT auth loss: a logged-in
                     // player with no living dino parses to all-None too.
                     // Only a page without the session markers counts — and
@@ -274,11 +418,62 @@ pub fn restart_poller(app: &AppHandle) {
                     } else {
                         auth_warned = false;
                         failures = 0;
-                        // Fetch /map when position use is on, or once as a
-                        // capability probe — the availability answer drives
-                        // the use_map_position setting (sync_map_pref) and
-                        // the checkbox state in the UI.
-                        let map = if config.use_map_position || live_map.is_none() {
+                        // Vietnamese quest text (dict -> templates -> cache ->
+                        // budgeted MyMemory fallback). English UI skips it —
+                        // no reason to spend the free API tier; switching the
+                        // language picks it up on the next tick.
+                        let lang_vi = {
+                            let state = app.state::<AppState>();
+                            let s = state.settings.lock_safe();
+                            settings::get_str(&s, &["language"], "vi") != "en"
+                        };
+                        if lang_vi {
+                            crate::translate::translate_quests(&mut player.prime_quests, &client);
+                        }
+                        // Position source 1 — the JSON markers API (the same
+                        // one the panel's own 15-second poll uses): exact UE
+                        // cm, no pct->px->cm roundtrip, immune to markup
+                        // changes. Any miss falls through to the HTML page.
+                        let mut position_from_api = false;
+                        if config.use_map_position {
+                            if let (Some(origin), Some(slug)) =
+                                (origin_of(&config.domain), server_slug(&config.domain))
+                            {
+                                match fetch_own_marker(
+                                    &client,
+                                    &origin,
+                                    &slug,
+                                    &cookie,
+                                    own_steam_id.as_deref(),
+                                ) {
+                                    Ok(Some((x_cm, y_cm))) => {
+                                        position_from_api = true;
+                                        if live_map != Some(true) {
+                                            live_map = Some(true);
+                                            sync_map_pref(&app, true);
+                                        }
+                                        log::debug!(
+                                            "islepilot markers api: {x_cm:.0},{y_cm:.0} cm"
+                                        );
+                                        pipeline::ingest_sample(&app, x_cm, y_cm, 0.0);
+                                    }
+                                    // ok:false / no own marker: map may be
+                                    // off — let the HTML probe decide.
+                                    Ok(None) => {}
+                                    Err(e) => {
+                                        log::warn!("islepilot markers api failed: {e}");
+                                    }
+                                }
+                            }
+                        }
+                        // Position source 2 / capability probe — the HTML
+                        // page. Fetched when the API produced nothing while
+                        // position use is on, or once as the availability
+                        // probe that drives the use_map_position setting
+                        // (sync_map_pref) and the checkbox state in the UI.
+                        let need_html =
+                            (config.use_map_position && !position_from_api) || live_map.is_none();
+                        let map = if need_html {
                             match get_page(&client, &config.domain, "/map", &cookie) {
                                 Ok(map_html) => {
                                     let map = parser::parse_map(&map_html);
@@ -287,7 +482,7 @@ pub fn restart_poller(app: &AppHandle) {
                                         live_map = Some(available);
                                         sync_map_pref(&app, available);
                                     }
-                                    if config.use_map_position {
+                                    if config.use_map_position && !position_from_api {
                                         ingest_map_position(&app, &map);
                                     }
                                     Some(map)
@@ -354,6 +549,7 @@ pub(crate) fn backoff_s(base: f64, failures: u32) -> f64 {
 pub fn stop_poller() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
     *LAST_UPDATE.lock_safe() = None;
+    QUEST_COUNT.store(0, Ordering::SeqCst);
 }
 
 /// Open the panel in a login window; once the user finishes Steam sign-in
@@ -465,6 +661,94 @@ mod tests {
         assert_eq!(backoff_s(10.0, 2), 40.0);
         assert_eq!(backoff_s(10.0, 5), 300.0, "capped at 5 minutes");
         assert_eq!(backoff_s(10.0, 60), 300.0, "cap sticks, no overflow");
+    }
+
+    #[test]
+    fn slug_and_origin_for_both_domain_forms() {
+        assert_eq!(server_slug("https://sdvn2.islepilot.eu/"), Some("sdvn2".into()));
+        assert_eq!(server_slug("https://mixi.islepilot.eu"), Some("mixi".into()));
+        assert_eq!(server_slug("https://islepilot.eu/p/myserver"), Some("myserver".into()));
+        assert_eq!(server_slug("https://islepilot.eu"), None, "no slug to derive");
+        assert_eq!(
+            origin_of("https://islepilot.eu/p/myserver/"),
+            Some("https://islepilot.eu".into()),
+            "API sits at the origin root even for path-form panels"
+        );
+    }
+
+    #[test]
+    fn steam_id_comes_out_of_the_session_jwt() {
+        // header.payload.sig with payload {"steamId":"76561198000000001"}
+        // (base64url, no padding) — structure matches the real cookie.
+        let payload = "eyJzdGVhbUlkIjoiNzY1NjExOTgwMDAwMDAwMDEiLCJwZXJzb25hTmFtZSI6IlgifQ";
+        let cookie = format!("other=1; islepilot_player=xxx.{payload}.yyy");
+        assert_eq!(
+            steam_id_from_cookie(&cookie),
+            Some("76561198000000001".to_string())
+        );
+        assert_eq!(steam_id_from_cookie("islepilot_player=garbage"), None);
+        assert_eq!(steam_id_from_cookie("unrelated=1"), None);
+    }
+
+    /// Shape captured from a real server (values anonymised). The decisive
+    /// assertion is the AXIS SWAP: their x is our y (Long), their y is our
+    /// x (Lat) — verified against named landmarks in the panel's map SVG.
+    #[test]
+    fn own_marker_is_selected_and_axes_are_swapped() {
+        let body = r#"{"ok":true,"markers":[
+            {"steamId":"111","label":"Friend","x":1.0,"y":2.0},
+            {"steamId":"76561198000000001","label":"You","x":-92413.23,"y":38665.41,"yaw":-146.89,
+             "path":[{"x":-92413.23,"y":38665.41}]}
+        ]}"#;
+        let got = parse_own_marker(body, Some("76561198000000001")).unwrap();
+        assert_eq!(got, Some((38665.41, -92413.23)), "(game X=their y, game Y=their x)");
+        // No steamId available -> the "You" label still finds us.
+        assert_eq!(parse_own_marker(body, None).unwrap(), Some((38665.41, -92413.23)));
+    }
+
+    #[test]
+    fn markers_api_refusals_fall_back_instead_of_erroring() {
+        assert_eq!(parse_own_marker(r#"{"ok":false}"#, None).unwrap(), None);
+        assert_eq!(
+            parse_own_marker(r#"{"ok":true,"markers":[]}"#, Some("1")).unwrap(),
+            None
+        );
+        // Several markers, none provably ours: refuse rather than guess.
+        let two = r#"{"ok":true,"markers":[
+            {"steamId":"a","label":"P1","x":1.0,"y":2.0},
+            {"steamId":"b","label":"P2","x":3.0,"y":4.0}
+        ]}"#;
+        assert_eq!(parse_own_marker(two, Some("zz")).unwrap(), None);
+        assert!(parse_own_marker("not json", None).is_err());
+    }
+
+    /// Live check of the markers API through the exact production path
+    /// (slug derivation, our client/UA, axis swap):
+    ///   THEISLE_TEST_DOMAIN=... THEISLE_TEST_COOKIE=... \
+    ///   cargo test -- --ignored live_markers
+    #[test]
+    #[ignore]
+    fn live_markers_api() {
+        let (Ok(domain), Ok(cookie)) = (
+            std::env::var("THEISLE_TEST_DOMAIN"),
+            std::env::var("THEISLE_TEST_COOKIE"),
+        ) else {
+            eprintln!("set THEISLE_TEST_DOMAIN + THEISLE_TEST_COOKIE to run");
+            return;
+        };
+        let client = http_client().unwrap();
+        let origin = origin_of(&domain).expect("origin");
+        let slug = server_slug(&domain).expect("slug");
+        let own = steam_id_from_cookie(&cookie);
+        eprintln!("origin={origin} slug={slug} steamId={own:?}");
+        let pos = fetch_own_marker(&client, &origin, &slug, &cookie, own.as_deref())
+            .expect("markers api reachable");
+        eprintln!("own position (game cm, our axes): {pos:?}");
+        if let Some((x, y)) = pos {
+            let cal = overlay_core::Calibration::gateway();
+            let (px, py) = overlay_core::world_to_pixel(x, y, cal);
+            eprintln!("-> vulnona px=({px:.0},{py:.0}) of {}x{}", cal.image_width_px, cal.image_height_px);
+        }
     }
 
     /// Live end-to-end check of the exact HTTP path the app uses (our client,

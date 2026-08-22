@@ -22,6 +22,7 @@
     "opacity_down",
     "zoom_in",
     "zoom_out",
+    "toggle_quests",
     "reload_ui",
   ] as const;
 

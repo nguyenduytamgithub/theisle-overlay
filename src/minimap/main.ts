@@ -7,7 +7,17 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { error } from "@tauri-apps/plugin-log";
 import { installGlobalErrorLog } from "../lib/errlog";
 import { ANIMAL_GLYPHS, waypointGlyph } from "../lib/theme";
-import { PANEL_H, render, type DinoBars, type MinimapState, type PoiDot } from "./render";
+import {
+  PANEL_H,
+  QUEST_HEADER_H,
+  QUEST_PAD_H,
+  QUEST_ROW_H,
+  render,
+  type DinoBars,
+  type MinimapState,
+  type PoiDot,
+  type QuestRow,
+} from "./render";
 
 installGlobalErrorLog("minimap");
 
@@ -83,6 +93,9 @@ const state: MinimapState = {
   showFreshwater: true,
   panelH: 0,
   dino: null,
+  questsH: 0,
+  quests: [],
+  questLang: "vi",
   compassLetters: STRINGS.vi.letters,
   hintText: STRINGS.vi.hint,
   headingLabel: "",
@@ -104,11 +117,23 @@ function applySettings(s: Settings) {
   const ip = s.islepilot ?? {};
   state.panelH = ip.enabled && (ip.show_overlay_panel ?? true) ? PANEL_H : 0;
   const lang = (s.language === "en" ? "en" : "vi") as keyof typeof STRINGS;
+  state.questLang = lang;
+  recomputeQuestsH();
   state.compassLetters = STRINGS[lang].letters;
   state.hintText = STRINGS[lang].hint;
   state.headingUnknown = STRINGS[lang].unknown;
   refreshHeadingLabel(lang);
   refreshPoiFilter();
+}
+
+/** Window height for the quest card is Rust's job (minimap.rs quests_h reads
+ * the same count from the poller); this only has to agree on the formula. */
+function recomputeQuestsH() {
+  const ip = settings.islepilot ?? {};
+  state.questsH =
+    ip.enabled && (ip.show_quests_panel ?? false) && state.quests.length > 0
+      ? QUEST_HEADER_H + state.quests.length * QUEST_ROW_H + QUEST_PAD_H
+      : 0;
 }
 
 function refreshHeadingLabel(lang: keyof typeof STRINGS) {
@@ -354,6 +379,7 @@ async function init() {
       health: DinoStatBar | null;
       hunger: DinoStatBar | null;
       thirst: DinoStatBar | null;
+      primeQuests?: QuestRow[];
     } | null;
   }
   const toBars = (u: DinoUpdatePayload): DinoBars | null =>
@@ -365,13 +391,22 @@ async function init() {
           growthPct: u.player.growthPct,
         }
       : null;
+  // Error updates carry player: null — keep the last good quests/bars so a
+  // network hiccup doesn't blank (or resize) the overlay.
+  const applyDino = (u: DinoUpdatePayload) => {
+    state.dino = toBars(u) ?? state.dino;
+    if (u.player) {
+      state.quests = u.player.primeQuests ?? [];
+      recomputeQuestsH();
+    }
+  };
   await listen<DinoUpdatePayload>("dino://update", (e) => {
-    state.dino = toBars(e.payload) ?? state.dino;
+    applyDino(e.payload);
     draw();
   });
   try {
     const st = await invoke<{ lastUpdate: DinoUpdatePayload | null }>("islepilot_state");
-    if (st.lastUpdate) state.dino = toBars(st.lastUpdate);
+    if (st.lastUpdate) applyDino(st.lastUpdate);
   } catch {
     // feature off — strip just shows "…" until data arrives
   }

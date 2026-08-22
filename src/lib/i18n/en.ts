@@ -88,6 +88,7 @@ export const en: Record<MsgKey, string> = {
   "hotkey.zoom_in": "Zoom view in",
   "hotkey.reload_ui": "Reload the UI (if it freezes)",
   "hotkey.zoom_out": "Zoom view out",
+  "hotkey.toggle_quests": "Show/hide the Prime quests panel",
 
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Minimap",
@@ -178,6 +179,7 @@ export const en: Record<MsgKey, string> = {
   "dino.enabled": "Track dino info",
   "dino.interval": "Update frequency",
   "dino.overlay_panel": "Show stats strip under the minimap",
+  "dino.quests_panel": "Show Prime quests under the minimap",
   "dino.use_map_position":
     "Auto position from the server's live map (instead of manual coordinate copying)",
   "dino.rules_note":

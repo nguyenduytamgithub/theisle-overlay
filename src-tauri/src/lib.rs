@@ -16,6 +16,7 @@ pub mod replay;
 pub mod settings;
 pub mod state;
 pub mod store;
+pub mod translate;
 pub mod tray;
 pub mod webview_mem;
 pub mod win;

@@ -265,6 +265,15 @@
         />
         {$t("dino.overlay_panel")}
       </label>
+      <label class="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={settings.islepilot.show_quests_panel}
+          onchange={(e) =>
+            void patch({ islepilot: { show_quests_panel: e.currentTarget.checked } })}
+        />
+        {$t("dino.quests_panel")}
+      </label>
       <!-- Live-map position: driven by the server's capability. No live map
            -> forced off and not clickable; live map -> on by default, and a
            manual flip marks map_pref_user_set so auto-on never overrides. -->
@@ -394,7 +403,14 @@
                 <span style="color: {quest.completed ? '#72d653' : 'var(--color-muted)'}">
                   {quest.completed ? "✓" : "○"}
                 </span>
-                <span style={quest.completed ? "color: #72d653" : ""}>{quest.text}</span>
+                <!-- Vietnamese when available; the English original stays a
+                     hover away so in-game terms remain checkable. -->
+                <span
+                  style={quest.completed ? "color: #72d653" : ""}
+                  title={$locale === "vi" && quest.textVi ? quest.text : undefined}
+                >
+                  {$locale === "vi" ? (quest.textVi ?? quest.text) : quest.text}
+                </span>
               </li>
             {/each}
           </ul>

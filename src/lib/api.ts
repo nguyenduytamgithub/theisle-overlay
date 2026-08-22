@@ -56,6 +56,7 @@ export type Settings = Record<string, unknown> & {
     use_map_position: boolean;
     map_pref_user_set: boolean;
     show_overlay_panel: boolean;
+    show_quests_panel: boolean;
   };
 };
 
@@ -313,6 +314,8 @@ export interface DinoStatBar {
 
 export interface DinoQuest {
   text: string;
+  /** Vietnamese translation from the backend; absent when untranslated. */
+  textVi?: string | null;
   completed: boolean;
 }
 

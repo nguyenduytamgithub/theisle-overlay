@@ -99,6 +99,22 @@ fn on_ready(app: &AppHandle) {
 /// PANEL_H in src/minimap/render.ts.
 const DINO_PANEL_H: f64 = 76.0;
 
+/// Quest-panel geometry, logical px. Must match QUEST_HEADER_H / QUEST_ROW_H /
+/// QUEST_PAD_H in src/minimap/render.ts.
+const QUEST_HEADER_H: f64 = 18.0;
+const QUEST_ROW_H: f64 = 14.0;
+const QUEST_PAD_H: f64 = 8.0;
+
+/// Height of the Prime-quests panel for `n` quests; 0 quests -> no panel at
+/// all (an empty card under the minimap would just be clutter).
+fn quests_panel_h(n: usize) -> f64 {
+    if n == 0 {
+        0.0
+    } else {
+        QUEST_HEADER_H + n as f64 * QUEST_ROW_H + QUEST_PAD_H
+    }
+}
+
 #[derive(PartialEq, Clone, Copy)]
 struct Snapshot {
     /// The user's intent (hotkey / Settings toggle) — game presence gates it
@@ -113,11 +129,13 @@ struct Snapshot {
     topmost_ms: u64,
     /// Extra height for the "your dino" stats panel.
     panel_h: f64,
+    /// Extra height for the Prime-quests panel (varies with quest count).
+    quests_h: f64,
 }
 
 impl Snapshot {
     fn window_h(&self) -> f64 {
-        self.size_px + self.panel_h
+        self.size_px + self.panel_h + self.quests_h
     }
 }
 
@@ -156,6 +174,14 @@ fn snapshot(app: &AppHandle) -> Snapshot {
             && settings::get_bool(&s, &["islepilot", "show_overlay_panel"], true)
         {
             DINO_PANEL_H
+        } else {
+            0.0
+        },
+        quests_h: if settings::get_bool(&s, &["islepilot", "enabled"], false)
+            && settings::get_bool(&s, &["islepilot", "show_quests_panel"], false)
+        {
+            // The 250 ms tick picks up quest-count changes via the diff.
+            quests_panel_h(crate::islepilot::last_quest_count())
         } else {
             0.0
         },
@@ -288,7 +314,7 @@ fn spawn_supervisor(app: AppHandle) {
             if cur.click_through != prev.click_through {
                 let _ = window.set_ignore_cursor_events(cur.click_through);
             }
-            if cur.size_px != prev.size_px || cur.panel_h != prev.panel_h {
+            if cur.size_px != prev.size_px || cur.window_h() != prev.window_h() {
                 let _ = window.set_size(LogicalSize::new(cur.size_px, cur.window_h()));
                 last_rect = None;
             }
@@ -346,7 +372,17 @@ fn anchor(window: &tauri::WebviewWindow, rect: (i32, i32, i32, i32), snap: &Snap
 
 #[cfg(test)]
 mod tests {
-    use super::GamePresence;
+    use super::{quests_panel_h, GamePresence, QUEST_HEADER_H, QUEST_PAD_H, QUEST_ROW_H};
+
+    #[test]
+    fn quest_panel_height_scales_with_count_and_vanishes_at_zero() {
+        assert_eq!(quests_panel_h(0), 0.0, "no quests, no card");
+        assert_eq!(quests_panel_h(1), QUEST_HEADER_H + QUEST_ROW_H + QUEST_PAD_H);
+        assert_eq!(
+            quests_panel_h(10),
+            QUEST_HEADER_H + 10.0 * QUEST_ROW_H + QUEST_PAD_H
+        );
+    }
 
     #[test]
     fn presence_appears_immediately_and_survives_one_miss() {
