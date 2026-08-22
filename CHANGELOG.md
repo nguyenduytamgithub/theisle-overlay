@@ -4,6 +4,57 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.4.0] — 2026-08-23
+
+### Thêm
+
+- **Đăng nhập Steam 1 lần cho mọi server IslePilot** (khuyên dùng): đăng nhập
+  qua islepilot.eu duy nhất một lần, token dùng chung cho mọi server — hết cảnh
+  nhập link server + copy cookie mỗi lần đổi server. Token lưu mã hóa DPAPI;
+  redirect được bắt ngay trong cửa sổ đăng nhập (không đăng ký protocol hệ
+  thống, không đụng app overlay gốc nếu có cài); có ô dán token thủ công làm
+  lối thoát. Chế độ mới đọc API JSON thay vì scrape HTML: thêm **thể lực, dinh
+  dưỡng Carb/Đạm/Béo, tên server đang chơi, giới tính** trong tab Khủng long.
+  Cách cũ nhập server + cookie giữ nguyên làm dự phòng, người dùng cũ không
+  phải làm lại gì. (`b8cff31`)
+- **Tab Garage (Gacha)** — cần đăng nhập token: mỗi dino đã park là một card
+  gồm **model 3D xoay/phóng được, đúng màu skin đã park** + tên/loài/growth +
+  nút Park/Restore/Đổi tên/Bán (Bán chỉ hiện khi server bật; có hộp xác nhận).
+  Model + texture tải từ CDN công khai của IslePilot (21 loài), cache trên đĩa
+  — lần đầu mỗi loài tải vài MB có hiện tiến trình, các lần sau mở tức thì và
+  offline được. Danh sách tự làm mới mỗi 10 phút khi tab đang mở (có dòng
+  trạng thái), server không hỗ trợ garage thì báo rõ thay vì nút chết.
+  (`63b4caf`, `2044c5f`)
+- **Lớp bản đồ "POI server (IslePilot)"**: vẽ POI sống do admin server đặt
+  (Sanctuaries, Migration/Patrol Zones…) lên bản đồ lớn, màu theo server, tự
+  làm mới ~15 giây; cần đăng nhập token, thiếu quyền (link Discord/server tắt
+  live map) thì hiện lý do trong bảng lớp. (`5bbb840`)
+- **Thanh Thể lực trên minimap**: dải chỉ số dưới đĩa thêm hàng ⚡ khi có dữ
+  liệu (chế độ token); cửa sổ overlay tự cao thêm đúng một hàng. (`f60d567`)
+- **Icon cho thanh tab + tab Ủng hộ riêng**: 6 tab đều có icon; QR VietQR
+  chuyển từ popup Footer thành tab Ủng hộ cạnh Hướng dẫn. (`69dbf51`)
+- **Protocol `theisle-overlay://`**: bấm link `theisle-overlay://?sid=..&token=..`
+  từ bất kỳ đâu là mở app và đăng nhập luôn — cố ý không dùng scheme
+  `isle-overlay://` để không tranh với app gốc. (`aa9aa8e`)
+
+### Sửa
+
+- **Minimap "tự bỏ tích" rồi bật lại không hiện, phải mở lại app** — hai lỗi
+  thực địa: (1) Windows tự lặp hotkey khi giữ tổ hợp làm toggle đảo ngược tức
+  thì → thêm debounce 350 ms cho các phím bật/tắt (phím chỉnh độ đậm/zoom vẫn
+  lặp như chủ đích); (2) cửa sổ minimap chết (WebView2 crash) thì supervisor
+  trước đây lặp vô hạn không làm gì — giờ tự phát hiện và dựng lại trong ~5
+  giây. (`6265364`)
+
+### Thay đổi
+
+- **Hướng dẫn kết nối IslePilot viết lại**: 2 cách rõ ràng — Đăng nhập Steam
+  qua IslePilot (khuyên dùng) và cách cũ server + cookie (dự phòng); bỏ mục
+  giải thích hướng đi và câu "giữ bí mật chuỗi như mật khẩu". (`f7d7818`)
+- Tab Khủng long và Garage được giữ sống sau lần mở đầu (chuyển tab không còn
+  khựng); model 3D chỉ dựng lại khi đổi loài/màu, tạm ngừng render khi khuất
+  màn hình. (`2044c5f`)
+
 ## [1.3.0] — 2026-08-22
 
 ### Thêm
