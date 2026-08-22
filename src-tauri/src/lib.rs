@@ -33,8 +33,11 @@ pub fn run(replay_file: Option<PathBuf>) {
         // second instance would silently lose half its hotkeys. The old app
         // used a named mutex for the same reason.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // The "deep-link" feature forwards any theisle-overlay:// URL in
+            // the second instance's argv to on_open_url automatically.
             tray::show_main(app);
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -117,6 +120,33 @@ pub fn run(replay_file: Option<PathBuf>) {
     builder
         .setup(move |app| {
             settings::ensure_dirs()?;
+            // Own protocol: theisle-overlay:// (HKCU, this exe — works for
+            // dev builds too). A clicked theisle-overlay://?sid=..&token=..
+            // link logs the token in, exactly like the paste box. Distinct
+            // from the official app's isle-overlay:// scheme on purpose —
+            // we never take that one over.
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    log::warn!("deep-link register failed: {e}");
+                }
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        let url = url.to_string();
+                        if !url.contains("token=") {
+                            continue;
+                        }
+                        tray::show_main(&handle);
+                        let app = handle.clone();
+                        std::thread::spawn(move || {
+                            if let Err(e) = crate::islepilot::manual_token(&app, url) {
+                                log::warn!("deep-link token login failed: {e}");
+                            }
+                        });
+                    }
+                });
+            }
             // Upgrade pois_gateway.json in place (offline, from cache) when
             // an app update added new layers.
             fetch::ensure_pois_current();

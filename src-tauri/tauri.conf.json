@@ -30,6 +30,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["theisle-overlay"]
+      }
+    },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGMjlFRjA2Mzg0MTUyMDIKUldRQ1VrRTRCdThwejhPSDJuNGNLc1czelZ6TmthWXpIVlR6SXFDS0J0d0R3M2JDRkU1dW9Ha1UK",
       "endpoints": [
