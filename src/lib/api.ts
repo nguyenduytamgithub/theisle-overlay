@@ -108,6 +108,10 @@ export const onHotkeyFailed = (
   cb: (failed: FailedHotkey[]) => void,
 ): Promise<UnlistenFn> => listen<FailedHotkey[]>("hotkey://failed", (e) => cb(e.payload));
 
+/** The full-map hotkey just SHOWED the window — switch to the map tab. */
+export const onFullmapShow = (cb: () => void): Promise<UnlistenFn> =>
+  listen("fullmap://show", () => cb());
+
 // -------------------------------------------------------------- commands ---
 
 export interface Waypoint {

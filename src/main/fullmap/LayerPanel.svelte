@@ -111,6 +111,29 @@
 
   const fmt = (n: number) =>
     Math.round(n).toLocaleString($locale === "vi" ? "vi-VN" : "en-US");
+
+  // --- collapsible layer list ------------------------------------------------
+  // The layer list is the tallest block of the panel; folding it keeps the
+  // trail/position/waypoint info below in view. Remembered across sessions
+  // (pure UI convenience — localStorage, not the settings file).
+  const OPEN_KEY = "layerpanel.layers_open";
+  let layersOpen = $state(
+    (() => {
+      try {
+        return localStorage.getItem(OPEN_KEY) !== "false";
+      } catch {
+        return true;
+      }
+    })(),
+  );
+  function toggleLayers() {
+    layersOpen = !layersOpen;
+    try {
+      localStorage.setItem(OPEN_KEY, String(layersOpen));
+    } catch {
+      // Storage unavailable: the toggle still works for this session.
+    }
+  }
 </script>
 
 <aside
@@ -167,42 +190,65 @@
   </section>
 
   <section>
-    <h2 class="mb-1 text-sm font-semibold" style="color: var(--color-accent)">
-      {$t("layers.title")}
-    </h2>
-    {#each LAYER_ORDER as key (key)}
-      {#if available.includes(key)}
-        <label class="flex cursor-pointer items-center gap-2 py-1 text-sm">
-          <input
-            type="checkbox"
-            class="size-3.5 accent-current"
-            style="color: {LAYER_COLORS[key]}"
-            checked={layers[key] ?? true}
-            onchange={(e) => ontoggle(key, e.currentTarget.checked)}
-          />
-          <span
-            class="inline-block size-2.5 rounded-full"
-            style="background: {LAYER_COLORS[key]}"
-          ></span>
-          {$t(layerKey(key))}
-        </label>
-      {/if}
-    {/each}
-    {#if islepilotNote}
-      <p class="py-1 text-xs" style="color: var(--color-muted)">{islepilotNote}</p>
-    {/if}
-    <label
-      class="mt-1 flex cursor-pointer items-center gap-2 border-t pt-1.5 text-sm"
-      style="border-color: var(--color-border)"
+    <button
+      class="mb-1 flex w-full cursor-pointer items-center gap-1 text-sm font-semibold"
+      style="color: var(--color-accent)"
+      onclick={toggleLayers}
+      aria-expanded={layersOpen}
     >
-      <input
-        type="checkbox"
-        class="size-3.5"
-        checked={zoneLabels}
-        onchange={(e) => ontogglezonelabels(e.currentTarget.checked)}
-      />
-      {$t("layers.zone_labels")}
-    </label>
+      <svg
+        viewBox="0 0 24 24"
+        class="h-3.5 w-3.5 shrink-0 transition-transform duration-150"
+        style="transform: rotate({layersOpen ? 90 : 0}deg)"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+      <span>{$t("layers.title")}</span>
+      <span class="ml-auto text-xs font-normal" style="color: var(--color-muted)">
+        {layersOpen ? $t("layers.collapse") : $t("layers.expand")}
+      </span>
+    </button>
+    {#if layersOpen}
+      {#each LAYER_ORDER as key (key)}
+        {#if available.includes(key)}
+          <label class="flex cursor-pointer items-center gap-2 py-1 text-sm">
+            <input
+              type="checkbox"
+              class="size-3.5 accent-current"
+              style="color: {LAYER_COLORS[key]}"
+              checked={layers[key] ?? true}
+              onchange={(e) => ontoggle(key, e.currentTarget.checked)}
+            />
+            <span
+              class="inline-block size-2.5 rounded-full"
+              style="background: {LAYER_COLORS[key]}"
+            ></span>
+            {$t(layerKey(key))}
+          </label>
+        {/if}
+      {/each}
+      {#if islepilotNote}
+        <p class="py-1 text-xs" style="color: var(--color-muted)">{islepilotNote}</p>
+      {/if}
+      <label
+        class="mt-1 flex cursor-pointer items-center gap-2 border-t pt-1.5 text-sm"
+        style="border-color: var(--color-border)"
+      >
+        <input
+          type="checkbox"
+          class="size-3.5"
+          checked={zoneLabels}
+          onchange={(e) => ontogglezonelabels(e.currentTarget.checked)}
+        />
+        {$t("layers.zone_labels")}
+      </label>
+    {/if}
   </section>
 
   <section>

@@ -8,6 +8,7 @@
     getSettings,
     listenerBag,
     onFetchFinished,
+    onFullmapShow,
     onHotkeyFailed,
     onSettingsChanged,
     simulatePosition,
@@ -122,6 +123,8 @@
         }),
       );
       await bag.add(onHotkeyFailed((failed) => (failedHotkeys = failed)));
+      // Full-map hotkey mid-game: land on the map, not the last-open tab.
+      await bag.add(onFullmapShow(() => (tab = "map")));
       // The download can finish while the user is on another tab (FirstRun
       // unmounted) — the App itself must notice and unlock the map tab.
       await bag.add(onFetchFinished(() => void getDataStatus().then((d) => (dataStatus = d))));

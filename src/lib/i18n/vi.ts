@@ -48,6 +48,8 @@ export const vi = {
   "layer.animal": "Động vật",
   "layers.title": "Lớp bản đồ",
   "layers.zone_labels": "Tên vùng khoanh",
+  "layers.collapse": "Thu gọn",
+  "layers.expand": "Mở rộng",
 
   // --- waypoint ---
   "wp.title": "Điểm đánh dấu",

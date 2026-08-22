@@ -296,6 +296,11 @@ fn dispatch(app: &AppHandle, action: &str) {
                     crate::webview_mem::on_hidden(&window);
                 } else {
                     crate::tray::show_main(app);
+                    // The hotkey means "show me the MAP": mid-game the user
+                    // wants the map, not whichever tab was left open. Only
+                    // this hotkey path switches — tray/second-instance keep
+                    // the current tab.
+                    crate::events::emit_all(app, "fullmap://show", ());
                 }
             }
             None => {
@@ -309,6 +314,9 @@ fn dispatch(app: &AppHandle, action: &str) {
                                     crate::win::vis::register("main", hwnd.0 as isize);
                                 }
                                 let _ = window.set_focus();
+                                // Freshly recreated webview may not have its
+                                // listeners up yet — best effort only.
+                                crate::events::emit_all(app, "fullmap://show", ());
                             }
                             Err(e) => log::warn!("recreating main window failed: {e}"),
                         },
