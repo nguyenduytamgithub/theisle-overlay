@@ -4,8 +4,9 @@
 
 Map overlay for **The Isle: Evrima** (Gateway). Circular minimap pinned to the
 game window · full map with POIs, place names, waypoints and travel trails ·
-your dino's stats from the server's IslePilot panel · bilingual VI/EN
-interface · one-click install with auto-update.
+dino stats + Garage (Gacha) with **3D preview** from the IslePilot system, one
+Steam login **for every server** · bilingual VI/EN interface · one-click
+install with auto-update.
 
 ▶️ **Install & usage video guide** (Vietnamese):
 
@@ -19,10 +20,12 @@ interface · one-click install with auto-update.
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
   never blocks play. North stays up, with an arrow showing your direction of travel.
-- **Full map**: smooth zoom/pan, 11 toggleable layers (fresh water, water, salt licks,
+- **Full map**: smooth zoom/pan, 12 toggleable layers (fresh water, water, salt licks,
   mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
-  with per-species icons 🐗🦌🐢, region names, landmarks), with place names drawn
-  directly on the map; a clear-trail button to declutter mid-session.
+  with per-species icons 🐗🦌🐢, region names, landmarks, and a live **server
+  POI** layer from IslePilot), with place names drawn directly on the map; a
+  collapsible layer list and a clear-trail button to declutter mid-session.
+  Opening the map by hotkey lands on the map tab.
 - **3 basemap styles**: Vulnona captures (default) or the hand-drawn
   [IsleMaps](https://www.islemaps.com/) light/dark art — switch in Settings,
   applies to both the full map and the minimap. The IsleMaps art tracks a newer
@@ -33,8 +36,13 @@ interface · one-click install with auto-update.
 - **Search & navigation**: search places/waypoints, paste coordinates to jump
   there, follow mode with an edge arrow leading back to your position.
 - **Travel trail** recorded per session, with the previous session's path restored.
-- **Your dino**: growth, health, hunger, thirst and Prime progress read from the
-  server's IslePilot panel, plus a compact stats strip under the minimap.
+- **Your dino**: growth, health, hunger, thirst, stamina, Carb/Protein/Lipid
+  nutrition and Prime progress (with Vietnamese translation) from the IslePilot
+  system; compact stats strip + Prime quest card under the minimap. One Steam
+  login works on **every IslePilot server** — switch servers and the data follows.
+- **Garage (Gacha) with 3D preview**: each parked dino is a card with an
+  orbitable **3D model in its own skin colours** + growth + Park/Restore/
+  Rename/Sell; models download once and open instantly (and offline) after.
 - **Global hotkeys** rebindable in-app, bilingual UI, automatic updates.
 
 ## Install
@@ -52,12 +60,21 @@ installs; the installer fetches it if missing.
 ## Connecting "Your Dino" (IslePilot)
 
 The **Dino** tab reads your own dino's stats (growth, health, hunger, thirst,
-Prime progress) from the server's IslePilot panel. Two ways to connect — pick one:
+stamina, nutrition, Prime progress) from the IslePilot system. Two ways to
+connect:
 
-**Method 1 — Steam login (fastest):** open the Dino tab → enter the server
-link → click **Steam login** → sign in in the window that opens. Done.
+**Method 1 — Steam login via IslePilot (recommended):** open the Dino tab →
+click **Steam login** → sign in in the islepilot.eu window that opens; it
+closes itself when done. Do this **once** — no server link needed, it works on
+**every IslePilot server**, and switching servers in game follows automatically.
+This login also unlocks the **Garage (Gacha)** tab and the **server POI** map
+layer. If the window fails to catch the token, open *"Or paste the token
+manually"* and paste the token (or the whole `theisle-overlay://…` link).
 
-**Method 2 — Paste the cookie manually** (when method 1 fails):
+**Method 2 — Legacy: server link + cookie** (only when method 1 does not work;
+the cookie is stored per server, so switching servers means doing it again).
+Open the **"Legacy"** section of the login card, enter the server link and
+click Steam login there; if that still fails, paste the cookie manually:
 
 1. Open the server page in your browser and sign in with Steam there. Press
    **F12** (or right-click → **Inspect**) and open the **Application** tab
@@ -66,7 +83,7 @@ link → click **Steam login** → sign in in the window that opens. Done.
    ![Open DevTools and pick the Application tab](docs/guide-dino-1-devtools.png)
 
 2. Pick **Cookies** → the server's domain → click the **`islepilot_player`**
-   cookie → copy the whole **Value**. Treat this string like a password.
+   cookie → copy the whole **Value**.
 
    ![Copy the islepilot_player cookie value](docs/guide-dino-2-copy-cookie.jpg)
 
@@ -125,17 +142,17 @@ when new data arrives.
    **system tray** (icon next to the clock), Steam/Discord-style — left-click
    the icon to bring it back, right-click → Quit to exit fully.
 6. **Hotkeys taken by another app** are reported at startup; rebind them in Settings.
-7. **The "Your dino" feature** supports IslePilot-based servers
-   (`xxx.islepilot.eu` or `islepilot.eu/p/server-name` — see
-   [Connecting "Your Dino"](#connecting-your-dino-islepilot)). It reads data by
-   parsing the server's web pages (there is no official API), so it **can break
-   whenever IslePilot changes their markup** — the app flags it when it detects
-   a new deployment. If this part fails, the map features are **unaffected**.
+7. **The "Your dino" feature** supports IslePilot-based servers — see
+   [Connecting "Your Dino"](#connecting-your-dino-islepilot). The recommended
+   Steam-login mode reads a stable JSON API; only the legacy server + cookie
+   mode parses the server's web pages, so that path **can break whenever
+   IslePilot changes their markup** — the app flags it when it detects a new
+   deployment. If this part fails, the map features are **unaffected**.
 8. **Ask your server admins** before using it routinely — some servers have their
    own rules about third-party tools. Auto-position only turns on when the app
    detects that the server runs a live map; it locks itself off when the live map
    is disabled, and a manual choice you make is always respected.
-9. **Your panel session cookie** is encrypted with Windows DPAPI and can only be
+9. **Your login token/cookie** is encrypted with Windows DPAPI and can only be
    decrypted by your Windows account on that machine.
 10. **SmartScreen** warns on first install because the installer is not code-signed
    (certificates cost a yearly fee). Later auto-updates are not prompted again.
@@ -150,8 +167,9 @@ The game runs kernel-level Easy Anti-Cheat. This app is safe because it
   voluntarily hands over.
 - Hotkeys use `RegisterHotKey` (Windows' cooperative API), **not** a keyboard
   hook.
-- Dino stats come over **HTTPS from the server's own website** (the IslePilot
-  panel) — again, nothing to do with the game process.
+- Dino stats / Garage / 3D models come over **HTTPS from the IslePilot system**
+  (the islepilot.eu API or the server's own website) — again, nothing to do
+  with the game process.
 - Never: reading game memory, DLL injection, DirectX hooks, synthetic input,
   packet capture, auto-copying coordinates on a timer, or sharing positions
   between players.
