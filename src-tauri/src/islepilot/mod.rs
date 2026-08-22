@@ -1182,6 +1182,101 @@ pub fn overlay_map_render(app: &AppHandle) -> Result<OverlayMapRender, String> {
     })
 }
 
+/// Public skinviewer CDN (3D dino models + textures). No auth; served
+/// without CORS headers, which is exactly why the download goes through
+/// Rust instead of the webview.
+const SKINVIEWER_CDN: &str = "https://islepilot.eu/cdn/skinviewer/";
+
+/// Client for CDN downloads only: models run 3-10 MB and a slow link must
+/// NOT be cut mid-download, so unlike `http_client` there is no overall
+/// request timeout — just a connect timeout so a dead host still fails fast.
+fn cdn_client() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .user_agent("theisle-overlay/2.0 (your-dino panel reader; personal use)")
+        .connect_timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Download-and-cache one skinviewer asset; returns the local file path
+/// (under cache/skinviewer, covered by the asset-protocol scope). Already-
+/// cached files are returned without a network roundtrip. Progress streams
+/// out as `cdn://progress` events so the 3D viewer can show real numbers
+/// instead of an opaque spinner (field report: 10 MB model on ~1 MB/s).
+pub fn cdn_asset(app: &AppHandle, url: &str) -> Result<String, String> {
+    let rel = url
+        .strip_prefix(SKINVIEWER_CDN)
+        .ok_or_else(|| "invalid-url".to_string())?;
+    // The URL becomes a filesystem path: refuse anything path-traversal-ish.
+    if rel.is_empty()
+        || rel
+            .split('/')
+            .any(|seg| seg.is_empty() || seg == "." || seg == ".." || seg.contains('\\'))
+    {
+        return Err("invalid-url".into());
+    }
+    let mut dest = settings::cache_dir().join("skinviewer");
+    for seg in rel.split('/') {
+        dest.push(seg);
+    }
+    if dest.exists() {
+        return Ok(dest.to_string_lossy().into_owned());
+    }
+    let client = cdn_client()?;
+    let mut resp = client.get(url).send().map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let total = resp.content_length().unwrap_or(0);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    // Stream to a .part file, rename on success — a killed download never
+    // leaves a truncated file that would be treated as a cache hit forever.
+    // APPEND the suffix (with_extension would REPLACE .glb/.png, letting two
+    // same-stem files clobber each other's temp).
+    let tmp = dest.with_file_name(format!(
+        "{}.part",
+        dest.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    let result = (|| -> Result<(), String> {
+        use std::io::{Read, Write};
+        let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        let mut buf = [0u8; 64 * 1024];
+        let mut received: u64 = 0;
+        let mut last_emit: u64 = 0;
+        loop {
+            let n = resp.read(&mut buf).map_err(|e| e.to_string())?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+            received += n as u64;
+            // ~4 events per MB keeps the UI live without spamming IPC.
+            if received - last_emit >= 262_144 {
+                last_emit = received;
+                crate::events::emit_all(
+                    app,
+                    "cdn://progress",
+                    serde_json::json!({ "url": url, "received": received, "total": total }),
+                );
+            }
+        }
+        crate::events::emit_all(
+            app,
+            "cdn://progress",
+            serde_json::json!({ "url": url, "received": received, "total": total }),
+        );
+        Ok(())
+    })();
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    std::fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
 fn token_or_err() -> Result<token::OverlayToken, String> {
     token::get().ok_or_else(|| "not-logged-in".to_string())
 }

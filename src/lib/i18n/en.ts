@@ -11,6 +11,7 @@ export const en: Record<MsgKey, string> = {
   "tab.map": "Map",
   "tab.dino": "Your Dino",
   "tab.settings": "Settings",
+  "tab.garage": "Garage",
   "tab.guide": "Guide",
   "tab.donate": "Donate",
 
@@ -244,6 +245,17 @@ export const en: Record<MsgKey, string> = {
   "garage.error": "Command failed:",
   "garage.sold": "Sold — received {amount} {currency}",
   "garage.done": "Done!",
+  "garage.need_token":
+    "The Garage needs the one-time Steam login via IslePilot — sign in from the " +
+    "Your Dino tab. The legacy server + cookie flow cannot use the Garage.",
+  "garage.unsupported":
+    "Could not load the Garage — the server you are playing on may not support it.",
+  "garage.updated":
+    "Updated {time} · auto-refreshes every 10 minutes — press Refresh for now.",
+
+  "dino3d.loading": "Loading 3D model…",
+  "dino3d.no_model": "No 3D model for this species yet.",
+  "dino3d.error": "Could not load the 3D model — check your connection and retry.",
 
   "layer.islepilot": "Server POIs (IslePilot)",
   "poi.islepilot_discord":

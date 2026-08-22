@@ -652,6 +652,16 @@ pub async fn islepilot_overlay_map(
         .map_err(|e| e.to_string())?
 }
 
+/// Download-and-cache a skinviewer CDN asset (3D model / texture); returns
+/// the local file path for convertFileSrc. Public CDN, no auth — routed
+/// through Rust because the CDN sends no CORS headers.
+#[tauri::command]
+pub async fn islepilot_cdn_asset(app: AppHandle, url: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::islepilot::cdn_asset(&app, &url))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Garage (gacha) listing: parked dinos + server flags. Token mode only.
 #[tauri::command]
 pub async fn islepilot_garage(

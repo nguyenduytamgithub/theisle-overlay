@@ -12,6 +12,7 @@ export const vi = {
   "tab.map": "Bản đồ",
   "tab.dino": "Khủng long",
   "tab.settings": "Cài đặt",
+  "tab.garage": "Garage",
   "tab.guide": "Hướng dẫn",
   "tab.donate": "Ủng hộ",
 
@@ -258,6 +259,18 @@ export const vi = {
   "garage.error": "Lệnh thất bại:",
   "garage.sold": "Đã bán — nhận {amount} {currency}",
   "garage.done": "Xong!",
+  "garage.need_token":
+    "Garage cần đăng nhập Steam qua IslePilot (1 lần, dùng cho mọi server) — vào tab " +
+    "Khủng long để đăng nhập. Cách cũ nhập server + cookie không dùng được Garage.",
+  "garage.unsupported":
+    "Không lấy được Garage — server bạn đang chơi có thể không hỗ trợ tính năng này.",
+  "garage.updated":
+    "Cập nhật lúc {time} · tự làm mới sau mỗi 10 phút — bấm Làm mới nếu cần ngay.",
+
+  // --- xem 3D ---
+  "dino3d.loading": "Đang tải model 3D…",
+  "dino3d.no_model": "Loài này chưa có model 3D.",
+  "dino3d.error": "Không tải được model 3D — kiểm tra mạng rồi thử lại.",
 
   // --- POI IslePilot trên bản đồ ---
   "layer.islepilot": "POI server (IslePilot)",

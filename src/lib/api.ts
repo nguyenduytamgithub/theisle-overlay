@@ -413,6 +413,34 @@ export interface IslepilotOverlayMap {
 export const islepilotOverlayMap = () =>
   invoke<IslepilotOverlayMap>("islepilot_overlay_map");
 
+/**
+ * Download-and-cache a skinviewer CDN asset (3D model / texture) via Rust
+ * (the CDN sends no CORS headers); resolves to a local path for
+ * convertFileSrc.
+ */
+export const islepilotCdnAsset = (url: string) =>
+  invoke<string>("islepilot_cdn_asset", { url });
+
+export interface CdnProgress {
+  url: string;
+  received: number;
+  /** 0 when the server sent no Content-Length. */
+  total: number;
+}
+
+/** Download progress of skinviewer CDN assets (only fires for cache misses). */
+export const onCdnProgress = (
+  cb: (p: CdnProgress) => void,
+): Promise<UnlistenFn> => listen<CdnProgress>("cdn://progress", (e) => cb(e.payload));
+
+/** Fetch a cached CDN asset as raw bytes (through the asset protocol). */
+export async function fetchCdnAsset(url: string): Promise<ArrayBuffer> {
+  const path = await islepilotCdnAsset(url);
+  const resp = await fetch(convertFileSrc(path));
+  if (!resp.ok) throw new Error(`asset fetch failed: ${resp.status}`);
+  return resp.arrayBuffer();
+}
+
 /** Parked-dino record — backend shape, read defensively in the UI. */
 export type GarageDino = Record<string, unknown> & { id?: string };
 
