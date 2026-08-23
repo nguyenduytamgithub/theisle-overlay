@@ -284,12 +284,16 @@ fn dispatch(app: &AppHandle, action: &str) {
         }
         "toggle_fullmap" => match app.get_webview_window("main") {
             Some(window) => {
-                // A minimized window reports visible == true, but the user
-                // cannot see it — for them the hotkey means "bring it up",
-                // so only a window actually on screen gets hidden. Registry
-                // reads, never the blocking tauri getters, on this thread.
+                // A minimized window reports visible == true, and so does one
+                // buried BEHIND a borderless game — in both cases the user
+                // cannot see it, so for them the hotkey means "bring it up".
+                // Only a window the user is actually looking at (foreground)
+                // gets hidden; same reasoning as the minimap's main_in_front
+                // check. Registry reads, never the blocking tauri getters,
+                // on this thread.
                 let on_screen = crate::win::vis::is_visible("main").unwrap_or(false)
-                    && !crate::win::vis::is_minimized("main").unwrap_or(false);
+                    && !crate::win::vis::is_minimized("main").unwrap_or(false)
+                    && crate::win::vis::is_foreground("main");
                 if on_screen {
                     log::info!("main window: hide (hotkey)");
                     let _ = window.hide();
