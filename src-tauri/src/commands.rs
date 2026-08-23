@@ -2,7 +2,7 @@
 //! `src/lib/api.ts` on the frontend.
 
 use overlay_core::{
-    bearing_to_compass_key, pixel_to_world, world_to_pixel, MapSource,
+    bearing_to_compass_key, pixel_to_world, world_to_pixel, Calibration, MapSource,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -352,6 +352,83 @@ pub struct PoiLayer {
     pub items: Vec<PoiItem>,
 }
 
+/// One POI record -> render item, or None when it carries no usable geometry.
+///
+/// Polygon zones have NO top-level x/y (only `points`), so the world anchor is
+/// derived from the vertex centroid. Reading `points` BEFORE the x/y lookup is
+/// the whole point: the old order dropped every polygon zone before it ever
+/// looked at them.
+fn poi_render_item(item: &Value, kind: &str, cal: &Calibration) -> Option<PoiItem> {
+    let shape = item.get("shape").and_then(|s| s.as_str());
+    // Vertices in world cm first — they double as the anchor for polygons.
+    let points_cm: Option<Vec<(f64, f64)>> = (shape == Some("polygon"))
+        .then(|| item.get("points").and_then(|p| p.as_array()))
+        .flatten()
+        .map(|pts| {
+            pts.iter()
+                .filter_map(|p| Some((p.get(0)?.as_f64()?, p.get(1)?.as_f64()?)))
+                .collect::<Vec<_>>()
+        })
+        .filter(|pts: &Vec<_>| pts.len() >= 3);
+
+    let (x, y) = match (
+        item.get("x").and_then(|v| v.as_f64()),
+        item.get("y").and_then(|v| v.as_f64()),
+    ) {
+        (Some(x), Some(y)) => (x, y),
+        // Vertex centroid is plenty for an anchor (and for name placement).
+        _ => {
+            let pts = points_cm.as_ref()?;
+            let n = pts.len() as f64;
+            (
+                pts.iter().map(|p| p.0).sum::<f64>() / n,
+                pts.iter().map(|p| p.1).sum::<f64>() / n,
+            )
+        }
+    };
+    let (px, py) = world_to_pixel(x, y, cal);
+
+    // Same metres->basemap-pixels factor the original layers.py used.
+    let radius_px = (shape == Some("circle"))
+        .then(|| item.get("radius_m").and_then(|r| r.as_f64()))
+        .flatten()
+        .map(|r_m| r_m * 100.0 / 1000.0 / cal.span_y() * cal.image_width_px as f64)
+        .filter(|r| *r > 0.0);
+    let points_px = points_cm
+        .map(|pts| pts.iter().map(|p| world_to_pixel(p.0, p.1, cal)).collect::<Vec<_>>());
+
+    let (label_px, label_py) = if kind == "zone" {
+        match &points_px {
+            Some(pts) => {
+                let n = pts.len() as f64;
+                (
+                    Some(pts.iter().map(|p| p.0).sum::<f64>() / n),
+                    Some(pts.iter().map(|p| p.1).sum::<f64>() / n),
+                )
+            }
+            None => (Some(px), Some(py)),
+        }
+    } else {
+        (None, None)
+    };
+
+    Some(PoiItem {
+        label: item
+            .get("label")
+            .and_then(|l| l.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        px,
+        py,
+        x_cm: x,
+        y_cm: y,
+        radius_px,
+        points_px,
+        label_px,
+        label_py,
+    })
+}
+
 /// POI layers with every coordinate already converted to basemap pixels —
 /// the frontend renders, it never transforms.
 #[tauri::command]
@@ -370,70 +447,16 @@ pub fn get_pois_render(state: State<AppState>) -> Result<Vec<PoiLayer>, String> 
             .and_then(|k| k.as_str())
             .unwrap_or("point")
             .to_string();
-        let mut items = Vec::new();
-        for item in layer
+        let items = layer
             .get("items")
             .and_then(|i| i.as_array())
-            .unwrap_or(&Vec::new())
-        {
-            let (Some(x), Some(y)) = (
-                item.get("x").and_then(|v| v.as_f64()),
-                item.get("y").and_then(|v| v.as_f64()),
-            ) else {
-                continue;
-            };
-            let (px, py) = world_to_pixel(x, y, cal);
-            let shape = item.get("shape").and_then(|s| s.as_str());
-            // Same metres->basemap-pixels factor the original layers.py used.
-            let radius_px = (shape == Some("circle"))
-                .then(|| item.get("radius_m").and_then(|r| r.as_f64()))
-                .flatten()
-                .map(|r_m| r_m * 100.0 / 1000.0 / cal.span_y() * cal.image_width_px as f64)
-                .filter(|r| *r > 0.0);
-            let points_px = (shape == Some("polygon"))
-                .then(|| item.get("points").and_then(|p| p.as_array()))
-                .flatten()
-                .map(|pts| {
-                    pts.iter()
-                        .filter_map(|p| {
-                            let x = p.get(0)?.as_f64()?;
-                            let y = p.get(1)?.as_f64()?;
-                            Some(world_to_pixel(x, y, cal))
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .filter(|pts: &Vec<_>| pts.len() >= 3);
-            let (label_px, label_py) = if kind == "zone" {
-                match &points_px {
-                    // Vertex centroid is plenty for name placement.
-                    Some(pts) => {
-                        let n = pts.len() as f64;
-                        (
-                            Some(pts.iter().map(|p| p.0).sum::<f64>() / n),
-                            Some(pts.iter().map(|p| p.1).sum::<f64>() / n),
-                        )
-                    }
-                    None => (Some(px), Some(py)),
-                }
-            } else {
-                (None, None)
-            };
-            items.push(PoiItem {
-                label: item
-                    .get("label")
-                    .and_then(|l| l.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                px,
-                py,
-                x_cm: x,
-                y_cm: y,
-                radius_px,
-                points_px,
-                label_px,
-                label_py,
-            });
-        }
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| poi_render_item(item, &kind, cal))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         out.push(PoiLayer {
             key: key.clone(),
             kind,
@@ -743,4 +766,91 @@ pub fn islepilot_state(app: AppHandle) -> crate::islepilot::IslepilotState {
 #[tauri::command]
 pub fn simulate_position(app: AppHandle, x: f64, y: f64, z: f64) {
     pipeline::ingest_sample(&app, x, y, z);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn cal() -> &'static Calibration {
+        Calibration::gateway()
+    }
+
+    /// The regression this module exists for: zone polygons carry `points`
+    /// and NO top-level x/y, and used to be dropped before `points` was read.
+    #[test]
+    fn polygon_zone_without_xy_still_renders() {
+        let item = json!({
+            "shape": "polygon",
+            "label": "Swamp",
+            "points": [[228_100.0, -31_000.0], [361_000.0, -31_000.0],
+                       [361_000.0, 141_000.0], [228_100.0, 141_000.0]],
+        });
+        let out = poi_render_item(&item, "zone", cal()).expect("polygon must survive");
+        let pts = out.points_px.expect("points_px");
+        assert_eq!(pts.len(), 4);
+        // Anchor and label both sit on the vertex centroid (the two are
+        // computed either side of the projection, so compare with a tolerance).
+        assert!((out.px - out.label_px.unwrap()).abs() < 1e-6);
+        assert!((out.py - out.label_py.unwrap()).abs() < 1e-6);
+        let (cx, cy) = world_to_pixel(294_550.0, 55_000.0, cal());
+        assert!((out.px - cx).abs() < 1e-6 && (out.py - cy).abs() < 1e-6);
+        assert!(out.radius_px.is_none());
+    }
+
+    #[test]
+    fn circle_zone_is_unchanged() {
+        let item = json!({
+            "shape": "circle", "label": "Tide Beach",
+            "x": -37_105.64, "y": 450_363.68, "radius_m": 625.72,
+        });
+        let out = poi_render_item(&item, "zone", cal()).expect("circle must survive");
+        assert_eq!((out.x_cm, out.y_cm), (-37_105.64, 450_363.68));
+        assert!(out.radius_px.unwrap() > 0.0);
+        assert!(out.points_px.is_none());
+        // Circle label sits at the centre.
+        assert_eq!((out.label_px, out.label_py), (Some(out.px), Some(out.py)));
+    }
+
+    /// Under three vertices is not a polygon; with no x/y there is nothing
+    /// left to anchor on, so the item is still skipped.
+    #[test]
+    fn degenerate_polygon_without_xy_is_skipped() {
+        let item = json!({
+            "shape": "polygon", "label": "sliver",
+            "points": [[0.0, 0.0], [1000.0, 1000.0]],
+        });
+        assert!(poi_render_item(&item, "zone", cal()).is_none());
+    }
+
+    /// Against the real on-disk database, not a fixture: every zone item must
+    /// survive into a render item. Before the fix 48 of them silently did not.
+    ///
+    /// `cargo test -- --ignored real_pois`
+    #[test]
+    #[ignore = "needs the downloaded pois_gateway.json"]
+    fn real_pois_lose_no_zone() {
+        let text = std::fs::read_to_string(settings::pois_path()).unwrap();
+        let raw: Value = serde_json::from_str(&text).unwrap();
+        for (key, layer) in raw["layers"].as_object().unwrap() {
+            let kind = layer["kind"].as_str().unwrap();
+            if kind != "zone" {
+                continue;
+            }
+            let items = layer["items"].as_array().unwrap();
+            let rendered = items
+                .iter()
+                .filter(|i| poi_render_item(i, kind, cal()).is_some())
+                .count();
+            assert_eq!(rendered, items.len(), "{key} lost zones");
+        }
+    }
+
+    #[test]
+    fn point_poi_gets_no_zone_label_anchor() {
+        let item = json!({ "label": "", "x": 1000.0, "y": 2000.0 });
+        let out = poi_render_item(&item, "point", cal()).expect("point must survive");
+        assert_eq!((out.label_px, out.label_py), (None, None));
+    }
 }

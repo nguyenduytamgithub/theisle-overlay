@@ -269,6 +269,154 @@ fn parse_vulnona_text(txt: &str, kind: &str) -> Vec<Value> {
         .collect()
 }
 
+/// Zone records from one `dir <name>` ... `dirEnd <name>` section of Vulnona's
+/// data_1.txt. Same output shape as `parse_zones`, so both sources merge.
+///
+/// The section grammar (verified against Gateway_v0.21.7 data_1.txt):
+///
+/// ```text
+/// dir\tMigration
+/// #---
+/// line|path|circle \t extra \t <Name>[:mz] \t <flags: "mz" | "mz mmz">
+/// <x>,<y>[,extra fields...]      <- vertices, until the next record
+/// ...
+/// dirEnd\tMigration
+/// ```
+///
+/// Vertex lines carry trailing junk the map editor needs and we do not: draw
+/// commands (`M`, `N`), label hints (`-97,252,,60,-5,`) and radius overrides
+/// (`R=15/6/-10`) — only the first two comma fields are coordinates, in
+/// thousand-cm units and already on OUR axis convention (x = Lat, y = Long),
+/// so unlike myislemap they need no swap.
+///
+/// Fail-soft like every other parser here: a missing or reformatted section
+/// yields an empty Vec, never an error.
+fn parse_vulnona_zones(txt: &str, dir: &str) -> Vec<Value> {
+    // Scoping to the section is not cosmetic: "Mudflats" exists in both
+    // `dir Migration` and `dir Sanctuary`. Scanned line-wise because the file
+    // is CRLF and `lines()` is what strips the trailing \r.
+    let open = format!("dir\t{dir}");
+    let close = format!("dirEnd\t{dir}");
+    let mut in_section = false;
+
+    let coords = |line: &str| -> Option<(f64, f64)> {
+        let mut f = line.split(',');
+        Some((
+            f.next()?.trim().parse::<f64>().ok()? * 1000.0,
+            f.next()?.trim().parse::<f64>().ok()? * 1000.0,
+        ))
+    };
+
+    let mut zones = Vec::new();
+    let mut record: Option<(String, String)> = None; // (kind, label)
+    let mut verts: Vec<Value> = Vec::new();
+
+    // A record ends when the next one starts (or the section does).
+    let mut flush = |record: &mut Option<(String, String)>, verts: &mut Vec<Value>| {
+        let Some((kind, label)) = record.take() else {
+            verts.clear();
+            return;
+        };
+        if kind == "circle" {
+            // Vulnona circles are ellipses: cx,cy,rx,ry,rot. rx is close
+            // enough for a zone outline, and matches myislemap's radii.
+            if let Some(v) = verts.first() {
+                let (cx, cy) = (v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0));
+                // 1 Vulnona unit = 1000 cm = 10 m.
+                let radius_m = v.get(2).and_then(|r| r.as_f64()).unwrap_or(0.0) * 10.0;
+                if radius_m > 0.0 {
+                    zones.push(json!({
+                        "shape": "circle", "label": label,
+                        "x": cx, "y": cy, "radius_m": radius_m,
+                    }));
+                }
+            }
+        } else {
+            // The editor closes rings explicitly; the renderer does it itself.
+            if verts.len() > 1 && verts.first() == verts.last() {
+                verts.pop();
+            }
+            if verts.len() >= 3 {
+                zones.push(json!({ "shape": "polygon", "label": label, "points": verts.clone() }));
+            }
+        }
+        verts.clear();
+    };
+
+    for line in txt.lines() {
+        if line == open {
+            in_section = true;
+            continue;
+        }
+        if line == close {
+            break;
+        }
+        if !in_section || line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        let mut cols = line.split('\t');
+        let head = cols.next().unwrap_or_default();
+        if matches!(head, "line" | "path" | "circle") {
+            flush(&mut record, &mut verts);
+            let _group = cols.next(); // "extra"
+            let name = cols.next().unwrap_or_default().trim();
+            // Names carry a layer suffix ("Delta (MMZ):mz"), but not always
+            // ("Lagoon" has none).
+            let label = name.rsplit_once(':').map_or(name, |(n, _)| n).trim();
+            if label.is_empty() {
+                record = None;
+            } else {
+                record = Some((head.to_string(), label.to_string()));
+            }
+            continue;
+        }
+        if head.starts_with("dir") {
+            flush(&mut record, &mut verts);
+            continue;
+        }
+        if let Some((kind, _)) = &record {
+            let Some((x, y)) = coords(line) else { continue };
+            if kind == "circle" {
+                // cx,cy,rx,ry,rot — keep rx (still in thousand-cm units).
+                let rx = line
+                    .split(',')
+                    .nth(2)
+                    .and_then(|r| r.trim().parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                verts.push(json!([x, y, rx]));
+            } else {
+                verts.push(json!([x, y]));
+            }
+        }
+    }
+    flush(&mut record, &mut verts);
+    zones
+}
+
+/// Two sources describe the same zones under slightly different names
+/// ("Highlands" vs "Highland (MMZ)"), so a plain label match would double
+/// them up. `primary` wins on geometry; `extra` only contributes zones the
+/// primary source does not have at all.
+fn merge_zones_by_name(primary: Vec<Value>, extra: Vec<Value>) -> Vec<Value> {
+    fn key(zone: &Value) -> String {
+        let label = zone.get("label").and_then(|l| l.as_str()).unwrap_or("");
+        let mut k: String = label
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+        // "(MMZ)" is a tag, not part of the name; plurals differ per source.
+        if let Some(stripped) = k.strip_suffix("mmz") {
+            k = stripped.to_string();
+        }
+        k.strip_suffix('s').unwrap_or(&k).to_string()
+    }
+    let seen: std::collections::HashSet<String> = primary.iter().map(key).collect();
+    let mut out = primary;
+    out.extend(extra.into_iter().filter(|z| !seen.contains(&key(z))));
+    out
+}
+
 // ------------------------------------------------------------------ fetch ---
 
 #[derive(Clone, Serialize)]
@@ -703,7 +851,7 @@ pub fn run(app: &AppHandle, force: bool) -> FetchFinished {
 /// Bump when convert() emits new layers/fields — ensure_pois_current()
 /// re-converts old on-disk data (offline, from the cache) on upgrade.
 /// v3: optional "animal" layer (islemaps.com sightings).
-pub const POIS_VERSION: u64 = 3;
+pub const POIS_VERSION: u64 = 4;
 
 /// Re-run the cache -> pois_gateway.json conversion when the on-disk file
 /// predates the current POIS_VERSION and the cached sources are still
@@ -821,6 +969,13 @@ fn convert() -> Result<(), String> {
     let water = parse_vulnona_text(&water_txt, "water");
     let regions = parse_vulnona_text(&water_txt, "area");
     let landmarks = parse_vulnona_text(&water_txt, "land");
+    // The two zone sources overlap but neither is complete: myislemap has
+    // "Southern Beach", Vulnona has "Lagoon". Keep myislemap's geometry and
+    // top up with whatever only Vulnona knows about.
+    let migration = merge_zones_by_name(
+        zones.get("migration").cloned().unwrap_or_default(),
+        parse_vulnona_zones(&water_txt, "Migration"),
+    );
     // Optional: the islemaps sighting chunk may be missing (fetch failed or
     // never ran) — then the animal layer is simply absent from the output.
     let animals = read("islemaps-sightings.js")
@@ -837,7 +992,7 @@ fn convert() -> Result<(), String> {
             "saltlick": { "kind": "point", "items": points.get("saltrock").cloned().unwrap_or_default() },
             "mudwallow": { "kind": "point", "items": points.get("mudwallow").cloned().unwrap_or_default() },
             "sanctuary": { "kind": "zone", "items": zones.get("sanctuary").cloned().unwrap_or_default() },
-            "migration": { "kind": "zone", "items": zones.get("migration").cloned().unwrap_or_default() },
+            "migration": { "kind": "zone", "items": migration },
             "patrol": { "kind": "zone", "items": zones.get("patrol").cloned().unwrap_or_default() },
             "food": { "kind": "zone", "items": ai_zones },
             "region": { "kind": "label", "items": regions },
@@ -878,8 +1033,8 @@ fn convert() -> Result<(), String> {
                   "url": "https://myislemap.com/map-data.js", "credit": "myislemap.com" },
                 { "layers": ["food"], "url": "https://myislemap.com/map-ai-spawn-zones.js",
                   "credit": "myislemap.com (datamined AI spawn zones)" },
-                { "layers": ["water"], "url": format!("{base}/data_1.txt"),
-                  "credit": "VulnonaMAP (Coco.N)" },
+                { "layers": ["water", "region", "landmark", "migration"],
+                  "url": format!("{base}/data_1.txt"), "credit": "VulnonaMAP (Coco.N)" },
                 { "layers": ["animal"], "url": "https://www.islemaps.com/ (map bundle)",
                   "credit": "IsleMaps.com (Pont & Emeara), community-collected AI spawn sightings" },
             ],
@@ -959,9 +1114,73 @@ mod tests {
         assert_eq!(points["saltrock"].len(), 24, "saltlick");
         assert_eq!(points["mudwallow"].len(), 36, "mudwallow");
         assert_eq!(zones["sanctuary"].len(), 7, "sanctuary");
-        assert_eq!(zones["migration"].len(), 12, "migration");
+        assert_eq!(zones["migration"].len(), 12, "migration (myislemap)");
         assert_eq!(zones["patrol"].len(), 61, "patrol");
         assert_eq!(ai.len(), 52, "food");
+
+        // Vulnona lists its own 12 migration zones; the two sets differ by one
+        // each way ("Lagoon" here, "Southern Beach" there), so the union is 13.
+        let vuln = parse_vulnona_zones(&water_txt, "Migration");
+        assert_eq!(vuln.len(), 12, "migration (vulnona)");
+        let merged = merge_zones_by_name(zones["migration"].clone(), vuln);
+        assert_eq!(merged.len(), 13, "migration (merged)");
+        assert!(merged.iter().any(|z| z["label"] == "Lagoon"));
+        assert!(merged.iter().any(|z| z["label"] == "Southern Beach"));
+    }
+
+    /// Covers every shape the Migration section actually uses: a suffixed
+    /// name, a bare name, a first vertex padded with label hints, an explicit
+    /// closing vertex, and a circle. The trailing Sanctuary block proves the
+    /// section scope holds — "Mudflats" exists in both.
+    #[test]
+    fn vulnona_zone_section_is_scoped_and_tolerates_row_junk() {
+        let txt = "dir\tMigration\n#---\n\
+            line\textra\tEast Jungle:mz\tmz\n\
+            -97,252,,60,-5,\n-97,326,\n69,326,\n69,252,\n-97,252,\n#---\n\
+            path\textra\tLagoon\tmz mmz\n\
+            395,-181,M\n391,-200,\n381,-211,R=15/6/-10\n#---\n\
+            circle\textra\tMudflats:mz\tmz\n154,-290,65,70,5,\n#---\n\
+            dirEnd\tMigration\n#---\n\
+            dir\tSanctuary\n#---\n\
+            circle\textra\tSwamp:sanc\tsanc\n282,28,10,8,16,\n#---\n\
+            dirEnd\tSanctuary\n";
+        let out = parse_vulnona_zones(txt, "Migration");
+        assert_eq!(out.len(), 3, "Sanctuary must not leak in");
+
+        assert_eq!(out[0]["label"], "East Jungle");
+        assert_eq!(out[0]["shape"], "polygon");
+        // The duplicated closing vertex is dropped.
+        assert_eq!(out[0]["points"].as_array().unwrap().len(), 4);
+        assert_eq!(out[0]["points"][0], json!([-97_000.0, 252_000.0]));
+
+        assert_eq!(out[1]["label"], "Lagoon", "a name with no ':' suffix");
+        assert_eq!(out[1]["points"].as_array().unwrap().len(), 3);
+
+        assert_eq!(out[2]["shape"], "circle");
+        assert_eq!(out[2]["x"], 154_000.0);
+        assert_eq!(out[2]["radius_m"], 650.0, "rx 65 units = 650 m");
+    }
+
+    #[test]
+    fn vulnona_zones_are_empty_when_the_section_is_missing() {
+        assert!(parse_vulnona_zones("dir\tWater\n#---\ndirEnd\tWater\n", "Migration").is_empty());
+    }
+
+    /// The same zone under two spellings must not appear twice.
+    #[test]
+    fn merge_keeps_primary_geometry_and_only_adds_unknown_zones() {
+        let primary = vec![
+            json!({ "shape": "polygon", "label": "Highlands", "points": [[0, 0]] }),
+            json!({ "shape": "polygon", "label": "Southern Beach", "points": [[1, 1]] }),
+        ];
+        let extra = vec![
+            json!({ "shape": "polygon", "label": "Highland (MMZ)", "points": [[9, 9]] }),
+            json!({ "shape": "polygon", "label": "Lagoon", "points": [[2, 2]] }),
+        ];
+        let out = merge_zones_by_name(primary, extra);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0]["points"][0], json!([0, 0]), "primary geometry wins");
+        assert_eq!(out[2]["label"], "Lagoon");
     }
 
     #[test]
