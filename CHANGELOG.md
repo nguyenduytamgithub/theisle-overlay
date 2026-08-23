@@ -4,6 +4,25 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.4.3] — 2026-08-23
+
+### Sửa
+
+- **Vùng khoanh hình đa giác không hiện trên bản đồ**: tầng render bắt mọi điểm phải có
+  toạ độ tâm `x`/`y`, nhưng vùng đa giác chỉ mang danh sách đỉnh `points` — nên bị loại
+  bỏ trước cả khi đọc tới đỉnh. Kết quả: **vùng di cư chỉ hiện 4/12** (mất Swamp,
+  South Plains, NE Cape, Southern Beach, Highlands, Northern Jungle, East Jungle,
+  Delta), **khu bảo tồn 1/7**, **vùng tuần tra AI 27/61**. Giờ tâm vùng được tính
+  từ trọng tâm các đỉnh, mọi vùng đều vẽ đủ. Lỗi có từ bản Tauri đầu tiên. (`39c42e8`)
+
+### Thêm
+
+- **Vùng di cư Lagoon**: myislemap và Vulnona mỗi bên thiếu một vùng của bên kia,
+  nên lớp vùng di cư giờ hợp cả hai nguồn (12 → 13 vùng): giữ nguyên hình dạng từ
+  myislemap, bổ sung `Lagoon` đọc từ mục `dir Migration` của Vulnona `data_1.txt`.
+  Tên trùng được khớp chuẩn hoá nên `Highlands` và `Highland (MMZ)` không bị
+  nhân đôi. Dữ liệu trên máy đã cài tự nâng cấp offline từ cache ở lần mở kế tiếp. (`39c42e8`)
+
 ## [1.4.2] — 2026-08-23
 
 ### Sửa
