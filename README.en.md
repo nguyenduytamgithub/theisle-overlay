@@ -16,6 +16,8 @@ install with auto-update.
 
 ![Full map with place names and POI layers](docs/screenshot-fullmap.png)
 
+![Your Dino tab with stats and Prime progress](docs/screenshot-dino.png)
+
 ## Features
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it

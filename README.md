@@ -16,6 +16,8 @@ Việt/Anh · cài một lần, tự cập nhật.
 
 ![Bản đồ lớn với tên địa danh và các lớp POI](docs/screenshot-fullmap.png)
 
+![Tab Khủng long của bạn với chỉ số và Prime progress](docs/screenshot-dino.png)
+
 ## Tính năng
 
 - **Minimap tròn** bám góc cửa sổ game, chuột bấm xuyên qua, không cản trở lúc chơi.
