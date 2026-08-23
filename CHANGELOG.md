@@ -4,6 +4,16 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.4.2] — 2026-08-23
+
+### Sửa
+
+- **Hotkey mở bản đồ khi cửa sổ bị game che**: bản đồ lớn nằm sau game (borderless
+  fullscreen) vẫn được Windows coi là "đang hiện", nên bấm hotkey lần đầu bị hiểu
+  ngược thành đóng bản đồ — thấy "nháy" một cái và phải bấm lần hai mới mở được.
+  Giờ chỉ khi bản đồ lớn thực sự ở foreground (bạn đang nhìn nó) hotkey mới đóng;
+  bị che hoặc thu nhỏ thì bấm một lần là mở lên ngay. (`b1f15c6`)
+
 ## [1.4.1] — 2026-08-23
 
 ### Thêm

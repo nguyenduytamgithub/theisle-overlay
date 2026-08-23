@@ -4815,7 +4815,7 @@ dependencies = [
 
 [[package]]
 name = "theisle-overlay"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "chrono",
  "image",
