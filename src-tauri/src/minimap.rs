@@ -325,9 +325,15 @@ fn spawn_supervisor(app: AppHandle) {
                     crate::webview_mem::on_shown(&window);
                     if window.show().is_ok() {
                         effective_prev = true;
-                        // No 2 s topmost gap on an auto-show.
+                        // Unconditional, not `ensure_topmost`: ShowWindow
+                        // restores the z-position the window HAD when it was
+                        // hidden, and the game (or another overlay) may have
+                        // climbed above it inside the topmost band since —
+                        // the style bit is still set, so the checked variant
+                        // would be a no-op and the overlay would come back
+                        // BEHIND the game ("bật lại không hiện" field report).
                         if let Some(h) = vis::hwnd("minimap") {
-                            overlay::ensure_topmost(h);
+                            overlay::force_topmost(h);
                         }
                         crate::pipeline::resync(&app);
                         last_rect = None; // re-anchor right away
@@ -346,7 +352,11 @@ fn spawn_supervisor(app: AppHandle) {
                 // The OS hid us (or a show was lost) while we believe we are
                 // on screen — re-apply idempotently, no resync spam.
                 crate::webview_mem::on_shown(&window);
-                let _ = window.show();
+                if window.show().is_ok() {
+                    if let Some(h) = vis::hwnd("minimap") {
+                        overlay::force_topmost(h);
+                    }
+                }
             }
 
             if cur.click_through != prev.click_through {

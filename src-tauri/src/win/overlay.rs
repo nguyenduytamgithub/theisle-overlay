@@ -37,7 +37,30 @@ pub fn set_click_through(raw: isize, enabled: bool) {
     }
 }
 
-/// Re-assert topmost if lost — the game grabs it back on focus changes.
+/// Unconditional HWND_TOPMOST — for the moment a hidden overlay is shown
+/// again. `ensure_topmost` only reads the WS_EX_TOPMOST style bit, which
+/// stays SET while another topmost window (the game flipping to borderless /
+/// exclusive fullscreen, a Steam or Discord overlay) sits above us inside
+/// the topmost band; ShowWindow then restores the OLD z-position, i.e.
+/// behind the game, and the checked variant never repairs it. One
+/// SetWindowPos per show is cheap; the periodic poll keeps the style check.
+pub fn force_topmost(raw: isize) {
+    unsafe {
+        let _ = SetWindowPos(
+            hwnd(raw),
+            Some(HWND_TOPMOST),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+    }
+}
+
+/// Re-assert topmost if the STYLE BIT was lost — the game grabs it back on
+/// focus changes. Blind to z-order changes within the topmost band; see
+/// `force_topmost` for the on-show case.
 ///
 /// Checks before setting: calling SetWindowPos unconditionally every 2 s
 /// forces a needless DWM repaint each time.

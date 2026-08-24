@@ -71,6 +71,12 @@
 
   let mapEl: HTMLDivElement;
   let map: L.Map | undefined;
+  // Set by onDestroy. The onMount loader awaits several IPC calls; a tab
+  // switch (or a basemap remount via {#key}) during any of them tears `map`
+  // down, so every resume re-checks this before touching the map. Field
+  // crash: "Cannot read properties of undefined (reading 'on')" on a slow
+  // first load.
+  let destroyed = false;
   let layerGroups: Record<string, L.LayerGroup> = {};
   // Image overlays (fresh water). Separate from layerGroups so POI rebuilds
   // (after a background top-up) never tear them down.
@@ -557,6 +563,9 @@
     (async () => {
       settings = await getSettings();
       const info = await getMapInfo();
+      // Unmounted meanwhile: a Leaflet map built now would sit on a detached
+      // element and never be removed (onDestroy already ran).
+      if (destroyed) return;
       const W = info.imageWidthPx;
       const H = info.imageHeightPx;
       pxPerMY = info.pxPerMY;
@@ -576,6 +585,7 @@
         [0, W],
       ];
       const urls = await getBasemapUrls();
+      if (destroyed || !map) return;
       L.imageOverlay(urls.fullmap, bounds).addTo(map);
       map.fitBounds(bounds);
       map.setMaxBounds([
@@ -601,6 +611,9 @@
       drawTrail(previousTrail, await getPreviousTrail(), true);
       drawTrail(currentTrail, await getCurrentTrail(), false);
       await refreshWaypoints();
+      // The helpers above all guard `map` themselves; the handlers below do
+      // not, and this is the point the field crash resumed at.
+      if (destroyed || !map) return;
 
       map.on("contextmenu", (e: L.LeafletMouseEvent) => {
         pendingPixel = { px: e.latlng.lng, py: -e.latlng.lat };
@@ -664,6 +677,7 @@
   });
 
   onDestroy(() => {
+    destroyed = true;
     try {
       map?.remove();
     } catch {

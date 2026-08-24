@@ -8,6 +8,7 @@
     getSettings,
     listenerBag,
     onFetchFinished,
+    onSettingsChanged,
     patchSettings,
     setBasemapSource,
     startFetchData,
@@ -26,6 +27,11 @@
     const bag = listenerBag();
     void getSettings().then((s) => (settings = s));
     void bag.add(onFetchFinished(() => (refetching = false)));
+    // Hotkeys (Ctrl+Alt+M etc.) patch settings from Rust while this screen
+    // is open. Without mirroring the broadcast, the "visible" checkbox kept
+    // its stale tick after a hotkey hide, and the click meant to turn the
+    // minimap back on actually sent visible:false (field report).
+    void bag.add(onSettingsChanged((s) => (settings = s)));
     return () => bag.dispose();
   });
 
