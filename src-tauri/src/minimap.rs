@@ -247,6 +247,9 @@ fn spawn_supervisor(app: AppHandle) {
     std::thread::spawn(move || {
         const TICK_MS: u64 = 250;
         let mut prev = snapshot(&app);
+        // See the comment at the size check below: the window's build height
+        // cannot be trusted to match `prev`, so the first tick applies it.
+        let mut size_applied = false;
         let mut presence = GamePresence::new();
         let mut unfocused_ticks: u8 = 0;
         // The window was created hidden; the first tick decides the show.
@@ -349,7 +352,17 @@ fn spawn_supervisor(app: AppHandle) {
             if cur.click_through != prev.click_through {
                 let _ = window.set_ignore_cursor_events(cur.click_through);
             }
-            if cur.size_px != prev.size_px || cur.window_h() != prev.window_h() {
+            // `size_applied` guards a startup race: create() builds the window
+            // from a snapshot taken BEFORE the first IslePilot poll (no stamina
+            // row, no quest card), but `prev` below is snapshotted later — when
+            // the webview signals ready, or after the 5 s fallback. If the first
+            // poll lands in between, prev already carries the TALLER height, the
+            // `!=` never trips, and the window stays at its build height forever
+            // while the canvas draws the full one: the Growth line and the quest
+            // card get cut off at the window edge. Applying the size once on the
+            // first tick makes the window match the canvas no matter the timing.
+            if !size_applied || cur.size_px != prev.size_px || cur.window_h() != prev.window_h() {
+                size_applied = true;
                 let _ = window.set_size(LogicalSize::new(cur.size_px, cur.window_h()));
                 last_rect = None;
             }
