@@ -4,7 +4,7 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
-## [Chưa phát hành]
+## [1.5.1] — 2026-08-24
 
 ### Sửa
 
