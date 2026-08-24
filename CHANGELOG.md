@@ -4,6 +4,32 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.5.0] — 2026-08-24
+
+### Thêm
+
+- **Số liệu sử dụng ẩn danh**: app gửi một ping mỗi lần khởi động tới backend riêng
+  trên Cloudflare Workers, để biết có bao nhiêu người còn dùng, phiên bản nào còn
+  chạy ngoài thực tế, và **tính năng nào hay được mở** — cơ sở để quyết định nên tối
+  ưu chỗ nào thay vì đoán. Số lần dùng từng tính năng được đếm cục bộ trong bộ nhớ,
+  ghi xuống đĩa mỗi 60 giây (app overlay hay bị tắt cứng hơn là đóng sạch) rồi gửi
+  kèm ping lần mở kế tiếp — nên **một lần mở app chỉ tốn đúng một request**, không
+  phải một request mỗi lần bấm. Những gì được gửi: một mã cài đặt ngẫu nhiên, phiên
+  bản app, số hiệu bản Windows, ngôn ngữ giao diện, và các bộ đếm đó. **Không gửi địa
+  chỉ IP** — máy chủ chỉ lấy mã quốc gia từ biên Cloudflare rồi bỏ địa chỉ đi; không
+  gửi vị trí trong game; không gửi tên tài khoản Windows. Tắt được bất cứ lúc nào ở
+  **Cài đặt → Số liệu sử dụng & phản hồi**. Mất mạng hay backend chết thì app im lặng
+  bỏ qua, không hiện lỗi và không chờ. (`ac28f61`)
+- **Gửi phản hồi ngay trong app**: mục mới ở cuối màn Cài đặt — chọn Lỗi / Góp ý /
+  Khác, mô tả vấn đề, để lại cách liên hệ nếu muốn nhận trả lời. Gửi trùng đúng một
+  nội dung nhiều lần chỉ tính một. Nút này không phụ thuộc công tắc số liệu ở trên:
+  bấm Gửi là đồng ý gửi đúng tin nhắn đó, không hơn. (`ac28f61`)
+- **Báo lỗi tự động**: khi app hoặc giao diện gặp lỗi không bắt được, một báo cáo gọn
+  (loại lỗi + vài dòng stack đầu) được gửi để sửa. Đường dẫn Windows được thay
+  `C:\Users\<tên>\` bằng `%USERPROFILE%\` **ngay trên máy bạn trước khi gửi**, nên tên
+  tài khoản không bao giờ rời khỏi máy. Tối đa 3 báo cáo mỗi lần chạy và 10 mỗi ngày
+  — app kẹt vòng lặp lỗi cũng không thể spam. (`ac28f61`)
+
 ## [1.4.3] — 2026-08-23
 
 ### Sửa
