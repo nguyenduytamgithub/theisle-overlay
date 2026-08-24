@@ -96,16 +96,34 @@ function bars(rows, cls, total) {
 // Inline SVG, no chart library. A CDN script would be one more origin to
 // trust on a page that displays private numbers, and one more thing that can
 // break long after anyone remembers why it was there.
+//
+// The series ends YESTERDAY, not today: stat_daily is written by the nightly
+// cron and only ever covers complete days, so today has no row. Plotting it
+// would append a permanent zero -- the line would dive to the floor at the
+// right edge every single day and "gan nhat" would always read 0.
 function spark(series, metric, days, today) {
   const byDay = new Map(series.filter((r) => r.metric === metric).map((r) => [r.utc_day, r.value]));
+  const lastDay = today - 1;
+  const firstDay = lastDay - days + 1;
+
+  // A missing row is not a row saying zero. Before the first cron run every
+  // value is absent, and a flat line along the bottom would claim "nobody
+  // used it" when the truth is "not summarised yet".
+  let present = 0;
+  for (let d = firstDay; d <= lastDay; d++) if (byDay.has(d)) present++;
+  if (present === 0) {
+    return "<div class='note'>Chưa có dữ liệu — bảng tổng kết được ghi mỗi ngày lúc 02:10 UTC (09:10 giờ VN).</div>";
+  }
+
   const pts = [];
-  for (let d = today - days; d <= today; d++) pts.push(Number(byDay.get(d) ?? 0));
+  for (let d = firstDay; d <= lastDay; d++) pts.push(Number(byDay.get(d) ?? 0));
   const max = Math.max(...pts, 1);
   const w = 100, h = 30;
   const path = pts.map((v, i) => ((i / (pts.length - 1)) * w) + "," + (h - (v / max) * h)).join(" ");
   return "<svg viewBox='0 0 " + w + " " + h + "' preserveAspectRatio='none' style='width:100%;height:56px'>" +
     "<polyline fill='none' stroke='var(--accent)' stroke-width='1.2' vector-effect='non-scaling-stroke' points='" + path + "'/></svg>" +
-    "<div class='note'>Cao nhất " + fmt(max) + " · gần nhất " + fmt(pts[pts.length - 1]) + "</div>";
+    "<div class='note'>Cao nhất " + fmt(max) + " · hôm qua " + fmt(pts[pts.length - 1]) +
+    " · " + present + "/" + days + " ngày có số</div>";
 }
 
 async function load() {
