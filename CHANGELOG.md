@@ -4,6 +4,24 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [Chưa phát hành]
+
+### Sửa
+
+- **Bản đồ lớn thỉnh thoảng trống, không phản hồi** (báo lỗi tự động đầu tiên
+  của 1.5.0: `Cannot read properties of undefined (reading 'on')`, 7 lần trên
+  một máy): rời tab Bản đồ hoặc đổi nguồn bản đồ khi bản đồ chưa tải xong (máy
+  chậm) làm phần tải tiếp tục chạy trên một bản đồ đã bị gỡ. Lỗi có từ trước,
+  1.5.0 chỉ là bản đầu tiên nhìn thấy nó nhờ báo lỗi tự động. (`f5850e5`)
+- **Minimap bật lại nhưng nằm dưới game**: sau khi tắt, game (hoặc overlay
+  Steam/Discord) có thể chen lên trên trong nhóm cửa sổ "luôn trên cùng"; bật
+  lại thì Windows trả minimap về đúng vị trí cũ — dưới game — và vòng kiểm tra
+  2 giây không nhận ra vì cờ "trên cùng" vẫn còn. Giờ ép lên trên cùng ngay mỗi
+  lần hiện. (`f5850e5`)
+- **Ô "Hiện minimap" trong Cài đặt không đổi khi bấm hotkey**: đang mở tab Cài
+  đặt mà bấm `Ctrl+Alt+M` tắt minimap thì ô vẫn tích, bấm vào "để bật lại" thực
+  ra lại gửi lệnh tắt. Màn Cài đặt giờ nghe thay đổi từ hotkey. (`f5850e5`)
+
 ## [1.5.0] — 2026-08-24
 
 ### Thêm
