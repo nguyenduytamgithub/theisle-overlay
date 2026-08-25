@@ -4,6 +4,41 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.5.2] — 2026-08-25
+
+### Thay đổi
+
+- **Quay lại tab Bản đồ là hiện ngay, giữ nguyên chỗ đang xem**: trước đây rời tab Bản
+  đồ là toàn bộ Leaflet bị huỷ, quay lại phải dựng lại từ đầu — khoảng 16 lượt gọi tuần
+  tự sang Rust, đọc và parse lại 120 KB điểm quan tâm, dựng lại 634 đối tượng lớp (608
+  trong số đó thuộc lớp đang tắt), nạp lại ảnh nền 7800×7817 — và mất luôn mức zoom, vị
+  trí đã kéo. Số liệu sử dụng cho thấy người chơi quay lại tab này khoảng 2 lần mỗi
+  phiên. Giờ bản đồ được giữ sống khi ẩn (đúng cách tab Khủng long và Garage đã làm);
+  trong lúc ẩn, mẫu vị trí và đường đi chỉ được ghi nhớ chứ không vẽ, không kéo bản đồ,
+  không hỏi Rust waypoint gần nhất — quay lại là vẽ đúng một lần từ mẫu mới nhất. Đổi
+  nền bản đồ từ tab Cài đặt vẫn dựng lại đúng khung nhìn dù bản đồ đang ẩn. (`a2c2bdb`)
+- **Bật/tắt lớp bản đồ không còn quét hai lần**: mỗi cú bấm trước đây duyệt toàn bộ nhóm
+  lớp hai lượt (một từ ô tick, một từ thông báo cài đặt vòng về), và *mọi* thay đổi cài
+  đặt khác — phím tắt độ đậm minimap, đổi ngôn ngữ, cả thông báo đồng bộ theo từng mẫu vị
+  trí — cũng khiến bản đồ lớn duyệt lại toàn bộ lớp. Giờ chỉ duyệt khi trạng thái lớp thực
+  sự thay đổi. (`a2c2bdb`)
+- **Dữ liệu điểm quan tâm được cache phía Rust**: ba nơi gọi (bản đồ lớn lúc mở và sau
+  mỗi lần tải dữ liệu, cửa sổ minimap) trước đây mỗi nơi tự đọc, parse và chiếu toạ độ
+  lại toàn bộ file. Cache khoá theo nền bản đồ và dấu thời gian file, nên tải lại dữ liệu
+  hay đổi nền tự làm mới, không cần ai nhớ xoá. (`a2c2bdb`)
+- **Đo đạc sử dụng đúng hơn**: nhãn `dino3d_view` thực chất đo việc mở tab Khủng long
+  (tab đó không có 3D — viewer nằm ở Garage), đổi thành `dino_tab_open`; `fullmap_open`
+  không còn tự cộng một lượt mỗi lần mở app, vì số lần mở app đã có ô riêng. (`a2c2bdb`)
+
+### Sửa
+
+- **Lỗi hiếm "Cannot read properties of undefined (reading '_leaflet_pos')"** (1 báo cáo
+  trên 1.5.1): Leaflet kết thúc animation zoom bằng một bộ hẹn giờ 250 ms sống lâu hơn
+  `map.remove()`; lăn chuột zoom rồi bấm sang tab khác trong khoảng đó là bộ hẹn giờ
+  chạm vào một bản đồ đã bị huỷ. Cùng họ với lỗi `'on'` của 1.5.0 — đều là bản đồ bị huỷ
+  giữa chừng. Việc giữ bản đồ sống ở trên xoá luôn đường huỷ-khi-chuyển-tab; thêm chốt
+  chặn cho đường còn lại khi đổi nền. (`7931471`)
+
 ## [1.5.1] — 2026-08-24
 
 ### Sửa
