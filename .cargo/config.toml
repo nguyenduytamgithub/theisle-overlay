@@ -1,4 +1,4 @@
 # target/ runs to multiple GB; keep it out of the OneDrive-synced project folder
 # (same rule that keeps the old app's venv in %LOCALAPPDATA%).
 [build]
-target-dir = "C:/Users/mxhio/AppData/Local/TheIsleOverlay/cargo-target"
+target-dir = "src-tauri/target"
