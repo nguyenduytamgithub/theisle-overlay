@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for the main and minimap windows",
-  "windows": ["main", "minimap"],
+  "description": "Capabilities for the main, minimap, and navigation HUD windows",
+  "windows": ["main", "minimap", "hud"],
   "permissions": [
     "core:default",
     "core:window:allow-show",

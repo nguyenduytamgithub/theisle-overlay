@@ -252,4 +252,16 @@ mod tests {
         assert!(!should_show(true, false, false));
         assert!(!should_show(true, true, true));
     }
+
+    #[test]
+    fn hud_window_has_default_capability() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let windows = capability["windows"].as_array().unwrap();
+
+        assert!(
+            windows.iter().any(|window| window.as_str() == Some("hud")),
+            "the HUD webview must be authorized to invoke commands and emit its ready event"
+        );
+    }
 }
