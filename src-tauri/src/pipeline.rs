@@ -2,7 +2,8 @@
 //! windows. Port of the sample-handling wiring from the original `main.py`.
 
 use overlay_core::{
-    bearing_to_compass_key, world_to_pixel, Calibration, HeadingSource, Sample, SampleOutcome,
+    bearing_to_compass_key, distance_m, world_to_pixel, Calibration, HeadingSource, Sample,
+    SampleOutcome,
 };
 // Note: every px in these payloads is computed with state.active_calibration()
 // at emit time — nothing px-shaped is cached, so a basemap switch only needs a
@@ -31,14 +32,18 @@ pub fn ingest_sample_with_heading(
     let now_s = state.now_s();
     let cal = state.active_calibration();
 
-    let (outcome, current, heading, server_facing, motion_course, velocity, trail) = {
+    let (outcome, current, heading, server_facing, motion_course, velocity, correction_m, trail) = {
         let mut tracker = state.tracker.lock_safe();
+        let previous = tracker.current;
         let outcome = tracker.add_sample_with_heading(x, y, z, heading_deg, now_s);
         let current = tracker.current;
         let heading = tracker.heading_with_source(now_s);
         let server_facing = tracker.server_facing(now_s);
         let motion_course = tracker.motion_course(now_s);
         let velocity = tracker.velocity_cm_s();
+        let correction_m = previous
+            .zip(current)
+            .map(|(from, to)| distance_m(from.x, from.y, to.x, to.y));
         let trail = outcome
             .trail_changed
             .then(|| trail_payload(&tracker.segments, cal));
@@ -49,13 +54,36 @@ pub fn ingest_sample_with_heading(
             server_facing,
             motion_course,
             velocity,
+            correction_m,
             trail,
         )
     };
 
     if !should_publish(outcome) {
-        log::warn!("position sample quarantined as implausible");
+        log::warn!("navigation state=quarantined reset=outlier");
         return;
+    }
+
+    if outcome.relocated || outcome.refreshed_only || outcome.broke_segment {
+        let source = heading
+            .map(|(_, source)| heading_source_key(source))
+            .unwrap_or("none");
+        let state_key = if outcome.relocated {
+            "relocated"
+        } else if outcome.refreshed_only {
+            "refreshed"
+        } else {
+            "segment-start"
+        };
+        let reset = if outcome.relocated {
+            "relocation"
+        } else {
+            "none"
+        };
+        log::debug!(
+            "navigation state={state_key} source={source} age_ms=0 correction_m={:.1} reset={reset}",
+            correction_m.unwrap_or(0.0)
+        );
     }
 
     if should_persist(outcome) {
@@ -69,11 +97,13 @@ pub fn ingest_sample_with_heading(
 
     let payload = position_payload(
         current.expect("accepted sample is current"),
-        heading,
-        server_facing,
-        motion_course,
-        velocity,
-        outcome,
+        PositionMetadata {
+            heading,
+            server_facing_deg: server_facing,
+            motion_course_deg: motion_course,
+            velocity,
+            outcome,
+        },
         now_s,
         cal,
     );
@@ -101,29 +131,35 @@ fn heading_source_key(source: HeadingSource) -> &'static str {
     }
 }
 
-fn position_payload(
-    current: Sample,
+#[derive(Clone, Copy, Default)]
+struct PositionMetadata {
     heading: Option<(f64, HeadingSource)>,
     server_facing_deg: Option<f64>,
     motion_course_deg: Option<f64>,
     velocity: Option<(f64, f64)>,
     outcome: SampleOutcome,
+}
+
+fn position_payload(
+    current: Sample,
+    metadata: PositionMetadata,
     now_s: f64,
     cal: &Calibration,
 ) -> PositionUpdate {
     let (px, py) = world_to_pixel(current.x, current.y, cal);
-    let ((velocity_x_cm_s, velocity_y_cm_s), (velocity_px_x_s, velocity_px_y_s)) = match velocity {
-        Some((vx, vy)) => {
-            let (next_px, next_py) = world_to_pixel(current.x + vx, current.y + vy, cal);
-            (
-                (Some(vx), Some(vy)),
-                (Some(next_px - px), Some(next_py - py)),
-            )
-        }
-        None => ((None, None), (None, None)),
-    };
+    let ((velocity_x_cm_s, velocity_y_cm_s), (velocity_px_x_s, velocity_px_y_s)) =
+        match metadata.velocity {
+            Some((vx, vy)) => {
+                let (next_px, next_py) = world_to_pixel(current.x + vx, current.y + vy, cal);
+                (
+                    (Some(vx), Some(vy)),
+                    (Some(next_px - px), Some(next_py - py)),
+                )
+            }
+            None => ((None, None), (None, None)),
+        };
     let age_ms = ((now_s - current.at_s).max(0.0) * 1000.0).round() as i64;
-    let heading_deg = heading.map(|(degrees, _)| degrees);
+    let heading_deg = metadata.heading.map(|(degrees, _)| degrees);
     PositionUpdate {
         x_cm: current.x,
         y_cm: current.y,
@@ -131,10 +167,12 @@ fn position_payload(
         px,
         py,
         heading_deg,
-        heading_source: heading.map(|(_, source)| heading_source_key(source)),
+        heading_source: metadata
+            .heading
+            .map(|(_, source)| heading_source_key(source)),
         compass_key: heading_deg.map(bearing_to_compass_key),
-        server_facing_deg,
-        motion_course_deg,
+        server_facing_deg: metadata.server_facing_deg,
+        motion_course_deg: metadata.motion_course_deg,
         velocity_x_cm_s,
         velocity_y_cm_s,
         velocity_px_x_s,
@@ -142,8 +180,8 @@ fn position_payload(
         confirmed_at_ms: chrono::Utc::now().timestamp_millis() - age_ms,
         prediction_horizon_s: PREDICTION_HORIZON_S,
         stale_after_s: STALE_AFTER_S,
-        relocated: outcome.relocated,
-        refreshed_only: outcome.refreshed_only,
+        relocated: metadata.outcome.relocated,
+        refreshed_only: metadata.outcome.refreshed_only,
         in_bounds: overlay_core::is_in_bounds(px, py, cal),
     }
 }
@@ -168,11 +206,13 @@ pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
     let cur = current?;
     Some(position_payload(
         cur,
-        heading,
-        server_facing,
-        motion_course,
-        velocity,
-        SampleOutcome::default(),
+        PositionMetadata {
+            heading,
+            server_facing_deg: server_facing,
+            motion_course_deg: motion_course,
+            velocity,
+            outcome: SampleOutcome::default(),
+        },
         now_s,
         cal,
     ))
@@ -256,11 +296,13 @@ mod tests {
                 at_s: 10.0,
                 heading_deg: Some(5.0),
             },
-            Some((5.0, HeadingSource::Server)),
-            Some(5.0),
-            Some(90.0),
-            None,
-            outcome,
+            super::PositionMetadata {
+                heading: Some((5.0, HeadingSource::Server)),
+                server_facing_deg: Some(5.0),
+                motion_course_deg: Some(90.0),
+                velocity: None,
+                outcome,
+            },
             10.0,
             Calibration::gateway(),
         );

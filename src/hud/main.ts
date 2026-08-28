@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { error } from "@tauri-apps/plugin-log";
+import { error, info } from "@tauri-apps/plugin-log";
 
 import { installGlobalErrorLog } from "../lib/errlog";
 import { compassPoint, type HudLanguage } from "../lib/navigation/guidance";
@@ -54,6 +54,9 @@ let language: HudLanguage = "vi";
 let navigation: NavigationTarget | null = null;
 let paintTimer: number | null = null;
 let hasPosition = false;
+let lastFreshness: NavigationSnapshot["freshness"] | null = null;
+let lastSampleSource: "motion" | "server" | "none" | null = null;
+let lastConfirmedForDiagnostics: Pick<PositionUpdate, "xCm" | "yCm"> | null = null;
 
 function applySettings(settings: Record<string, unknown>) {
   language = settings.language === "en" ? "en" : "vi";
@@ -89,6 +92,12 @@ function paintCourse(view: NavigationSnapshot) {
 function paintFreshness(view: NavigationSnapshot) {
   freshnessEl.className = `freshness ${view.freshness}`;
   freshnessEl.textContent = localizeFreshness(view.freshness, language);
+  if (view.freshness !== lastFreshness) {
+    void info(
+      `[hud-nav] state=${view.freshness} source=local-estimator reset=none`,
+    ).catch(() => {});
+    lastFreshness = view.freshness;
+  }
 }
 
 function paintNavigation(view: NavigationSnapshot) {
@@ -134,6 +143,31 @@ function paint(nowMs: number) {
 
 function acceptPosition(position: PositionUpdate) {
   hasPosition = true;
+  const moving = position.velocityXCmS !== null
+    && position.velocityYCmS !== null
+    && Math.hypot(position.velocityXCmS, position.velocityYCmS) >= 1;
+  const source = moving && position.motionCourseDeg !== null
+    ? "motion"
+    : position.serverFacingDeg !== null ? "server" : "none";
+  const correctionM = lastConfirmedForDiagnostics
+    ? Math.hypot(
+        position.xCm - lastConfirmedForDiagnostics.xCm,
+        position.yCm - lastConfirmedForDiagnostics.yCm,
+      ) / 100
+    : 0;
+  const reset = position.relocated
+    ? "relocation"
+    : correctionM > 100 ? "large-correction"
+    : position.refreshedOnly ? "refresh"
+    : "none";
+  if (source !== lastSampleSource || reset !== "none") {
+    const ageMs = Math.max(0, Date.now() - position.confirmedAtMs);
+    void info(
+      `[hud-nav] state=confirmed source=${source} age_ms=${Math.round(ageMs)} correction_m=${correctionM.toFixed(1)} reset=${reset}`,
+    ).catch(() => {});
+    lastSampleSource = source;
+  }
+  lastConfirmedForDiagnostics = { xCm: position.xCm, yCm: position.yCm };
   estimator.accept(position);
   paintNow();
 }
