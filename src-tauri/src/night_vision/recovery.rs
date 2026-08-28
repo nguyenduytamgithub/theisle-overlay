@@ -49,8 +49,9 @@ impl RecoveryRecord {
         }
 
         let mut ramp = [[0u16; 256]; 3];
-        for (channel, values) in ramp.iter_mut().zip(self.ramp.chunks_exact(256)) {
-            channel.copy_from_slice(values);
+        for (channel_index, channel) in ramp.iter_mut().enumerate() {
+            let start = channel_index * 256;
+            channel.copy_from_slice(&self.ramp[start..start + 256]);
         }
         Ok(ramp)
     }

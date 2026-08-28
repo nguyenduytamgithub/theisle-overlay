@@ -338,7 +338,7 @@ fn dispatch(app: &AppHandle, action: &str) {
         // clicks, and a reload rebuilds the page (state comes back through
         // get_current_position/resync).
         "reload_ui" => {
-            for label in ["main", "minimap"] {
+            for label in ["main", "minimap", "night-vision"] {
                 if let Some(window) = app.get_webview_window(label) {
                     crate::webview_mem::on_shown(&window);
                     let _ = window.eval("location.reload()");

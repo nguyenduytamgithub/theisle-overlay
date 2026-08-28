@@ -11,6 +11,7 @@
     onFullmapShow,
     onHotkeyFailed,
     onSettingsChanged,
+    prepareNightVisionExit,
     simulatePosition,
     trackFeature,
     type DataStatus,
@@ -126,6 +127,11 @@
     updating = true;
     try {
       await pendingUpdate.downloadAndInstall();
+      const restored = await prepareNightVisionExit();
+      if (restored.applied) {
+        updating = false;
+        return;
+      }
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch {
