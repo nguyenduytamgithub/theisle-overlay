@@ -17,17 +17,18 @@ pub(crate) fn lifted_ramp(strength: u8) -> GammaRamp {
     [channel; 3]
 }
 
-pub(crate) fn ramps_match(
-    expected: &GammaRamp,
-    actual: &GammaRamp,
-    tolerance: u16,
-) -> bool {
-    expected.iter().zip(actual).all(|(expected_channel, actual_channel)| {
-        expected_channel
-            .iter()
-            .zip(actual_channel)
-            .all(|(expected_value, actual_value)| expected_value.abs_diff(*actual_value) <= tolerance)
-    })
+pub(crate) fn ramps_match(expected: &GammaRamp, actual: &GammaRamp, tolerance: u16) -> bool {
+    expected
+        .iter()
+        .zip(actual)
+        .all(|(expected_channel, actual_channel)| {
+            expected_channel
+                .iter()
+                .zip(actual_channel)
+                .all(|(expected_value, actual_value)| {
+                    expected_value.abs_diff(*actual_value) <= tolerance
+                })
+        })
 }
 
 #[cfg(test)]

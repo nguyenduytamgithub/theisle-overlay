@@ -56,6 +56,10 @@ pub fn settings_path() -> PathBuf {
     roaming_dir().join("settings.json")
 }
 
+pub fn night_vision_recovery_path() -> PathBuf {
+    local_dir().join("night-vision-recovery.json")
+}
+
 pub fn waypoints_path() -> PathBuf {
     roaming_dir().join("waypoints.json")
 }
