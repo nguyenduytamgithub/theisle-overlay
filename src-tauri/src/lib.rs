@@ -195,6 +195,7 @@ pub fn run(replay_file: Option<PathBuf>) {
                 }
             }
             minimap::create(app.handle())?;
+            night_vision::create_button(app.handle())?;
             tray::create(app.handle())?;
             clipboard::spawn(app.handle().clone());
             webview_mem::spawn_watchdog(app.handle().clone());
