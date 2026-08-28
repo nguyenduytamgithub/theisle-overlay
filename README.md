@@ -8,7 +8,7 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > (`f628a18`). Tác giả và dự án gốc: **Trần Quốc Toản**.
 
-Phiên bản của fork: **v1.6.0 Navigation HUD**. Mục tiêu là làm vị trí, hướng
+Phiên bản của fork: **v1.7.0 Newbie Navigation**. Mục tiêu là làm vị trí, hướng
 đi, đường đã đi và waypoint dễ tin cậy hơn trong lúc chơi — không đọc bộ nhớ
 game và không can thiệp Easy Anti-Cheat.
 
@@ -24,19 +24,19 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 
 ## Fork này cải thiện gì?
 
-| Khi đang chơi | Upstream mã mở v1.5.2 | Navigation HUD v1.6.0 |
+| Khi đang chơi | Upstream mã mở v1.5.2 | Newbie Navigation v1.7.0 |
 |---|---|---|
 | Nhịp lấy vị trí IslePilot | Mặc định 10 giây | Mặc định **5 giây**; giữ nguyên nếu bạn đã tự đặt giá trị khác |
-| Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Ước tính hiển thị tối đa **4 giây**, sau đó đứng chờ xác nhận; hiệu chỉnh mềm **350 ms** |
-| Tọa độ lỗi/nhảy xa | Có thể kéo đường mòn lệch hàng kilomet | Mẫu bất khả thi bị cách ly; chỉ xác nhận đổi chỗ xa khi có **hai mẫu nhất quán** |
-| Hướng nhìn | Chủ yếu suy ra từ quãng đường đã đi | Ưu tiên **yaw do server cung cấp**, hướng chuyển động là dự phòng |
+| Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Chạy thẳng 4 giây, giảm dần tới 12 giây rồi giữ; hiệu chỉnh **300/650 ms** theo độ lệch |
+| Tọa độ lỗi/nhảy xa | Có thể kéo đường mòn lệch hàng kilomet | Mẫu bất khả thi bị cách ly và cắt dự đoán cũ; chỉ xác nhận đổi chỗ xa khi có **hai mẫu nhất quán** |
+| Hướng đi | Chủ yếu suy ra từ quãng đường đã đi | Tách riêng yaw server và hướng chuyển động; đổi nguồn sau 1 giây ổn định, chống xoay vòng qua 0° |
 | Waypoint | Mũi tên tới điểm gần nhất | Chọn đúng một điểm làm đích; bản đồ lớn, minimap và HUD dùng **cùng một đích** |
-| Dẫn đường trên màn hình game | Không có HUD riêng | HUD click-through ở giữa phía trên: BẮC/ĐÔNG/NAM/TÂY, số độ, mũi tên rẽ, tên đích và khoảng cách |
-| Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **SERVER / ƯỚC TÍNH / MẤT TÍN HIỆU** |
+| Dẫn đường trên màn hình game | Không có HUD riêng | Mũi tên đích Bắc-lên ổn định + câu lệnh **ĐI THẲNG / CHẾCH / RẼ / QUAY LẠI** và chữ hướng Đông Tây Nam Bắc |
+| Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **ĐANG BÁM / ĐANG ƯỚC LƯỢNG / CHỜ SERVER** |
 | Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
 
-Điểm quan trọng: chuyển động mượt là **ước tính có giới hạn**, không bịa thành
-realtime. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
+Điểm quan trọng: phần hiển thị 30 FPS là **ước tính cục bộ có giới hạn**, không
+bịa thành tọa độ thật. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
 có live map thì dùng `Tab` → **Asset Location** như trước.
 
 ▶️ **Video hướng dẫn cài đặt & sử dụng:**
@@ -53,8 +53,9 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
 
 - **Minimap tròn** bám góc cửa sổ game, chuột bấm xuyên qua, không cản trở lúc chơi.
   Hướng Bắc luôn ở trên; mũi tên rìa bản đồ chỉ tới đúng waypoint bạn chọn.
-- **Navigation HUD trên game**: la bàn BẮC–ĐÔNG–NAM–TÂY, hướng nhìn theo độ,
-  mũi tên cần rẽ, tên đích, khoảng cách và trạng thái dữ liệu; tự ẩn khi
+- **Navigation HUD trên game**: mũi tên lớn luôn chỉ **hướng tuyệt đối tới đích**
+  với Bắc ở trên, chữ hướng đi BẮC–ĐÔNG–NAM–TÂY, lệnh rẽ dễ hiểu, tên đích,
+  khoảng cách và trạng thái dữ liệu; tự ẩn khi
   Alt-Tab và bật/tắt bằng `Ctrl+Alt+H`.
 - **Bản đồ lớn**: phóng to/thu nhỏ mượt, 12 lớp bật/tắt được (nước ngọt, nguồn
   nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
@@ -70,8 +71,10 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
   biểu tượng nhanh (💀 chỗ chết, 🏠 hang…); chọn **Dẫn đường tới điểm này** để
   bản đồ lớn, minimap và HUD cùng dẫn tới đúng đích đó.
 - **Tìm kiếm & điều hướng**: ô tìm địa danh/waypoint, dán tọa độ để nhảy tới,
-  đường thẳng và mũi tên từ vị trí hiện tại tới đích đã chọn; báo đã tới trong
-  bán kính 15 m.
+  đường thẳng và mũi tên từ vị trí hiện tại tới đích đã chọn; đoạn ước lượng
+  hiện màu xanh nét đứt trên cả hai bản đồ; báo đã tới trong bán kính mặc định
+  25 m và không lật mũi tên khi dự đoán vừa đi qua ghim. Đây là hướng thẳng tới
+  ghim, **không phải** đường đi an toàn qua địa hình hay hệ thống navmesh.
 - **Đường đã đi ổn định hơn**: tự ghi theo phiên, khôi phục phiên trước, bỏ
   mẫu nhảy bất khả thi và không ghi vị trí dự đoán vào lịch sử.
 - **Khủng long của bạn**: growth, máu, đói, khát, thể lực, dinh dưỡng
@@ -87,8 +90,8 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
 ## Cài đặt nhanh
 
 1. Mở [Releases của fork](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
-   và tải file `TheIsle Overlay_1.6.0_x64-setup.exe` trong bản
-   **v1.6.0-navigation-hud**.
+   và tải file `TheIsle Overlay_1.7.0_x64-setup.exe` trong bản
+   **v1.7.0-newbie-navigation**.
 2. Nếu đang chạy một bản Overlay khác, thoát nó từ khay hệ thống rồi chạy bộ
    cài. Dữ liệu settings và waypoint cũ được installer giữ lại.
 3. Nếu Windows SmartScreen cảnh báo, chọn **More info → Run anyway**. Bộ cài
@@ -111,8 +114,9 @@ giữ Navigation HUD; hãy cài bản mới từ Releases của fork khi có th�
 2. Mở bản đồ lớn bằng `Ctrl+Alt+F`.
 3. Bấm chuột phải tại nơi muốn tới để tạo waypoint, hoặc chọn waypoint đã lưu.
 4. Trong menu waypoint, chọn **Dẫn đường tới điểm này**.
-5. Quay lại game. HUD hiển thị hướng nhìn, mũi tên cần rẽ và khoảng cách; minimap
-   có mũi tên cùng đích. Chọn **Dừng dẫn đường** khi xong.
+5. Quay lại game. Giữ Bắc ở phía trên để đối chiếu: mũi tên xanh lớn chỉ hướng
+   tuyệt đối tới đích; dòng **HƯỚNG ĐI** và câu lệnh ĐI THẲNG/CHẾCH/RẼ giúp
+   chỉnh đường. Minimap dùng cùng đích. Chọn **Dừng dẫn đường** khi xong.
 
 | Phím | Tác dụng |
 |---|---|
@@ -175,15 +179,16 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Artifact v1.6.0 Navigation HUD đã phát hành được đo trực tiếp sau khi build:
+Artifact v1.7.0 Newbie Navigation được đo trực tiếp sau khi build:
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt NSIS | **5.728.468 byte (~5,7 MB)** |
-| File chạy sau khi cài | **21.093.888 byte (~21,1 MB)** |
+| File cài đặt NSIS | **5.731.741 byte (~5,7 MB)** |
+| File chạy sau khi cài | **21.111.296 byte (~21,1 MB)** |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 
-HUD giới hạn ghi DOM khoảng 30 FPS và chỉ dự đoán khi đang có mẫu chuyển động;
+HUD và bản đồ giới hạn cập nhật cục bộ khoảng 30 FPS, chạy thẳng 4 giây rồi
+giảm dần tới mốc giữ 12 giây; không có mẫu mới thì hiện **CHỜ SERVER**;
 không chạy bộ đọc game hoặc quét bộ nhớ nền. Mức RAM thực tế phụ thuộc WebView2,
 số tab đang mở và model 3D đã tải, nên fork không công bố một con số RAM cố định.
 
@@ -193,12 +198,13 @@ số tab đang mở và model 3D đã tải, nên fork không công bố một c
    độc quyền (Exclusive Fullscreen)** — đây là giới hạn của Windows với mọi
    overlay ngoài tiến trình. Hãy dùng **Cửa sổ** hoặc **Toàn màn hình không viền**.
    App tự đọc cấu hình game và cảnh báo nếu bạn đang để sai chế độ.
-2. **Vị trí tự động phụ thuộc server**: IslePilot live map xác nhận vị trí mặc
-   định mỗi 5 giây. Giữa hai lần đó app chỉ ước tính tối đa 4 giây. Server tắt
+2. **Vị trí thật vẫn phụ thuộc server**: IslePilot live map xác nhận vị trí mặc
+   định mỗi 5 giây. Giữa hai lần đó app hiển thị cục bộ mượt, giảm dự đoán sau
+   4 giây và giữ hẳn sau 12 giây. Server tắt
    live map thì bạn phải bấm `Tab` → **Asset Location** để cập nhật thủ công.
-3. **Hướng nhìn ưu tiên yaw server**. Khi server không gửi yaw, app cần ít nhất
-   hai mẫu di chuyển hợp lệ để suy ra hướng; dữ liệu quá cũ sẽ chuyển sang
-   **MẤT TÍN HIỆU** thay vì tiếp tục chỉ bừa.
+3. **Mũi tên đích không dùng yaw server** nên không còn xoay lung tung khi nhân
+   vật đổi góc nhìn. Dòng HƯỚNG ĐI ưu tiên hướng chuyển động đã xác nhận, chỉ
+   dùng yaw ổn định làm dự phòng; dữ liệu quá cũ chuyển sang **CHỜ SERVER**.
 4. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
 5. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm

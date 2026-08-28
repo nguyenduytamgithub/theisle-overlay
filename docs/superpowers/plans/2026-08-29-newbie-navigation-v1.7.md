@@ -68,7 +68,7 @@ test("freshness labels are honest at boundaries", () => {
 
 - [ ] **Step 2: Run the primitive test and verify RED**
 
-Run: `node --test src/lib/navigation/estimator.test.mjs`  
+Run: `node --test src/lib/navigation/estimator.test.mjs`
 Expected: FAIL because `estimator.ts` or its exports do not exist.
 
 - [ ] **Step 3: Implement the minimal circular and decay math**
@@ -111,7 +111,7 @@ export const freshnessForAge = (ageS: number) =>
 
 - [ ] **Step 4: Run estimator primitives and the existing navigation suite**
 
-Run: `node --test src/lib/navigation/estimator.test.mjs src/lib/navigation/prediction.test.mjs src/lib/navigation/guidance.test.mjs`  
+Run: `node --test src/lib/navigation/estimator.test.mjs src/lib/navigation/prediction.test.mjs src/lib/navigation/guidance.test.mjs`
 Expected: PASS with zero failures.
 
 - [ ] **Step 5: Commit the primitives**
@@ -220,7 +220,7 @@ Also cover source stability for one second, four-degree angular deadband, 600 ms
 
 - [ ] **Step 2: Run the stateful tests and verify RED**
 
-Run: `node --test src/lib/navigation/estimator.test.mjs`  
+Run: `node --test src/lib/navigation/estimator.test.mjs`
 Expected: FAIL on missing `NavigationEstimator` behavior, not syntax.
 
 - [ ] **Step 3: Implement the estimator state machine**
@@ -239,7 +239,7 @@ The target arrow consumes only `bearingTo(projectedPosition, target)`. Guidance 
 
 - [ ] **Step 4: Run all navigation tests**
 
-Run: `node --test src/lib/navigation/*.test.mjs`  
+Run: `node --test src/lib/navigation/*.test.mjs`
 Expected: PASS with zero failures.
 
 - [ ] **Step 5: Commit the estimator**
@@ -374,7 +374,7 @@ test("Vietnamese newbie copy is explicit and nontechnical", () => {
 
 - [ ] **Step 2: Run the copy test and verify RED**
 
-Run: `node --test src/lib/navigation/estimator.test.mjs`  
+Run: `node --test src/lib/navigation/estimator.test.mjs`
 Expected: FAIL on missing localization exports.
 
 - [ ] **Step 3: Wire HUD to one 30 FPS estimator loop**
@@ -438,7 +438,7 @@ test("independent consumers return equivalent snapshots for one event and timest
 
 - [ ] **Step 2: Run the equivalence test and verify RED**
 
-Run: `node --test src/lib/navigation/estimator.test.mjs`  
+Run: `node --test src/lib/navigation/estimator.test.mjs`
 Expected: FAIL until deterministic state/reset behavior is complete.
 
 - [ ] **Step 3: Replace legacy prediction in both maps**
@@ -542,7 +542,7 @@ git commit -m "fix: bound HUD recovery and navigation diagnostics"
 - Preserves: `%LOCALAPPDATA%\TheIsleOverlay\islepilot_token.bin`
 - Preserves: `%APPDATA%\TheIsleOverlay\settings.json`, `waypoints.json`, and `trails\`
 
-- [ ] **Step 1: Update version and user-facing documentation**
+- [x] **Step 1: Update version and user-facing documentation**
 
 Document:
 
@@ -554,7 +554,7 @@ Document:
 - 25 m arrival behavior;
 - recovery hotkeys.
 
-- [ ] **Step 2: Run complete verification before packaging**
+- [x] **Step 2: Run complete verification before packaging**
 
 Run:
 
@@ -571,7 +571,7 @@ git diff --check
 
 Expected: every command exits 0; ignored live tests are listed honestly.
 
-- [ ] **Step 3: Build the NSIS installer**
+- [x] **Step 3: Build the NSIS installer**
 
 Run:
 

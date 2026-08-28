@@ -1,8 +1,10 @@
 # Newbie Navigation v1.7 Design
 
-**Status:** Approved direction; written specification awaiting final user review  
-**Date:** 2026-08-29  
-**Target:** public `navigation-hud` fork  
+**Status:** Approved direction; written specification awaiting final user review
+
+**Date:** 2026-08-29
+
+**Target:** public `navigation-hud` fork
 **Product goal:** A first-time The Isle player can select a waypoint, understand the direction to travel at a glance, and keep making progress despite sparse server updates, without an arrow that spins or falsely claims exact realtime position.
 
 ## 1. Evidence and problem statement

@@ -8,7 +8,7 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
 
-Fork version: **v1.6.0 Navigation HUD**. Its goal is reliable position,
+Fork version: **v1.7.0 Newbie Navigation**. Its goal is reliable position,
 heading, trails, and waypoint guidance while playing, without touching game
 memory or Easy Anti-Cheat.
 
@@ -25,18 +25,18 @@ installer with manual fork updates.
 
 ## What does this fork improve?
 
-| While playing | Open-source upstream v1.5.2 | Navigation HUD v1.6.0 |
+| While playing | Open-source upstream v1.5.2 | Newbie Navigation v1.7.0 |
 |---|---|---|
 | IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
-| Motion between server samples | Position jumps on every response | Up to **4 seconds** of bounded visual prediction, then freezes for confirmation; **350 ms** correction blend |
-| Bad coordinate spikes | Can draw a trail kilometres away | Impossible samples are quarantined; a far relocation needs **two consistent samples** |
-| Heading | Mainly inferred from travelled path | Prefers fresh **server yaw**, with motion heading as fallback |
+| Motion between server samples | Position jumps on every response | Linear for 4 seconds, decays through 12 seconds, then holds; **300/650 ms** correction based on distance |
+| Bad coordinate spikes | Can draw a trail kilometres away | Impossible samples are quarantined and stop old prediction; a far relocation needs **two consistent samples** |
+| Travel course | Mainly inferred from travelled path | Separates server facing from motion course, switches source after 1 stable second, and crosses 0° without full spins |
 | Waypoints | Rim arrow points to the nearest waypoint | Pick one explicit destination shared by the full map, minimap, and HUD |
-| In-game guidance | No dedicated navigation HUD | Click-through top-centre HUD with compass, degrees, turn arrow, target name, and distance |
-| Delayed data | Freshness is unclear | Explicit **SERVER / ESTIMATE / STALE** state |
+| In-game guidance | No dedicated navigation HUD | Stable north-up target arrow plus **GO STRAIGHT / BEAR / TURN / TURN AROUND** and cardinal course text |
+| Delayed data | Freshness is unclear | Explicit **TRACKING / ESTIMATING / WAITING FOR SERVER** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
 
-Smooth motion is a **bounded estimate**, not fake realtime. The server still
+The 30 FPS presentation is a **bounded local estimate**, not fake confirmed realtime. The server still
 confirms real coordinates every five seconds. Without IslePilot live-map
 support, use `Tab` → **Asset Location** as before.
 
@@ -54,8 +54,9 @@ support, use `Tab` → **Asset Location** as before.
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
   never blocks play. North stays up; its rim arrow points to the waypoint you selected.
-- **In-game Navigation HUD**: N/E/S/W compass, heading in degrees, required-turn
-  arrow, target name, distance, and data freshness; auto-hides on Alt-Tab and
+- **In-game Navigation HUD**: a large **absolute destination arrow** with north
+  up, N/E/S/W travel-course text, plain maneuver instructions, target name,
+  distance, and data freshness; auto-hides on Alt-Tab and
   toggles with `Ctrl+Alt+H`.
 - **Full map**: smooth zoom/pan, 12 toggleable layers (fresh water, water, salt licks,
   mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
@@ -72,7 +73,10 @@ support, use `Tab` → **Asset Location** as before.
   map, minimap, and HUD all use the same destination.
 - **Search & navigation**: search places/waypoints, paste coordinates to jump
   there, and draw a direct line and arrow from your position to the selected
-  destination; arrival is reported inside a 15 m radius.
+  destination; both maps show local estimates as a dashed blue segment;
+  arrival is latched inside a default 25 m radius so the arrow cannot flip
+  after prediction passes the pin. This is a direct bearing to the pin,
+  **not** terrain-safe routing or a navmesh path.
 - **More reliable travel trail** recorded per session: the previous session is
   restored, impossible jumps are rejected, and predicted display points are
   never written into history.
@@ -89,8 +93,8 @@ support, use `Tab` → **Asset Location** as before.
 ## Quick install
 
 1. Open the [fork Releases](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
-   and download `TheIsle Overlay_1.6.0_x64-setup.exe` from
-   **v1.6.0-navigation-hud**.
+   and download `TheIsle Overlay_1.7.0_x64-setup.exe` from
+   **v1.7.0-newbie-navigation**.
 2. Exit any older Overlay from the system tray, then run the installer. Existing
    settings and waypoints are preserved.
 3. If SmartScreen warns, choose **More info → Run anyway**. The installer is
@@ -112,8 +116,10 @@ want to keep Navigation HUD; install future builds from this fork's Releases.
 2. Open the full map with `Ctrl+Alt+F`.
 3. Right-click the destination to create a waypoint, or select a saved waypoint.
 4. Choose **Navigate to this waypoint** from its menu.
-5. Return to the game. The HUD shows heading, turn arrow, and distance; the
-   minimap points to the same target. Choose **Stop navigation** when finished.
+5. Return to the game. Keep north at the top: the large blue arrow is the
+   absolute bearing to the destination; **COURSE** and the plain maneuver text
+   tell you how to adjust. The minimap uses the same target. Choose **Stop
+   navigation** when finished.
 
 | Key | Action |
 |---|---|
@@ -177,16 +183,17 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-The published v1.6.0 Navigation HUD artifacts were measured directly after build:
+The v1.7.0 Newbie Navigation artifacts are measured directly after build:
 
 | Item | Size |
 |---|---|
-| NSIS installer | **5,728,468 bytes (~5.7 MB)** |
-| Installed executable | **21,093,888 bytes (~21.1 MB)** |
+| NSIS installer | **5,731,741 bytes (~5.7 MB)** |
+| Installed executable | **21,111,296 bytes (~21.1 MB)** |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 
-The HUD caps DOM writes at roughly 30 FPS and predicts only while a moving sample
-is active; there is no background game-memory reader or scanner. Runtime RAM
+The HUD and maps cap local presentation at roughly 30 FPS, run linearly for four
+seconds, decay through twelve seconds, then hold and show **WAITING FOR SERVER**;
+there is no background game-memory reader or scanner. Runtime RAM
 depends on WebView2, open tabs, and cached 3D models, so this fork does not publish
 one fixed RAM claim.
 
@@ -195,12 +202,13 @@ one fixed RAM claim.
 1. **Game display mode**: no out-of-process overlay can draw over **Exclusive
    Fullscreen** — a Windows limitation. Use **Windowed** or **Borderless
    Fullscreen**. The app reads your game config and warns you if the mode is wrong.
-2. **Automatic position depends on the server**: an IslePilot live map confirms
-   position every five seconds by default. Between responses the app estimates for
-   at most four seconds. If live map is disabled, use `Tab` → **Asset Location**.
-3. **Heading prefers server yaw**. Without yaw, the app needs at least two valid
-   movement samples to infer direction; stale data becomes **STALE** instead of
-   continuing to point confidently.
+2. **Confirmed position still depends on the server**: an IslePilot live map
+   confirms position every five seconds by default. Between responses the local
+   view decays after four seconds and fully holds after twelve. If live map is
+   disabled, use `Tab` → **Asset Location**.
+3. **The destination arrow never consumes server yaw**, so looking around cannot
+   spin it. COURSE prefers confirmed motion and uses stable server facing only as
+   fallback; old data becomes **WAITING FOR SERVER**.
 4. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
 5. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
