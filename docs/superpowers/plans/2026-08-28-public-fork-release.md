@@ -4,7 +4,7 @@
 
 **Goal:** Publish the tested navigation build as a transparent, documented, installable public GitHub fork.
 
-**Architecture:** Keep product code and the tested installer unchanged. Add bilingual public documentation plus durable release notes, push the existing commit history to a dedicated default branch in a GitHub fork, and publish the verified NSIS artifact as a manual-install release.
+**Architecture:** Keep navigation behavior unchanged, route updater metadata to the fork, and disable signed updater artifact generation so releases are explicitly manual. Add bilingual public documentation plus durable release notes, push the existing commit history to a dedicated default branch in a GitHub fork, and publish the rebuilt NSIS artifact as a manual-install release.
 
 **Tech Stack:** Markdown, Git, GitHub CLI/API, Tauri NSIS artifact, Node/Svelte, Rust/Cargo.
 
@@ -61,13 +61,27 @@ git commit -m "docs: prepare public navigation fork release"
 ### Task 2: Regression and safety verification
 
 **Files:**
-- Verify only: tracked source tree and NSIS installer.
+- Create: `src-tauri/tests/release_config.rs`
+- Modify: `src-tauri/tauri.conf.json`
+- Verify: tracked source tree and rebuilt NSIS installer.
 
 **Interfaces:**
 - Consumes: the final documented commit.
 - Produces: a publish/no-publish gate with fresh command evidence.
 
-- [ ] **Step 1: Run frontend tests and checks**
+- [ ] **Step 1: Add failing fork-release configuration tests**
+
+The tests load the real Tauri configuration and require the sole updater
+endpoint to target `nguyenduytamgithub/theisle-overlay` and
+`createUpdaterArtifacts` to be `false`. Run the focused test before changing
+the configuration and require both assertions to fail for those exact reasons.
+
+- [ ] **Step 2: Switch to the manual fork update channel**
+
+Change `src-tauri/tauri.conf.json` to the fork's `latest.json` URL and disable
+updater artifact creation, then rerun `cargo test --test release_config`.
+
+- [ ] **Step 3: Run frontend tests and checks**
 
 ```powershell
 node --test src/lib/navigation/guidance.test.mjs src/lib/navigation/prediction.test.mjs
@@ -75,14 +89,14 @@ npm run check
 npm run build
 ```
 
-- [ ] **Step 2: Run Rust tests and static analysis**
+- [ ] **Step 4: Run Rust tests and static analysis**
 
 ```powershell
 cargo test --workspace --manifest-path src-tauri/Cargo.toml
 cargo clippy --workspace --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 
-- [ ] **Step 3: Run the forbidden-API and secret gates**
+- [ ] **Step 5: Run the forbidden-API and secret gates**
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-forbidden-apis.ps1
@@ -91,9 +105,10 @@ git grep -n -I -E "(gho_|ghp_|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|islepilot_playe
 
 Expected: forbidden API script passes; secret grep returns no matches.
 
-- [ ] **Step 4: Confirm clean tree and installer identity**
+- [ ] **Step 6: Rebuild and confirm installer identity**
 
 ```powershell
+npm run tauri build
 git status --short
 Get-FileHash 'src-tauri/target/release/bundle/nsis/TheIsle Overlay_1.6.0_x64-setup.exe' -Algorithm SHA256
 ```
@@ -139,4 +154,3 @@ gh release create v1.6.0-navigation-hud --repo nguyenduytamgithub/theisle-overla
 Verify repository visibility, parent, default branch, tag commit, release state,
 asset byte size, and browser/download URLs with `gh repo view`, `gh api`, and
 `gh release view`. Open the final repository page for the user.
-

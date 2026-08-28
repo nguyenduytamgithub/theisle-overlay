@@ -1,12 +1,44 @@
-# TheIsle Overlay
+# TheIsle Overlay — Navigation HUD Community Fork
 
 [Tiếng Việt](README.md) · **English**
+
+> **Community navigation fork** maintained by
+> [@nguyenduytamgithub](https://github.com/nguyenduytamgithub). It is derived
+> from the public
+> [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
+> code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
+
+Fork version: **v1.6.0 Navigation HUD**. Its goal is reliable position,
+heading, trails, and waypoint guidance while playing, without touching game
+memory or Easy Anti-Cheat.
+
+Upstream 2.x is now a closed-source release with separate Pro features. This
+fork does **not** contain 2.x voice, friend positions, the skin editor, or Pro
+realtime. The comparison below is strictly against the open-source **v1.5.2**
+baseline.
 
 Map overlay for **The Isle: Evrima** (Gateway). Circular minimap pinned to the
 game window · full map with POIs, place names, waypoints and travel trails ·
 dino stats + Garage (Gacha) with **3D preview** from the IslePilot system, one
-Steam login **for every server** · bilingual VI/EN interface · one-click
-install with auto-update.
+Steam login **for every server** · bilingual VI/EN interface · small Windows
+installer with manual fork updates.
+
+## What does this fork improve?
+
+| While playing | Open-source upstream v1.5.2 | Navigation HUD v1.6.0 |
+|---|---|---|
+| IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
+| Motion between server samples | Position jumps on every response | Up to **4 seconds** of bounded visual prediction, then freezes for confirmation; **350 ms** correction blend |
+| Bad coordinate spikes | Can draw a trail kilometres away | Impossible samples are quarantined; a far relocation needs **two consistent samples** |
+| Heading | Mainly inferred from travelled path | Prefers fresh **server yaw**, with motion heading as fallback |
+| Waypoints | Rim arrow points to the nearest waypoint | Pick one explicit destination shared by the full map, minimap, and HUD |
+| In-game guidance | No dedicated navigation HUD | Click-through top-centre HUD with compass, degrees, turn arrow, target name, and distance |
+| Delayed data | Freshness is unclear | Explicit **SERVER / ESTIMATE / STALE** state |
+| Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
+
+Smooth motion is a **bounded estimate**, not fake realtime. The server still
+confirms real coordinates every five seconds. Without IslePilot live-map
+support, use `Tab` → **Asset Location** as before.
 
 ▶️ **Install & usage video guide** (Vietnamese):
 
@@ -21,7 +53,10 @@ install with auto-update.
 ## Features
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
-  never blocks play. North stays up, with an arrow showing your direction of travel.
+  never blocks play. North stays up; its rim arrow points to the waypoint you selected.
+- **In-game Navigation HUD**: N/E/S/W compass, heading in degrees, required-turn
+  arrow, target name, distance, and data freshness; auto-hides on Alt-Tab and
+  toggles with `Ctrl+Alt+H`.
 - **Full map**: smooth zoom/pan, 12 toggleable layers (fresh water, water, salt licks,
   mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
   with per-species icons 🐗🦌🐢, region names, landmarks, and a live **server
@@ -33,11 +68,14 @@ install with auto-update.
   applies to both the full map and the minimap. The IsleMaps art tracks a newer
   game build and shows the SE archipelago (Hell's Mouth).
 - **Waypoints**: right-click to drop, rename/recolor, delete, quick icons
-  (💀 death spot, 🏠 nest…); the minimap gets a rim arrow with bearing +
-  distance to the nearest one.
+  (💀 death spot, 🏠 nest…); select **Navigate to this waypoint** so the full
+  map, minimap, and HUD all use the same destination.
 - **Search & navigation**: search places/waypoints, paste coordinates to jump
-  there, follow mode with an edge arrow leading back to your position.
-- **Travel trail** recorded per session, with the previous session's path restored.
+  there, and draw a direct line and arrow from your position to the selected
+  destination; arrival is reported inside a 15 m radius.
+- **More reliable travel trail** recorded per session: the previous session is
+  restored, impossible jumps are rejected, and predicted display points are
+  never written into history.
 - **Your dino**: growth, health, hunger, thirst, stamina, Carb/Protein/Lipid
   nutrition and Prime progress (with Vietnamese translation) from the IslePilot
   system; compact stats strip + Prime quest card under the minimap. One Steam
@@ -45,19 +83,50 @@ install with auto-update.
 - **Garage (Gacha) with 3D preview**: each parked dino is a card with an
   orbitable **3D model in its own skin colours** + growth + Park/Restore/
   Rename/Sell; models download once and open instantly (and offline) after.
-- **Global hotkeys** rebindable in-app, bilingual UI, automatic updates.
+- **Global hotkeys** rebindable in-app, bilingual UI, plus `Ctrl+Alt+H` and a
+  HUD opacity control in Settings.
 
-## Install
+## Quick install
 
-Download `TheIsle Overlay_x.x.x_x64-setup.exe` from
-[Releases](https://github.com/toantranct/theisle-overlay/releases) and run it.
-On first launch the app downloads the map data (~3 MB) to your machine.
+1. Open the [fork Releases](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
+   and download `TheIsle Overlay_1.6.0_x64-setup.exe` from
+   **v1.6.0-navigation-hud**.
+2. Exit any older Overlay from the system tray, then run the installer. Existing
+   settings and waypoints are preserved.
+3. If SmartScreen warns, choose **More info → Run anyway**. The installer is
+   unsigned; verify the SHA-256 published on the Release page.
+4. Set The Isle to **Windowed** or **Borderless Fullscreen**. Windows cannot draw
+   an external overlay over Exclusive Fullscreen.
+5. Launch the app once; first run downloads about 3 MB of map data.
 
 Requires **Windows 10/11 64-bit**. WebView2 is already present on most Windows 11
 installs; the installer fetches it if missing.
 
-> Windows may show a SmartScreen warning because the installer is not
-> code-signed. Click **More info → Run anyway**.
+This fork uses **manual updates**. Do not accept an upstream 2.x update if you
+want to keep Navigation HUD; install future builds from this fork's Releases.
+
+## Using Navigation HUD and waypoint guidance
+
+1. Connect IslePilot as described below. A server with live-map support updates
+   position every five seconds; otherwise press `Tab` → **Asset Location** in game.
+2. Open the full map with `Ctrl+Alt+F`.
+3. Right-click the destination to create a waypoint, or select a saved waypoint.
+4. Choose **Navigate to this waypoint** from its menu.
+5. Return to the game. The HUD shows heading, turn arrow, and distance; the
+   minimap points to the same target. Choose **Stop navigation** when finished.
+
+| Key | Action |
+|---|---|
+| `Ctrl+Alt+H` | Toggle Navigation HUD |
+| `Ctrl+Alt+M` | Toggle minimap |
+| `Ctrl+Alt+F` | Show/hide the full map |
+| `Ctrl+Alt+R` | Reload the UI if minimap/HUD stops drawing |
+| `Ctrl+Alt+C` | Toggle minimap click-through |
+| `Ctrl+Alt+Up/Down` | Increase/decrease minimap opacity |
+| `Ctrl+Alt+Left/Right` | Increase/decrease minimap size |
+
+All shortcuts are rebindable in **Settings**. The HUD hides when the game is not
+foreground; that is expected behavior, not an app shutdown.
 
 ## Connecting "Your Dino" (IslePilot)
 
@@ -108,35 +177,30 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-Measured on a real machine: **Intel Core i5-14400F (10 cores / 16 threads), 32 GB
-RAM, RTX 3060 Ti, Windows 11 Pro build 26200, 100% display scaling** — release
-build v1.0.0:
+The published v1.6.0 Navigation HUD artifacts were measured directly after build:
 
 | Item | Size |
 |---|---|
-| Installer | **4.3 MB** |
-| Installed executable | 17.8 MB |
+| NSIS installer | **5,731,151 bytes (~5.7 MB)** |
+| Installed executable | **21,093,888 bytes (~21.1 MB)** |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
-| **Total disk footprint** | **~21 MB** |
 
-| At runtime | RAM (working set) | Idle CPU |
-|---|---|---|
-| Full map **and** minimap open | **522 MB** (8 processes) | 0.18% |
-| Full map hidden with `Ctrl+Alt+F` (the while-playing scenario) | **448 MB** | 0.08% |
-
-**CPU is essentially zero** because the app has no repaint loop — it draws only
-when new data arrives.
+The HUD caps DOM writes at roughly 30 FPS and predicts only while a moving sample
+is active; there is no background game-memory reader or scanner. Runtime RAM
+depends on WebView2, open tabs, and cached 3D models, so this fork does not publish
+one fixed RAM claim.
 
 ## Things to know
 
 1. **Game display mode**: no out-of-process overlay can draw over **Exclusive
    Fullscreen** — a Windows limitation. Use **Windowed** or **Borderless
    Fullscreen**. The app reads your game config and warns you if the mode is wrong.
-2. **Position does not update by itself**: you press `Tab` → **Asset Location** in
-   game whenever you want a position update. This is *deliberate* — see the
-   anti-cheat section below.
-3. **Heading needs two coordinate copies** at least 20 m apart; samples older than
-   10 minutes expire so the arrow never points the wrong way.
+2. **Automatic position depends on the server**: an IslePilot live map confirms
+   position every five seconds by default. Between responses the app estimates for
+   at most four seconds. If live map is disabled, use `Tab` → **Asset Location**.
+3. **Heading prefers server yaw**. Without yaw, the app needs at least two valid
+   movement samples to infer direction; stale data becomes **STALE** instead of
+   continuing to point confidently.
 4. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
 5. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
@@ -156,25 +220,25 @@ when new data arrives.
    is disabled, and a manual choice you make is always respected.
 9. **Your login token/cookie** is encrypted with Windows DPAPI and can only be
    decrypted by your Windows account on that machine.
-10. **SmartScreen** warns on first install because the installer is not code-signed
-   (certificates cost a yearly fee). Later auto-updates are not prompted again.
+10. **SmartScreen** may warn because the installer is not code-signed. Compare its
+    SHA-256 with the Release page and update this fork manually.
 
 ## Anti-cheat safety
 
 The game runs kernel-level Easy Anti-Cheat. This app is safe because it
 **never touches the game process**:
 
-- Position comes only from the **clipboard**, when you press Tab → "Asset
-  Location" in game yourself — the app just reads back what the game
-  voluntarily hands over.
+- Position comes over **HTTPS from IslePilot live map** when the server allows it,
+  or from the **clipboard** after you press `Tab` → **Asset Location**. Both are
+  server/game-provided data outside the game process.
 - Hotkeys use `RegisterHotKey` (Windows' cooperative API), **not** a keyboard
   hook.
 - Dino stats / Garage / 3D models come over **HTTPS from the IslePilot system**
   (the islepilot.eu API or the server's own website) — again, nothing to do
   with the game process.
 - Never: reading game memory, DLL injection, DirectX hooks, synthetic input,
-  packet capture, auto-copying coordinates on a timer, or sharing positions
-  between players.
+  packet capture, automatically copying coordinates out of the game, or sharing
+  positions between players.
 
 CI greps for any forbidden API call site (`scripts/check-forbidden-apis.ps1`).
 The allowed-call list lives at the top of `src-tauri/src/win/mod.rs`.
@@ -220,16 +284,24 @@ your machine, not a redistribution.
 
 Unaffiliated with Afterthought LLC.
 
-## Contact & Support
+## Origin, licensing, and contact
 
-Developed by **Trần Quốc Toản**.
+- Navigation HUD fork: maintained by
+  [@nguyenduytamgithub](https://github.com/nguyenduytamgithub); report fork bugs
+  in [fork Issues](https://github.com/nguyenduytamgithub/theisle-overlay/issues).
+- Original v1.5.2 project and code: **Trần Quốc Toản** —
+  [`toantranct/theisle-overlay`](https://github.com/toantranct/theisle-overlay).
+- Upstream currently has no `LICENSE` file. This fork does not invent a new
+  license; public source visibility is not a substitute for license terms.
+
+The upstream author's contact and support details are preserved below for
+proper attribution:
 
 - 📧 Email: toantranct1@gmail.com
 - 💬 Facebook: https://www.facebook.com/satann247/
-- 🐛 Bugs / suggestions: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
+- 🐛 Upstream Issues: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
 
-The app is free and open source. If you find it useful, you can buy the
-author a coffee:
+If the original foundation is useful, you can buy the upstream author a coffee:
 
 <img src="docs/qr_donate.png" alt="VietQR — Techcombank 8866886767 TRAN QUOC TOAN" width="280">
 

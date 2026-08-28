@@ -46,6 +46,9 @@ important claims. Both will include:
   fork's default branch. Keep fork `main` tracking upstream instead of force
   overwriting it.
 - Set a clear repository description and navigation-related topics.
+- Point the updater endpoint at the public fork and disable signed updater
+  artifact generation. This prevents the fork from offering upstream 2.x while
+  keeping manual NSIS Releases reproducible without the upstream private key.
 - Tag the tested commit as `v1.6.0-navigation-hud`.
 - Create a public GitHub Release from a checked-in release-notes file and attach
   the already verified unsigned NSIS installer.
@@ -61,4 +64,3 @@ important claims. Both will include:
   Clippy, and forbidden-API checks must pass before publication.
 - After pushing, use GitHub API readback to verify public visibility, fork parent,
   default branch, tag, release, asset size, and asset download URL.
-
