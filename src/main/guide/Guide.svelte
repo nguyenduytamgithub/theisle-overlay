@@ -22,6 +22,8 @@
 
   const ACTIONS = [
     "toggle_minimap",
+    "toggle_hud",
+    "toggle_night_vision",
     "toggle_fullmap",
     "toggle_click_through",
     "mark_here",
@@ -91,6 +93,19 @@
       <strong>Lưu ý:</strong> lớp phủ không thể hiện đè lên chế độ
       <strong>Toàn màn hình độc quyền</strong>. Đây là giới hạn của Windows. Dùng Cửa sổ hoặc
       Toàn màn hình không viền.
+    </p>
+
+    <h2>Nhìn đêm</h2>
+    <p>
+      Khi trời tối, bấm nút <strong>NHÌN ĐÊM</strong> ở góc trên bên phải hoặc nhấn
+      <strong>Ctrl+Alt+N</strong>. Chế độ này chỉ chỉnh đường cong sáng của đúng màn hình
+      đang chứa game; không đọc bộ nhớ, không chụp hình, không hook và không tự bấm phím.
+    </p>
+    <p>
+      Alt-Tab, tắt chế độ, đổi màn hình hoặc thoát ứng dụng đều tự phục hồi màu gốc. Nếu
+      màn hình đang bật HDR hoặc driver từ chối chỉnh gamma, nút sẽ báo
+      <strong>KHÔNG HỖ TRỢ</strong> thay vì giả vờ đã bật. Có thể chỉnh cường độ và ẩn nút
+      trong tab Cài đặt.
     </p>
 
     <h2>Khủng long của bạn (IslePilot)</h2>
@@ -210,6 +225,20 @@
       <strong>Note:</strong> no overlay can draw over
       <strong>exclusive Fullscreen</strong> — a Windows limitation. Use Windowed or
       Borderless Fullscreen.
+    </p>
+
+    <h2>Night Vision</h2>
+    <p>
+      In dark scenes, click the <strong>NIGHT VISION</strong> button in the top-right or
+      press <strong>Ctrl+Alt+N</strong>. It changes only the display gamma curve on the
+      monitor containing the game; it does not read game memory, capture frames, install
+      hooks, or synthesize input.
+    </p>
+    <p>
+      Alt-Tab, switching it off, moving monitors, or quitting restores the original color.
+      If HDR or the display driver rejects gamma control, the button truthfully reports
+      <strong>UNAVAILABLE</strong>. Strength and button visibility are adjustable in
+      Settings.
     </p>
 
     <h2>Your Dino (IslePilot)</h2>

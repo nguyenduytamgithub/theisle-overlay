@@ -1,4 +1,4 @@
-# TheIsle Overlay — Navigation HUD Community Fork
+# TheIsle Overlay — Navigation HUD + Night Vision Community Fork
 
 [Tiếng Việt](README.md) · **English**
 
@@ -8,9 +8,9 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
 
-Fork version: **v1.6.0 Navigation HUD**. Its goal is reliable position,
-heading, trails, and waypoint guidance while playing, without touching game
-memory or Easy Anti-Cheat.
+Fork version: **v1.7.0 Navigation HUD + Night Vision**. Its goal is reliable
+position, heading, trails, waypoint guidance, and useful dark-scene visibility
+while playing, without touching game memory or Easy Anti-Cheat.
 
 Upstream 2.x is now a closed-source release with separate Pro features. This
 fork does **not** contain 2.x voice, friend positions, the skin editor, or Pro
@@ -25,7 +25,7 @@ installer with manual fork updates.
 
 ## What does this fork improve?
 
-| While playing | Open-source upstream v1.5.2 | Navigation HUD v1.6.0 |
+| While playing | Open-source upstream v1.5.2 | Navigation HUD + Night Vision v1.7.0 |
 |---|---|---|
 | IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
 | Motion between server samples | Position jumps on every response | Up to **4 seconds** of bounded visual prediction, then freezes for confirmation; **350 ms** correction blend |
@@ -35,6 +35,7 @@ installer with manual fork updates.
 | In-game guidance | No dedicated navigation HUD | Click-through top-centre HUD with compass, degrees, turn arrow, target name, and distance |
 | Delayed data | Freshness is unclear | Explicit **SERVER / ESTIMATE / STALE** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
+| Scenes too dark to read | No dedicated visibility control | **NIGHT VISION** button + `Ctrl+Alt+N`, strength 0–100, verified gamma readback and automatic restore |
 
 Smooth motion is a **bounded estimate**, not fake realtime. The server still
 confirms real coordinates every five seconds. Without IslePilot live-map
@@ -57,6 +58,10 @@ support, use `Tab` → **Asset Location** as before.
 - **In-game Navigation HUD**: N/E/S/W compass, heading in degrees, required-turn
   arrow, target name, distance, and data freshness; auto-hides on Alt-Tab and
   toggles with `Ctrl+Alt+H`.
+- **Display Night Vision**: a small top-right button plus `Ctrl+Alt+N`, with
+  strength 0–100 in Settings. It uses only Windows display gamma on the game
+  monitor, verifies the readback, and restores original color on Alt-Tab,
+  monitor change, switch-off, or app exit.
 - **Full map**: smooth zoom/pan, 12 toggleable layers (fresh water, water, salt licks,
   mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
   with per-species icons 🐗🦌🐢, region names, landmarks, and a live **server
@@ -89,8 +94,8 @@ support, use `Tab` → **Asset Location** as before.
 ## Quick install
 
 1. Open the [fork Releases](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
-   and download `TheIsle Overlay_1.6.0_x64-setup.exe` from
-   **v1.6.0-navigation-hud**.
+   and download `TheIsle Overlay_1.7.0_x64-setup.exe` from
+   **v1.7.0-night-vision**.
 2. Exit any older Overlay from the system tray, then run the installer. Existing
    settings and waypoints are preserved.
 3. If SmartScreen warns, choose **More info → Run anyway**. The installer is
@@ -118,6 +123,7 @@ want to keep Navigation HUD; install future builds from this fork's Releases.
 | Key | Action |
 |---|---|
 | `Ctrl+Alt+H` | Toggle Navigation HUD |
+| `Ctrl+Alt+N` | Toggle Night Vision |
 | `Ctrl+Alt+M` | Toggle minimap |
 | `Ctrl+Alt+F` | Show/hide the full map |
 | `Ctrl+Alt+R` | Reload the UI if minimap/HUD stops drawing |
@@ -177,7 +183,9 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-The published v1.6.0 Navigation HUD artifacts were measured directly after build:
+The v1.7.0 size and SHA-256 are recorded in the
+[release note](docs/releases/v1.7.0-night-vision.md) after its measured build.
+The table below is the previous v1.6.0 baseline, not a new measurement:
 
 | Item | Size |
 |---|---|
@@ -201,26 +209,30 @@ one fixed RAM claim.
 3. **Heading prefers server yaw**. Without yaw, the app needs at least two valid
    movement samples to infer direction; stale data becomes **STALE** instead of
    continuing to point confidently.
-4. **Only one instance can run** — global hotkeys are system-exclusive, so two
+4. **Night Vision depends on display gamma** and works best in SDR. Some
+   displays, drivers, or HDR modes reject it; the app reports **UNAVAILABLE**
+   rather than pretending it applied. It calls Windows display APIs only: no
+   game process handle, memory read, hook/capture, or synthetic input.
+5. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
-5. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
+6. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
    the app trims the hidden window's memory. Clicking X parks the app in the
    **system tray** (icon next to the clock), Steam/Discord-style — left-click
    the icon to bring it back, right-click → Quit to exit fully.
-6. **Hotkeys taken by another app** are reported at startup; rebind them in Settings.
-7. **The "Your dino" feature** supports IslePilot-based servers — see
+7. **Hotkeys taken by another app** are reported at startup; rebind them in Settings.
+8. **The "Your dino" feature** supports IslePilot-based servers — see
    [Connecting "Your Dino"](#connecting-your-dino-islepilot). The recommended
    Steam-login mode reads a stable JSON API; only the legacy server + cookie
    mode parses the server's web pages, so that path **can break whenever
    IslePilot changes their markup** — the app flags it when it detects a new
    deployment. If this part fails, the map features are **unaffected**.
-8. **Ask your server admins** before using it routinely — some servers have their
+9. **Ask your server admins** before using it routinely — some servers have their
    own rules about third-party tools. Auto-position only turns on when the app
    detects that the server runs a live map; it locks itself off when the live map
    is disabled, and a manual choice you make is always respected.
-9. **Your login token/cookie** is encrypted with Windows DPAPI and can only be
+10. **Your login token/cookie** is encrypted with Windows DPAPI and can only be
    decrypted by your Windows account on that machine.
-10. **SmartScreen** may warn because the installer is not code-signed. Compare its
+11. **SmartScreen** may warn because the installer is not code-signed. Compare its
     SHA-256 with the Release page and update this fork manually.
 
 ## Anti-cheat safety
@@ -233,6 +245,8 @@ The game runs kernel-level Easy Anti-Cheat. This app is safe because it
   server/game-provided data outside the game process.
 - Hotkeys use `RegisterHotKey` (Windows' cooperative API), **not** a keyboard
   hook.
+- Night Vision uses only `GetDeviceGammaRamp`/`SetDeviceGammaRamp` on the game
+  display, with readback and a recovery record; it never obtains game pixels.
 - Dino stats / Garage / 3D models come over **HTTPS from the IslePilot system**
   (the islepilot.eu API or the server's own website) — again, nothing to do
   with the game process.
@@ -240,7 +254,8 @@ The game runs kernel-level Easy Anti-Cheat. This app is safe because it
   packet capture, automatically copying coordinates out of the game, or sharing
   positions between players.
 
-CI greps for any forbidden API call site (`scripts/check-forbidden-apis.ps1`).
+CI greps for forbidden call sites (`scripts/check-forbidden-apis.ps1`) and the
+dedicated `night_vision_safety` test locks Night Vision to display-only APIs.
 The allowed-call list lives at the top of `src-tauri/src/win/mod.rs`.
 
 ## Development

@@ -6,15 +6,20 @@
   import { invoke } from "@tauri-apps/api/core";
   import {
     getSettings,
+    getNightVisionState,
     listenerBag,
     onFetchFinished,
+    onNightVisionChanged,
     onSettingsChanged,
     patchSettings,
+    setNightVisionStrength,
     setBasemapSource,
     startFetchData,
     submitFeedback,
+    toggleNightVision,
     type BasemapSource,
     type FeedbackCategory,
+    type NightVisionState,
     type Settings,
   } from "$lib/api";
   import { t } from "$lib/i18n";
@@ -22,11 +27,15 @@
 
   let settings = $state<Settings | null>(null);
   let refetching = $state(false);
+  let nightVision = $state<NightVisionState | null>(null);
+  let nightVisionBusy = $state(false);
 
   onMount(() => {
     const bag = listenerBag();
     void getSettings().then((s) => (settings = s));
     void bag.add(onFetchFinished(() => (refetching = false)));
+    void bag.add(onNightVisionChanged((state) => (nightVision = state)));
+    void getNightVisionState().then((state) => (nightVision = state));
     // Hotkeys (Ctrl+Alt+M etc.) patch settings from Rust while this screen
     // is open. Without mirroring the broadcast, the "visible" checkbox kept
     // its stale tick after a hotkey hide, and the click meant to turn the
@@ -42,6 +51,37 @@
 
   async function patch(p: object) {
     settings = await patchSettings(p);
+  }
+
+  async function toggleNightVisionFromSettings() {
+    if (nightVisionBusy) return;
+    nightVisionBusy = true;
+    try {
+      nightVision = await toggleNightVision();
+    } finally {
+      nightVisionBusy = false;
+    }
+  }
+
+  async function changeNightVisionStrength(strength: number) {
+    if (nightVisionBusy) return;
+    nightVisionBusy = true;
+    try {
+      nightVision = await setNightVisionStrength(strength);
+    } finally {
+      nightVisionBusy = false;
+    }
+  }
+
+  function nightVisionStatusKey(): string {
+    if (!nightVision) return "night_vision.status_waiting";
+    if (nightVision.errorKey === "night_vision.recovery_error") {
+      return "night_vision.status_recovery_error";
+    }
+    if (!nightVision.supported) return "night_vision.status_unavailable";
+    if (nightVision.applied) return "night_vision.status_applied";
+    if (nightVision.requested) return "night_vision.status_waiting";
+    return "night_vision.status_off";
   }
 
   // Basemap switch: the command downloads the imagery on first selection, so
@@ -148,6 +188,68 @@
               void patch({ navigation: { hud_opacity: Number(e.currentTarget.value) } })}
           />
         </label>
+      </div>
+    </section>
+
+    <!-- Display-only Night Vision -->
+    <section>
+      <h2 class="mb-2 font-semibold" style="color: var(--color-accent)">
+        {$t("settings.night_vision")}
+      </h2>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <button
+            class="cursor-pointer rounded border px-3 py-1 text-sm font-semibold disabled:opacity-50"
+            style={nightVision?.applied
+              ? "background: #607d26; color: #f2ffc4; border-color: #d8ff57"
+              : "border-color: var(--color-border)"}
+            disabled={nightVisionBusy}
+            onclick={() => void toggleNightVisionFromSettings()}
+          >
+            {$t("settings.night_vision_toggle")}
+          </button>
+          <span
+            class="text-xs font-semibold"
+            style:color={nightVision?.applied
+              ? "#c9f46b"
+              : nightVision && !nightVision.supported
+                ? "#ff8a80"
+                : "var(--color-muted)"}
+          >
+            {$t(nightVisionStatusKey() as never)}
+          </span>
+        </div>
+        <label class="block text-sm">
+          <div class="mb-0.5 flex justify-between">
+            <span>{$t("settings.night_vision_strength")}</span>
+            <span class="font-mono" style="color: var(--color-muted)">
+              {nightVision?.strength ?? settings.night_vision.strength}%
+            </span>
+          </div>
+          <input
+            type="range"
+            class="w-full accent-[#c8ef58]"
+            min="0"
+            max="100"
+            step="5"
+            value={nightVision?.strength ?? settings.night_vision.strength}
+            disabled={nightVisionBusy}
+            onchange={(e) =>
+              void changeNightVisionStrength(Number(e.currentTarget.value))}
+          />
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.night_vision.show_button}
+            onchange={(e) =>
+              void patch({ night_vision: { show_button: e.currentTarget.checked } })}
+          />
+          {$t("settings.night_vision_show_button")}
+        </label>
+        <p class="text-xs leading-relaxed" style="color: var(--color-muted)">
+          {$t("settings.night_vision_hint")}
+        </p>
       </div>
     </section>
 

@@ -1,4 +1,4 @@
-# TheIsle Overlay — Navigation HUD Community Fork
+# TheIsle Overlay — Navigation HUD + Nhìn Đêm Community Fork
 
 **Tiếng Việt** · [English](README.en.md)
 
@@ -8,9 +8,9 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > (`f628a18`). Tác giả và dự án gốc: **Trần Quốc Toản**.
 
-Phiên bản của fork: **v1.6.0 Navigation HUD**. Mục tiêu là làm vị trí, hướng
-đi, đường đã đi và waypoint dễ tin cậy hơn trong lúc chơi — không đọc bộ nhớ
-game và không can thiệp Easy Anti-Cheat.
+Phiên bản của fork: **v1.7.0 Navigation HUD + Nhìn Đêm**. Mục tiêu là làm vị
+trí, hướng đi, đường đã đi, waypoint và khả năng quan sát cảnh tối hữu dụng hơn
+trong lúc chơi — không đọc bộ nhớ game và không can thiệp Easy Anti-Cheat.
 
 Upstream 2.x hiện là bản phát hành đóng mã nguồn với các tính năng Pro riêng.
 Fork này **không có** Voice, vị trí bạn bè, Skin editor hay realtime Pro của
@@ -24,7 +24,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 
 ## Fork này cải thiện gì?
 
-| Khi đang chơi | Upstream mã mở v1.5.2 | Navigation HUD v1.6.0 |
+| Khi đang chơi | Upstream mã mở v1.5.2 | Navigation HUD + Nhìn Đêm v1.7.0 |
 |---|---|---|
 | Nhịp lấy vị trí IslePilot | Mặc định 10 giây | Mặc định **5 giây**; giữ nguyên nếu bạn đã tự đặt giá trị khác |
 | Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Ước tính hiển thị tối đa **4 giây**, sau đó đứng chờ xác nhận; hiệu chỉnh mềm **350 ms** |
@@ -34,6 +34,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 | Dẫn đường trên màn hình game | Không có HUD riêng | HUD click-through ở giữa phía trên: BẮC/ĐÔNG/NAM/TÂY, số độ, mũi tên rẽ, tên đích và khoảng cách |
 | Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **SERVER / ƯỚC TÍNH / MẤT TÍN HIỆU** |
 | Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
+| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, cường độ 0–100; readback xác nhận và tự phục hồi gamma khi Alt-Tab/thoát |
 
 Điểm quan trọng: chuyển động mượt là **ước tính có giới hạn**, không bịa thành
 realtime. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
@@ -56,6 +57,10 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
 - **Navigation HUD trên game**: la bàn BẮC–ĐÔNG–NAM–TÂY, hướng nhìn theo độ,
   mũi tên cần rẽ, tên đích, khoảng cách và trạng thái dữ liệu; tự ẩn khi
   Alt-Tab và bật/tắt bằng `Ctrl+Alt+H`.
+- **Nhìn đêm trực tiếp trên màn hình**: nút nhỏ góc trên bên phải và
+  `Ctrl+Alt+N`; chỉnh cường độ 0–100 trong Cài đặt. Chỉ dùng Windows display
+  gamma trên đúng màn hình chứa game, xác minh bằng readback và tự phục hồi
+  màu gốc khi Alt-Tab, đổi màn hình, tắt hoặc thoát app.
 - **Bản đồ lớn**: phóng to/thu nhỏ mượt, 12 lớp bật/tắt được (nước ngọt, nguồn
   nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
   ăn, động vật với biểu tượng riêng từng loài 🐗🦌🐢, tên vùng, địa điểm, và
@@ -87,8 +92,8 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
 ## Cài đặt nhanh
 
 1. Mở [Releases của fork](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
-   và tải file `TheIsle Overlay_1.6.0_x64-setup.exe` trong bản
-   **v1.6.0-navigation-hud**.
+   và tải file `TheIsle Overlay_1.7.0_x64-setup.exe` trong bản
+   **v1.7.0-night-vision**.
 2. Nếu đang chạy một bản Overlay khác, thoát nó từ khay hệ thống rồi chạy bộ
    cài. Dữ liệu settings và waypoint cũ được installer giữ lại.
 3. Nếu Windows SmartScreen cảnh báo, chọn **More info → Run anyway**. Bộ cài
@@ -117,6 +122,7 @@ giữ Navigation HUD; hãy cài bản mới từ Releases của fork khi có th�
 | Phím | Tác dụng |
 |---|---|
 | `Ctrl+Alt+H` | Bật/tắt Navigation HUD |
+| `Ctrl+Alt+N` | Bật/tắt Nhìn đêm |
 | `Ctrl+Alt+M` | Bật/tắt minimap |
 | `Ctrl+Alt+F` | Mở/ẩn bản đồ lớn |
 | `Ctrl+Alt+R` | Tải lại giao diện khi minimap/HUD không vẽ |
@@ -175,7 +181,9 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Artifact v1.6.0 Navigation HUD đã phát hành được đo trực tiếp sau khi build:
+Artifact v1.7.0 sẽ được ghi đúng kích thước và SHA-256 trong
+[release note](docs/releases/v1.7.0-night-vision.md) sau khi build. Số dưới đây
+là mốc của v1.6.0 trước đó, không phải số đo mới:
 
 | Hạng mục | Dung lượng |
 |---|---|
@@ -199,27 +207,31 @@ số tab đang mở và model 3D đã tải, nên fork không công bố một c
 3. **Hướng nhìn ưu tiên yaw server**. Khi server không gửi yaw, app cần ít nhất
    hai mẫu di chuyển hợp lệ để suy ra hướng; dữ liệu quá cũ sẽ chuyển sang
    **MẤT TÍN HIỆU** thay vì tiếp tục chỉ bừa.
-4. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
+4. **Nhìn đêm phụ thuộc display gamma**: hiệu quả tốt nhất ở SDR. Một số màn
+   hình, driver hoặc chế độ HDR có thể từ chối; app sẽ hiện **KHÔNG HỖ TRỢ**,
+   không giả báo đã bật. Tính năng chỉ gọi API màn hình Windows; không mở tiến
+   trình game, không đọc bộ nhớ, không hook/capture và không giả lập input.
+5. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
-5. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm
+6. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm
    bộ nhớ của cửa sổ ẩn. Bấm nút X thì app thu về **khay hệ thống** (icon cạnh
    đồng hồ) như Steam/Discord — chuột trái icon để mở lại, chuột phải → Thoát
    để tắt hẳn.
-6. **Phím tắt bị ứng dụng khác chiếm**: app báo ngay khi khởi động, đổi lại trong
+7. **Phím tắt bị ứng dụng khác chiếm**: app báo ngay khi khởi động, đổi lại trong
    tab Cài đặt.
-7. **Tính năng "Khủng long của bạn"** hỗ trợ server dùng nền tảng IslePilot —
+8. **Tính năng "Khủng long của bạn"** hỗ trợ server dùng nền tảng IslePilot —
    xem mục [Kết nối "Khủng long của bạn"](#kết-nối-khủng-long-của-bạn-islepilot).
    Chế độ đăng nhập Steam (khuyên dùng) đọc qua API JSON ổn định; riêng cách cũ
    server + cookie phân tích HTML trang web của server nên **có thể hỏng khi
    IslePilot đổi giao diện** — app sẽ báo khi phát hiện server vừa cập nhật.
    Nếu phần này lỗi, các tính năng bản đồ **không bị ảnh hưởng**.
-8. **Nên hỏi admin server** trước khi dùng thường xuyên — một số server có luật
+9. **Nên hỏi admin server** trước khi dùng thường xuyên — một số server có luật
    riêng về công cụ bên thứ ba. Tùy chọn lấy vị trí tự động chỉ bật khi app dò
    thấy server có live map; server tắt live map thì tùy chọn tự khóa, và lựa
    chọn tắt/bật thủ công của bạn luôn được tôn trọng.
-9. **Token/cookie đăng nhập** được mã hóa bằng Windows DPAPI, chỉ giải được
+10. **Token/cookie đăng nhập** được mã hóa bằng Windows DPAPI, chỉ giải được
    bằng tài khoản Windows của bạn trên chính máy đó.
-10. **SmartScreen** có thể cảnh báo vì installer chưa ký số. Đối chiếu SHA-256
+11. **SmartScreen** có thể cảnh báo vì installer chưa ký số. Đối chiếu SHA-256
     trên trang Release và cập nhật fork bằng installer thủ công.
 
 ## An toàn với anti-cheat
@@ -232,13 +244,16 @@ vào tiến trình game**:
   dữ liệu server/game chủ động cung cấp ngoài tiến trình game.
 - Phím tắt dùng `RegisterHotKey` (API hợp tác của Windows), **không phải**
   keyboard hook.
+- Nhìn đêm chỉ dùng `GetDeviceGammaRamp`/`SetDeviceGammaRamp` trên màn hình
+  chứa game, có readback và recovery record; không lấy pixel hay nội dung game.
 - Chỉ số khủng long / Garage / model 3D lấy qua **HTTPS tới hệ thống IslePilot**
   (API islepilot.eu hoặc website của server) — cũng không liên quan gì tới tiến
   trình game.
 - Không bao giờ: đọc bộ nhớ game, inject DLL, hook DirectX, giả lập phím,
   bắt gói mạng, tự chép tọa độ từ game theo timer, chia sẻ vị trí giữa người chơi.
 
-CI có bước grep chặn mọi call site API cấm (`scripts/check-forbidden-apis.ps1`).
+CI có bước grep chặn mọi call site API cấm (`scripts/check-forbidden-apis.ps1`)
+và test riêng `night_vision_safety` khóa adapter nhìn đêm vào đúng API màn hình.
 Danh sách API được phép nằm ở đầu `src-tauri/src/win/mod.rs`.
 
 ## Phát triển

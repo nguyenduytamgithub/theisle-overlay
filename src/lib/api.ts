@@ -61,6 +61,10 @@ export type Settings = Record<string, unknown> & {
     hud_visible: boolean;
     hud_opacity: number;
   };
+  night_vision: {
+    strength: number;
+    show_button: boolean;
+  };
   number_format: "auto" | "us" | "eu";
   language: "vi" | "en";
   telemetry: { enabled: boolean };
@@ -88,6 +92,19 @@ export const onTrailChanged = (
 export const onSettingsChanged = (
   cb: (s: Settings) => void,
 ): Promise<UnlistenFn> => listen<Settings>("settings://changed", (e) => cb(e.payload));
+
+export interface NightVisionState {
+  requested: boolean;
+  applied: boolean;
+  supported: boolean;
+  strength: number;
+  errorKey: string | null;
+}
+
+export const onNightVisionChanged = (
+  cb: (state: NightVisionState) => void,
+): Promise<UnlistenFn> =>
+  listen<NightVisionState>("night-vision://changed", (e) => cb(e.payload));
 
 export const onWaypointsChanged = (cb: () => void): Promise<UnlistenFn> =>
   listen("waypoints://changed", () => cb());
@@ -148,6 +165,12 @@ export interface DataStatus {
 export const getSettings = () => invoke<Settings>("get_settings");
 export const patchSettings = (patch: object) =>
   invoke<Settings>("patch_settings", { patch });
+export const getNightVisionState = () =>
+  invoke<NightVisionState>("get_night_vision_state");
+export const toggleNightVision = () =>
+  invoke<NightVisionState>("toggle_night_vision");
+export const setNightVisionStrength = (strength: number) =>
+  invoke<NightVisionState>("set_night_vision_strength", { strength });
 
 /** Last known position (null before the first sample) — for initial paint. */
 export const getCurrentPosition = () =>
