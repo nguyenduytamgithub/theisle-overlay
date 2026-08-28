@@ -61,6 +61,13 @@ let predictionFrame: number | null = null;
 let staleTimer: number | null = null;
 let lastPaintAtMs = 0;
 
+function applySettings(settings: Record<string, unknown>) {
+  language = settings.language === "en" ? "en" : "vi";
+  const navigationSettings = settings.navigation as Record<string, unknown> | undefined;
+  const opacity = Number(navigationSettings?.hud_opacity ?? 0.92);
+  hud.style.opacity = String(Math.max(0.35, Math.min(1, opacity)));
+}
+
 const fmtDistance = (metres: number) =>
   metres >= 1_000 ? `${(metres / 1_000).toFixed(1)} km` : `${Math.round(metres)} m`;
 
@@ -168,13 +175,13 @@ async function refreshNavigation() {
 
 async function init() {
   const settings = await invoke<Record<string, unknown>>("get_settings");
-  language = settings.language === "en" ? "en" : "vi";
+  applySettings(settings);
 
   await listen<PositionUpdate>("position://update", (event) => acceptPosition(event.payload));
   await listen("navigation://changed", () => void refreshNavigation());
   await listen("waypoints://changed", () => void refreshNavigation());
   await listen<Record<string, unknown>>("settings://changed", (event) => {
-    language = event.payload.language === "en" ? "en" : "vi";
+    applySettings(event.payload);
     paint(Date.now(), true);
   });
 

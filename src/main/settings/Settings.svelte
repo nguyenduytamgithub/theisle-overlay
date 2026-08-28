@@ -115,6 +115,42 @@
       </div>
     </section>
 
+    <!-- Navigation HUD -->
+    <section>
+      <h2 class="mb-2 font-semibold" style="color: var(--color-accent)">
+        {$t("settings.hud")}
+      </h2>
+      <div class="space-y-3">
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.navigation.hud_visible}
+            onchange={(e) =>
+              void patch({ navigation: { hud_visible: e.currentTarget.checked } })}
+          />
+          {$t("settings.hud_visible")}
+        </label>
+        <label class="block text-sm">
+          <div class="mb-0.5 flex justify-between">
+            <span>{$t("settings.hud_opacity")}</span>
+            <span class="font-mono" style="color: var(--color-muted)">
+              {Math.round(settings.navigation.hud_opacity * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            class="w-full accent-[#e8a33d]"
+            min="0.35"
+            max="1"
+            step="0.05"
+            value={settings.navigation.hud_opacity}
+            oninput={(e) =>
+              void patch({ navigation: { hud_opacity: Number(e.currentTarget.value) } })}
+          />
+        </label>
+      </div>
+    </section>
+
     <!-- Minimap -->
     <section>
       <h2 class="mb-2 font-semibold" style="color: var(--color-accent)">

@@ -110,6 +110,7 @@ pub fn default_settings() -> Value {
         },
         "hotkeys": {
             "toggle_minimap": "Ctrl+Alt+M",
+            "toggle_hud": "Ctrl+Alt+H",
             "toggle_fullmap": "Ctrl+Alt+F",
             "toggle_click_through": "Ctrl+Alt+C",
             "mark_here": "Ctrl+Alt+B",
@@ -150,6 +151,8 @@ pub fn default_settings() -> Value {
         "navigation": {
             "target_waypoint_id": null,
             "arrival_radius_m": 15.0,
+            "hud_visible": true,
+            "hud_opacity": 0.92,
         },
         // Anonymous usage counts + crash reports. No IP is stored (the
         // edge supplies a country code and the address is dropped), no game
@@ -314,6 +317,9 @@ mod tests {
         assert_eq!(merged["map"]["basemap"], "vulnona", "new key gets its default");
         assert!(merged["navigation"]["target_waypoint_id"].is_null());
         assert_eq!(merged["navigation"]["arrival_radius_m"], 15.0);
+        assert_eq!(merged["navigation"]["hud_visible"], true);
+        assert_eq!(merged["navigation"]["hud_opacity"], 0.92);
+        assert_eq!(merged["hotkeys"]["toggle_hud"], "Ctrl+Alt+H");
         assert_eq!(
             active_source(&merged),
             overlay_core::MapSource::Vulnona,

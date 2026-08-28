@@ -99,6 +99,7 @@ export const vi = {
 
   // --- phím tắt (tên hành động) ---
   "hotkey.toggle_minimap": "Hiện/ẩn bản đồ nhỏ",
+  "hotkey.toggle_hud": "Hiện/ẩn HUD la bàn",
   "hotkey.toggle_fullmap": "Mở/đóng bản đồ lớn",
   "hotkey.toggle_click_through": "Bật/tắt chế độ bấm được",
   "hotkey.mark_here": "Đánh dấu vị trí hiện tại",
@@ -112,6 +113,9 @@ export const vi = {
   // --- cài đặt ---
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Bản đồ nhỏ",
+  "settings.hud": "HUD la bàn trên màn hình game",
+  "settings.hud_visible": "Hiện hướng Đông Tây Nam Bắc và mũi tên tới điểm ghim",
+  "settings.hud_opacity": "Độ đậm HUD",
   "settings.visible": "Hiện bản đồ nhỏ",
   "settings.require_game": "Chỉ hiện khi đang trong game (Alt-Tab ra là tự ẩn)",
   "settings.click_through": "Chuột bấm xuyên qua (không cản trở lúc chơi)",

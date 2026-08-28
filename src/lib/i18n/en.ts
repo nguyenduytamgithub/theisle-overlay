@@ -88,6 +88,7 @@ export const en: Record<MsgKey, string> = {
   "warn.no_data": "No map data on this machine yet. It needs to be downloaded once before use.",
 
   "hotkey.toggle_minimap": "Show/hide minimap",
+  "hotkey.toggle_hud": "Show/hide compass HUD",
   "hotkey.toggle_fullmap": "Open/close full map",
   "hotkey.toggle_click_through": "Toggle click-through",
   "hotkey.mark_here": "Mark current position",
@@ -100,6 +101,9 @@ export const en: Record<MsgKey, string> = {
 
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Minimap",
+  "settings.hud": "In-game compass HUD",
+  "settings.hud_visible": "Show cardinal directions and the pinned-target arrow",
+  "settings.hud_opacity": "HUD opacity",
   "settings.visible": "Show minimap",
   "settings.require_game": "Only show while you are in the game (hides on Alt-Tab)",
   "settings.click_through": "Click-through (never blocks gameplay)",

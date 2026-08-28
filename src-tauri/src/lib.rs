@@ -9,6 +9,7 @@ pub mod commands;
 pub mod events;
 pub mod fetch;
 pub mod hotkeys;
+pub mod hud;
 pub mod islepilot;
 pub mod minimap;
 pub mod pipeline;
@@ -191,6 +192,7 @@ pub fn run(replay_file: Option<PathBuf>) {
                 }
             }
             minimap::create(app.handle())?;
+            hud::create(app.handle())?;
             tray::create(app.handle())?;
             clipboard::spawn(app.handle().clone());
             webview_mem::spawn_watchdog(app.handle().clone());

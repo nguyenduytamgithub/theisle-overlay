@@ -271,6 +271,7 @@ fn dispatch(app: &AppHandle, action: &str) {
     crate::telemetry::counters::track("hotkey_used");
     match action {
         "toggle_minimap" => toggle_setting(app, "visible"),
+        "toggle_hud" => toggle_navigation_setting(app, "hud_visible"),
         "toggle_click_through" => toggle_setting(app, "click_through"),
         // Lives under "islepilot", not "minimap", so toggle_setting can't
         // serve it. Default false must match settings.rs.
@@ -337,7 +338,7 @@ fn dispatch(app: &AppHandle, action: &str) {
         // clicks, and a reload rebuilds the page (state comes back through
         // get_current_position/resync).
         "reload_ui" => {
-            for label in ["main", "minimap"] {
+            for label in ["main", "minimap", "hud"] {
                 if let Some(window) = app.get_webview_window(label) {
                     crate::webview_mem::on_shown(&window);
                     let _ = window.eval("location.reload()");
@@ -360,6 +361,15 @@ fn toggle_setting(app: &AppHandle, key: &str) {
         settings::get_bool(&s, &["minimap", key], true)
     };
     apply_settings_patch(app, serde_json::json!({ "minimap": { key: !current } }));
+}
+
+fn toggle_navigation_setting(app: &AppHandle, key: &str) {
+    let current = {
+        let state = app.state::<AppState>();
+        let settings = state.settings.lock_safe();
+        settings::get_bool(&settings, &["navigation", key], true)
+    };
+    apply_settings_patch(app, serde_json::json!({ "navigation": { key: !current } }));
 }
 
 fn adjust_opacity(app: &AppHandle, delta: f64) {

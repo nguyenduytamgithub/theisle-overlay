@@ -58,6 +58,8 @@ export type Settings = Record<string, unknown> & {
   navigation: {
     target_waypoint_id: string | null;
     arrival_radius_m: number;
+    hud_visible: boolean;
+    hud_opacity: number;
   };
   number_format: "auto" | "us" | "eu";
   language: "vi" | "en";
