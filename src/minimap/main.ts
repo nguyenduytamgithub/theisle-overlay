@@ -390,6 +390,10 @@ async function reloadMapSource() {
   try {
     const p = await invoke<PositionUpdate | null>("get_current_position");
     if (p) {
+      // px belongs to a different calibration after a basemap switch; never
+      // interpolate between the old and new pixel frames.
+      displayedPosition = null;
+      correctionFrom = null;
       acceptConfirmedPosition(p);
     }
     const trail = await invoke<{ segmentsPx: [number, number][][] }>("get_current_trail");

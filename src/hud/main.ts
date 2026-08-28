@@ -177,7 +177,12 @@ async function init() {
   const settings = await invoke<Record<string, unknown>>("get_settings");
   applySettings(settings);
 
-  await listen<PositionUpdate>("position://update", (event) => acceptPosition(event.payload));
+  await listen<PositionUpdate>("position://update", (event) => {
+    acceptPosition(event.payload);
+    // A persisted target cannot resolve until the first confirmed position;
+    // refresh here so startup does not require the user to re-select it.
+    void refreshNavigation();
+  });
   await listen("navigation://changed", () => void refreshNavigation());
   await listen("waypoints://changed", () => void refreshNavigation());
   await listen<Record<string, unknown>>("settings://changed", (event) => {
