@@ -41,7 +41,6 @@ fn build_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    build_window(app)?;
     let app_handle = app.clone();
     let started = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let ready_guard = started.clone();
@@ -51,6 +50,10 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         }
         spawn_supervisor(app_handle.clone());
     });
+
+    // Register before creating the webview: the HUD bundle is tiny enough to
+    // emit its ready event while `build_window` is still returning.
+    build_window(app)?;
 
     let fallback_app = app.clone();
     std::thread::spawn(move || {
