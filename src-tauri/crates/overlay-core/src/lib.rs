@@ -15,4 +15,4 @@ pub use coords::{
     world_to_pixel,
 };
 pub use parse::{parse_coordinates, NumberFormat};
-pub use tracker::{PositionTracker, Sample, SampleOutcome, TrailConfig};
+pub use tracker::{HeadingSource, PositionTracker, Sample, SampleOutcome, TrailConfig};

@@ -3,7 +3,10 @@
 //! built on.
 
 use overlay_core::calibration::Calibration;
-use overlay_core::tracker::{PositionTracker, TrailConfig, HEADING_MAX_AGE_S};
+use overlay_core::coords::game_yaw_to_bearing;
+use overlay_core::tracker::{
+    HeadingSource, PositionTracker, TrailConfig, HEADING_MAX_AGE_S,
+};
 
 fn tracker() -> PositionTracker {
     PositionTracker::new(Calibration::gateway().clone(), TrailConfig::default())
@@ -57,17 +60,23 @@ fn normal_move_appends_node_to_current_segment() {
 }
 
 #[test]
-fn long_jump_breaks_segment_and_starts_new_one_at_the_point() {
+fn long_jump_waits_for_confirmation_before_starting_a_new_segment() {
     let mut t = tracker();
     t.add_sample(0.0, 0.0, 0.0, 0.0);
-    // 300 m > break_after_m (200 m): new segment starts AT this point so the
-    // first point of the new leg is not lost.
-    let out = t.add_sample(30_000.0, 0.0, 0.0, 10.0);
+    // 300 m in 10 seconds is above the plausible movement envelope. It is
+    // quarantined until a second nearby sample proves this was a relocation.
+    let first = t.add_sample(30_000.0, 0.0, 0.0, 10.0);
+    assert!(!first.accepted);
+    assert_eq!(t.segments, vec![vec![(0.0, 0.0)]]);
+
+    let out = t.add_sample(30_100.0, 100.0, 0.0, 20.0);
+    assert!(out.accepted);
+    assert!(out.relocated);
     assert!(out.broke_segment);
     assert!(out.trail_changed);
     assert_eq!(
         t.segments,
-        vec![vec![(0.0, 0.0)], vec![(30_000.0, 0.0)]]
+        vec![vec![(0.0, 0.0)], vec![(30_100.0, 100.0)]]
     );
 }
 
@@ -129,4 +138,79 @@ fn clear_trail_resets_segments() {
     t.add_sample(10_000.0, 0.0, 0.0, 10.0);
     t.clear_trail();
     assert_eq!(t.segments, vec![Vec::<(f64, f64)>::new()]);
+}
+
+#[test]
+fn impossible_spike_is_quarantined_and_return_to_route_is_accepted() {
+    let mut t = tracker();
+    t.add_sample(18_167.0, -252_835.0, 0.0, 0.0);
+    let confirmed = t.current;
+    let trail = t.segments.clone();
+
+    // Real field regression: about 7.9 km in three seconds, followed by a
+    // return to the original route. The one bad point must never become the
+    // displayed position or a persisted trail node.
+    let spike = t.add_sample_with_heading(752_257.0, -240.0, 0.0, None, 3.0);
+    assert!(!spike.accepted);
+    assert!(spike.rejected_outlier);
+    assert_eq!(t.current, confirmed);
+    assert_eq!(t.segments, trail);
+
+    let resumed = t.add_sample_with_heading(18_900.0, -253_100.0, 0.0, None, 9.0);
+    assert!(resumed.accepted);
+    assert!(!resumed.relocated);
+    assert!(!resumed.broke_segment);
+}
+
+#[test]
+fn two_consistent_far_samples_confirm_a_relocation_without_a_connecting_line() {
+    let mut t = tracker();
+    t.add_sample(0.0, 0.0, 0.0, 0.0);
+
+    let first = t.add_sample_with_heading(500_000.0, 500_000.0, 0.0, Some(90.0), 5.0);
+    assert!(!first.accepted);
+
+    let second = t.add_sample_with_heading(500_600.0, 500_200.0, 0.0, Some(92.0), 10.0);
+    assert!(second.accepted);
+    assert!(second.relocated);
+    assert!(second.broke_segment);
+    assert_eq!(t.segments, vec![vec![(0.0, 0.0)], vec![(500_600.0, 500_200.0)]]);
+    assert_eq!(t.velocity_cm_s(), None, "a relocation cannot seed prediction velocity");
+    assert_eq!(t.heading_with_source(10.0), Some((92.0, HeadingSource::Server)));
+}
+
+#[test]
+fn delayed_but_plausible_movement_does_not_break_the_trail() {
+    let mut t = tracker();
+    t.add_sample(0.0, 0.0, 0.0, 0.0);
+
+    // 324 m in 34 s is fast but physically plausible. The legacy fixed 200 m
+    // rule incorrectly broke this kind of delayed server update.
+    let out = t.add_sample_with_heading(32_400.0, 0.0, 0.0, None, 34.0);
+    assert!(out.accepted);
+    assert!(!out.broke_segment);
+    assert_eq!(t.segments.len(), 1);
+}
+
+#[test]
+fn fresh_server_heading_wins_and_motion_is_the_fallback() {
+    let mut t = tracker();
+    t.add_sample_with_heading(0.0, 0.0, 0.0, Some(359.0), 0.0);
+    t.add_sample_with_heading(0.0, 10_000.0, 0.0, Some(1.0), 10.0);
+
+    assert_eq!(t.heading_with_source(10.0), Some((1.0, HeadingSource::Server)));
+    assert_eq!(t.heading_with_source(HEADING_MAX_AGE_S + 11.0), None);
+
+    let mut fallback = tracker();
+    fallback.add_sample(0.0, 0.0, 0.0, 0.0);
+    fallback.add_sample(0.0, 10_000.0, 0.0, 10.0);
+    assert_eq!(fallback.heading_with_source(10.0), Some((90.0, HeadingSource::Motion)));
+}
+
+#[test]
+fn unreal_yaw_converts_to_north_up_compass_bearing() {
+    assert!((game_yaw_to_bearing(0.0) - 180.0).abs() < 1e-9);
+    assert!((game_yaw_to_bearing(90.0) - 90.0).abs() < 1e-9);
+    assert!((game_yaw_to_bearing(-90.0) - 270.0).abs() < 1e-9);
+    assert!((game_yaw_to_bearing(540.0) - 0.0).abs() < 1e-9);
 }

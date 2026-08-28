@@ -70,3 +70,10 @@ const COMPASS_KEYS: [&str; 8] = [
 pub fn bearing_to_compass_key(bearing: f64) -> &'static str {
     COMPASS_KEYS[((bearing.rem_euclid(360.0) / 45.0 + 0.5) as usize) % 8]
 }
+
+/// Convert The Isle / Unreal's actor yaw to this overlay's north-up compass.
+/// Unreal yaw 0 faces +gameX (south on the Gateway map), while positive yaw
+/// turns toward +gameY (east), hence the mirrored `180 - yaw` transform.
+pub fn game_yaw_to_bearing(yaw: f64) -> f64 {
+    (180.0 - yaw).rem_euclid(360.0)
+}
