@@ -54,6 +54,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             "show" => show_main(app),
             "quit" => {
                 QUITTING.store(true, Ordering::SeqCst);
+                crate::night_vision::restore_before_exit(app);
                 app.exit(0);
             }
             _ => {}

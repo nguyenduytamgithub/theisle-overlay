@@ -114,6 +114,7 @@ pub fn default_settings() -> Value {
         },
         "hotkeys": {
             "toggle_minimap": "Ctrl+Alt+M",
+            "toggle_night_vision": "Ctrl+Alt+N",
             "toggle_fullmap": "Ctrl+Alt+F",
             "toggle_click_through": "Ctrl+Alt+C",
             "mark_here": "Ctrl+Alt+B",
@@ -150,6 +151,10 @@ pub fn default_settings() -> Value {
             "break_after_minutes": 15,
             "break_after_metres": 200,
             "min_node_distance_m": 5,
+        },
+        "night_vision": {
+            "strength": 70,
+            "show_button": true,
         },
         // Anonymous usage counts + crash reports. No IP is stored (the
         // edge supplies a country code and the address is dropped), no game
@@ -312,6 +317,9 @@ mod tests {
         assert_eq!(merged["number_format"], "eu");
         assert_eq!(merged["language"], "vi", "new key gets its default");
         assert_eq!(merged["map"]["basemap"], "vulnona", "new key gets its default");
+        assert_eq!(merged["night_vision"]["strength"], 70);
+        assert_eq!(merged["night_vision"]["show_button"], true);
+        assert_eq!(merged["hotkeys"]["toggle_night_vision"], "Ctrl+Alt+N");
         assert_eq!(
             active_source(&merged),
             overlay_core::MapSource::Vulnona,

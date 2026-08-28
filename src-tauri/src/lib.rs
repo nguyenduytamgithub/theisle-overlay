@@ -74,6 +74,7 @@ pub fn run(replay_file: Option<PathBuf>) {
             _ => {}
         })
         .manage(AppState::new())
+        .manage(night_vision::NightVision::new())
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::patch_settings,
@@ -116,6 +117,9 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::islepilot_logout,
             commands::islepilot_apply,
             commands::islepilot_state,
+            night_vision::get_night_vision_state,
+            night_vision::toggle_night_vision,
+            night_vision::set_night_vision_strength,
             telemetry::track_feature,
             telemetry::submit_feedback,
             telemetry::submit_crash,
@@ -126,6 +130,7 @@ pub fn run(replay_file: Option<PathBuf>) {
     builder
         .setup(move |app| {
             settings::ensure_dirs()?;
+            night_vision::initialize(app.handle());
             // Own protocol: theisle-overlay:// (HKCU, this exe — works for
             // dev builds too). A clicked theisle-overlay://?sid=..&token=..
             // link logs the token in, exactly like the paste box. Distinct
