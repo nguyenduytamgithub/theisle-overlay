@@ -200,7 +200,10 @@ fn steam_id_from_cookie(cookie: &str) -> Option<String> {
 ///
 /// Ok(None) = endpoint answered but carries no usable position (`ok:false`,
 /// empty list, ...) — the caller falls back to the HTML page.
-fn parse_own_marker(body: &str, own_steam_id: Option<&str>) -> Result<Option<(f64, f64)>, String> {
+fn parse_own_marker(
+    body: &str,
+    own_steam_id: Option<&str>,
+) -> Result<Option<api::PositionSample>, String> {
     let v: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
     if v.get("ok").and_then(|b| b.as_bool()) != Some(true) {
         return Ok(None);
@@ -227,7 +230,15 @@ fn parse_own_marker(body: &str, own_steam_id: Option<&str>) -> Result<Option<(f6
     ) else {
         return Ok(None);
     };
-    Ok(Some((lat_cm, long_cm)))
+    Ok(Some(api::PositionSample {
+        x_cm: lat_cm,
+        y_cm: long_cm,
+        z_cm: m.get("z").and_then(|z| z.as_f64()).unwrap_or(0.0),
+        heading_deg: m
+            .get("yaw")
+            .and_then(|yaw| yaw.as_f64())
+            .map(overlay_core::game_yaw_to_bearing),
+    }))
 }
 
 /// GET /api/p/{slug}/map/markers and extract our own position (game cm, our
@@ -238,7 +249,7 @@ fn fetch_own_marker(
     slug: &str,
     cookie: &str,
     own_steam_id: Option<&str>,
-) -> Result<Option<(f64, f64)>, String> {
+) -> Result<Option<api::PositionSample>, String> {
     let body = get_page(client, origin, &format!("/api/p/{slug}/map/markers"), cookie)?;
     parse_own_marker(&body, own_steam_id)
 }
@@ -336,7 +347,7 @@ fn ingest_map_position(app: &AppHandle, map: &MapPosition) {
     let py = pct_y / 100.0 * cal.image_height_px as f64;
     let (x_cm, y_cm) = pixel_to_world(px, py, cal);
     log::debug!("islepilot position: {pct_x:.2}%,{pct_y:.2}% -> {x_cm:.0},{y_cm:.0} cm");
-    pipeline::ingest_sample(app, x_cm, y_cm, 0.0);
+    pipeline::ingest_sample_with_heading(app, x_cm, y_cm, 0.0, map.heading_deg);
 }
 
 /// Keep `use_map_position` truthful to the server's capability: no live map
@@ -485,16 +496,23 @@ pub fn restart_poller(app: &AppHandle) {
                                     &cookie,
                                     own_steam_id.as_deref(),
                                 ) {
-                                    Ok(Some((x_cm, y_cm))) => {
+                                    Ok(Some(position)) => {
                                         position_from_api = true;
                                         if live_map != Some(true) {
                                             live_map = Some(true);
                                             sync_map_pref(&app, true);
                                         }
                                         log::debug!(
-                                            "islepilot markers api: {x_cm:.0},{y_cm:.0} cm"
+                                            "islepilot markers api: {:.0},{:.0} cm",
+                                            position.x_cm, position.y_cm
                                         );
-                                        pipeline::ingest_sample(&app, x_cm, y_cm, 0.0);
+                                        pipeline::ingest_sample_with_heading(
+                                            &app,
+                                            position.x_cm,
+                                            position.y_cm,
+                                            position.z_cm,
+                                            position.heading_deg,
+                                        );
                                     }
                                     // ok:false / no own marker: map may be
                                     // off — let the HTML probe decide.
@@ -622,7 +640,7 @@ fn run_token_poll(app: AppHandle, generation: u64, tok: token::OverlayToken) {
                     if lang_vi && !player.prime_quests.is_empty() {
                         crate::translate::translate_quests(&mut player.prime_quests, &client);
                     }
-                    let position = api::position_cm(&me);
+                    let position = api::position_sample(&me);
                     // Position availability doubles as the live-map probe.
                     // Only trust it while the API actually has data.
                     if me.has_data {
@@ -634,9 +652,19 @@ fn run_token_poll(app: AppHandle, generation: u64, tok: token::OverlayToken) {
                     }
                     // Never move the marker from cached (offline) data.
                     if config.use_map_position && me.online == Some(true) {
-                        if let Some((x_cm, y_cm)) = position {
-                            log::debug!("islepilot overlay api: {x_cm:.0},{y_cm:.0} cm");
-                            pipeline::ingest_sample(&app, x_cm, y_cm, 0.0);
+                        if let Some(position) = position {
+                            log::debug!(
+                                "islepilot overlay api: {:.0},{:.0} cm",
+                                position.x_cm,
+                                position.y_cm
+                            );
+                            pipeline::ingest_sample_with_heading(
+                                &app,
+                                position.x_cm,
+                                position.y_cm,
+                                position.z_cm,
+                                position.heading_deg,
+                            );
                         }
                     }
                     publish(
@@ -1365,9 +1393,12 @@ mod tests {
              "path":[{"x":-92413.23,"y":38665.41}]}
         ]}"#;
         let got = parse_own_marker(body, Some("76561198000000001")).unwrap();
-        assert_eq!(got, Some((38665.41, -92413.23)), "(game X=their y, game Y=their x)");
+        let got = got.expect("own marker");
+        assert_eq!((got.x_cm, got.y_cm), (38665.41, -92413.23));
+        assert!((got.heading_deg.unwrap() - 326.89).abs() < 1e-6);
         // No steamId available -> the "You" label still finds us.
-        assert_eq!(parse_own_marker(body, None).unwrap(), Some((38665.41, -92413.23)));
+        let fallback = parse_own_marker(body, None).unwrap().expect("You marker");
+        assert_eq!((fallback.x_cm, fallback.y_cm), (38665.41, -92413.23));
     }
 
     #[test]
@@ -1408,9 +1439,9 @@ mod tests {
         let pos = fetch_own_marker(&client, &origin, &slug, &cookie, own.as_deref())
             .expect("markers api reachable");
         eprintln!("own position (game cm, our axes): {pos:?}");
-        if let Some((x, y)) = pos {
+        if let Some(position) = pos {
             let cal = overlay_core::Calibration::gateway();
-            let (px, py) = overlay_core::world_to_pixel(x, y, cal);
+            let (px, py) = overlay_core::world_to_pixel(position.x_cm, position.y_cm, cal);
             eprintln!("-> vulnona px=({px:.0},{py:.0}) of {}x{}", cal.image_width_px, cal.image_height_px);
         }
     }

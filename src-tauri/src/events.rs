@@ -20,8 +20,17 @@ pub struct PositionUpdate {
     pub px: f64,
     pub py: f64,
     pub heading_deg: Option<f64>,
+    /// `server` for IslePilot yaw, `motion` for accepted-coordinate fallback.
+    pub heading_source: Option<&'static str>,
     /// Compass key ("dir.N".."dir.NW") for the heading, when known.
     pub compass_key: Option<&'static str>,
+    pub velocity_x_cm_s: Option<f64>,
+    pub velocity_y_cm_s: Option<f64>,
+    pub velocity_px_x_s: Option<f64>,
+    pub velocity_px_y_s: Option<f64>,
+    pub confirmed_at_ms: i64,
+    pub prediction_horizon_s: f64,
+    pub stale_after_s: f64,
     pub in_bounds: bool,
 }
 

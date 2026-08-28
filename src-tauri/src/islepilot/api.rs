@@ -11,6 +11,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use overlay_core::game_yaw_to_bearing;
+
 use super::parser::{Nutrition, PlayerStats, QuestStatus, StatBar};
 
 pub const API_ORIGIN: &str = "https://islepilot.eu";
@@ -135,6 +137,14 @@ pub struct OverlayPosition {
     pub yaw: Option<f64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PositionSample {
+    pub x_cm: f64,
+    pub y_cm: f64,
+    pub z_cm: f64,
+    pub heading_deg: Option<f64>,
+}
+
 #[derive(Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct OverlayPrime {
@@ -202,9 +212,18 @@ pub fn to_player_stats(me: &OverlayMe) -> PlayerStats {
 
 /// Own position in game cm, OUR axis convention (their x = our y — the same
 /// swap `parse_own_marker` uses, verified against named landmarks).
-pub fn position_cm(me: &OverlayMe) -> Option<(f64, f64)> {
+pub fn position_sample(me: &OverlayMe) -> Option<PositionSample> {
     let pos = me.position?;
-    Some((pos.y?, pos.x?))
+    Some(PositionSample {
+        x_cm: pos.y?,
+        y_cm: pos.x?,
+        z_cm: pos.z.unwrap_or(0.0),
+        heading_deg: pos.yaw.map(game_yaw_to_bearing),
+    })
+}
+
+pub fn position_cm(me: &OverlayMe) -> Option<(f64, f64)> {
+    position_sample(me).map(|p| (p.x_cm, p.y_cm))
 }
 
 // ---------------------------------------------------------------------------
@@ -421,14 +440,17 @@ mod tests {
     fn position_axis_swap_matches_markers_convention() {
         let me: OverlayMe = serde_json::from_str(ME).unwrap();
         // JSON: x=-263306, y=307415.69 -> ours (x=their y, y=their x).
-        assert_eq!(position_cm(&me), Some((307415.69, -263306.0)));
+        let position = position_sample(&me).expect("fixture has a position");
+        assert_eq!((position.x_cm, position.y_cm), (307415.69, -263306.0));
+        assert_eq!(position.z_cm, 21682.56);
+        assert!((position.heading_deg.unwrap() - 199.15).abs() < 1e-6);
     }
 
     #[test]
     fn no_data_response_is_not_an_error() {
         let me: OverlayMe = serde_json::from_str(ME_NODATA).unwrap();
         assert!(!me.has_data);
-        assert_eq!(position_cm(&me), None);
+        assert_eq!(position_sample(&me), None);
         let stats = to_player_stats(&me);
         assert!(!stats.looks_logged_in());
     }

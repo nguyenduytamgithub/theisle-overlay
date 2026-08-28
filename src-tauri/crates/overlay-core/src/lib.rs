@@ -11,8 +11,8 @@ pub mod tracker;
 
 pub use calibration::{Calibration, MapSource, CALIBRATION_ISLEMAPS_JSON, CALIBRATION_JSON};
 pub use coords::{
-    bearing_deg, bearing_to_compass_key, distance_m, is_in_bounds, pixel_to_world,
-    world_to_pixel,
+    bearing_deg, bearing_to_compass_key, distance_m, game_yaw_to_bearing, is_in_bounds,
+    pixel_to_world, world_to_pixel,
 };
 pub use parse::{parse_coordinates, NumberFormat};
 pub use tracker::{HeadingSource, PositionTracker, Sample, SampleOutcome, TrailConfig};

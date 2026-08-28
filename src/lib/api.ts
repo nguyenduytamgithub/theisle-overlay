@@ -16,7 +16,15 @@ export interface PositionUpdate {
   px: number;
   py: number;
   headingDeg: number | null;
+  headingSource: "server" | "motion" | null;
   compassKey: string | null;
+  velocityXCmS: number | null;
+  velocityYCmS: number | null;
+  velocityPxXS: number | null;
+  velocityPxYS: number | null;
+  confirmedAtMs: number;
+  predictionHorizonS: number;
+  staleAfterS: number;
   inBounds: boolean;
 }
 
