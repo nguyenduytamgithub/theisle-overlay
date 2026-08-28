@@ -38,13 +38,13 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGMjlFRjA2Mzg0MTUyMDIKUldRQ1VrRTRCdThwejhPSDJuNGNLc1czelZ6TmthWXpIVlR6SXFDS0J0d0R3M2JDRkU1dW9Ha1UK",
       "endpoints": [
-        "https://github.com/toantranct/theisle-overlay/releases/latest/download/latest.json"
+        "https://github.com/nguyenduytamgithub/theisle-overlay/releases/latest/download/latest.json"
       ]
     }
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",

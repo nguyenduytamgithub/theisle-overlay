@@ -1,12 +1,43 @@
-# TheIsle Overlay
+# TheIsle Overlay — Navigation HUD Community Fork
 
 **Tiếng Việt** · [English](README.en.md)
+
+> **Bản fork cộng đồng tập trung vào điều hướng**, duy trì bởi
+> [@nguyenduytamgithub](https://github.com/nguyenduytamgithub). Mã được phát
+> triển từ bản công khai
+> [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
+> (`f628a18`). Tác giả và dự án gốc: **Trần Quốc Toản**.
+
+Phiên bản của fork: **v1.6.0 Navigation HUD**. Mục tiêu là làm vị trí, hướng
+đi, đường đã đi và waypoint dễ tin cậy hơn trong lúc chơi — không đọc bộ nhớ
+game và không can thiệp Easy Anti-Cheat.
+
+Upstream 2.x hiện là bản phát hành đóng mã nguồn với các tính năng Pro riêng.
+Fork này **không có** Voice, vị trí bạn bè, Skin editor hay realtime Pro của
+2.x; bảng so sánh bên dưới chỉ đối chiếu với bản mã nguồn mở **v1.5.2**.
 
 Bản đồ hiện đè lên màn hình khi chơi **The Isle: Evrima** (map Gateway).
 Minimap tròn bám theo cửa sổ game · bản đồ lớn với POI, tên địa danh, waypoint,
 vết đường đi · chỉ số khủng long + Garage (Gacha) với **xem 3D** từ hệ thống
 IslePilot, đăng nhập Steam **một lần dùng cho mọi server** · giao diện song ngữ
-Việt/Anh · cài một lần, tự cập nhật.
+Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases của fork.
+
+## Fork này cải thiện gì?
+
+| Khi đang chơi | Upstream mã mở v1.5.2 | Navigation HUD v1.6.0 |
+|---|---|---|
+| Nhịp lấy vị trí IslePilot | Mặc định 10 giây | Mặc định **5 giây**; giữ nguyên nếu bạn đã tự đặt giá trị khác |
+| Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Ước tính hiển thị tối đa **4 giây**, sau đó đứng chờ xác nhận; hiệu chỉnh mềm **350 ms** |
+| Tọa độ lỗi/nhảy xa | Có thể kéo đường mòn lệch hàng kilomet | Mẫu bất khả thi bị cách ly; chỉ xác nhận đổi chỗ xa khi có **hai mẫu nhất quán** |
+| Hướng nhìn | Chủ yếu suy ra từ quãng đường đã đi | Ưu tiên **yaw do server cung cấp**, hướng chuyển động là dự phòng |
+| Waypoint | Mũi tên tới điểm gần nhất | Chọn đúng một điểm làm đích; bản đồ lớn, minimap và HUD dùng **cùng một đích** |
+| Dẫn đường trên màn hình game | Không có HUD riêng | HUD click-through ở giữa phía trên: BẮC/ĐÔNG/NAM/TÂY, số độ, mũi tên rẽ, tên đích và khoảng cách |
+| Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **SERVER / ƯỚC TÍNH / MẤT TÍN HIỆU** |
+| Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
+
+Điểm quan trọng: chuyển động mượt là **ước tính có giới hạn**, không bịa thành
+realtime. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
+có live map thì dùng `Tab` → **Asset Location** như trước.
 
 ▶️ **Video hướng dẫn cài đặt & sử dụng:**
 
@@ -21,7 +52,10 @@ Việt/Anh · cài một lần, tự cập nhật.
 ## Tính năng
 
 - **Minimap tròn** bám góc cửa sổ game, chuột bấm xuyên qua, không cản trở lúc chơi.
-  Hướng Bắc luôn ở trên, có mũi tên chỉ hướng đang đi.
+  Hướng Bắc luôn ở trên; mũi tên rìa bản đồ chỉ tới đúng waypoint bạn chọn.
+- **Navigation HUD trên game**: la bàn BẮC–ĐÔNG–NAM–TÂY, hướng nhìn theo độ,
+  mũi tên cần rẽ, tên đích, khoảng cách và trạng thái dữ liệu; tự ẩn khi
+  Alt-Tab và bật/tắt bằng `Ctrl+Alt+H`.
 - **Bản đồ lớn**: phóng to/thu nhỏ mượt, 12 lớp bật/tắt được (nước ngọt, nguồn
   nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
   ăn, động vật với biểu tượng riêng từng loài 🐗🦌🐢, tên vùng, địa điểm, và
@@ -33,11 +67,13 @@ Việt/Anh · cài một lần, tự cập nhật.
   cho cả bản đồ lớn lẫn minimap. Nền IsleMaps vẽ theo phiên bản game mới hơn,
   thấy cả quần đảo đông nam (Hell's Mouth).
 - **Điểm đánh dấu (waypoint)**: bấm chuột phải để cắm, đổi tên/đổi màu, xóa,
-  biểu tượng nhanh (💀 chỗ chết, 🏠 hang…); minimap có mũi tên rìa đĩa chỉ
-  hướng + khoảng cách tới điểm gần nhất.
+  biểu tượng nhanh (💀 chỗ chết, 🏠 hang…); chọn **Dẫn đường tới điểm này** để
+  bản đồ lớn, minimap và HUD cùng dẫn tới đúng đích đó.
 - **Tìm kiếm & điều hướng**: ô tìm địa danh/waypoint, dán tọa độ để nhảy tới,
-  chế độ bám vị trí với mũi tên mép màn hình dẫn về chỗ đứng.
-- **Đường đã đi**: tự ghi theo phiên, khôi phục lại đường đi của phiên trước.
+  đường thẳng và mũi tên từ vị trí hiện tại tới đích đã chọn; báo đã tới trong
+  bán kính 15 m.
+- **Đường đã đi ổn định hơn**: tự ghi theo phiên, khôi phục phiên trước, bỏ
+  mẫu nhảy bất khả thi và không ghi vị trí dự đoán vào lịch sử.
 - **Khủng long của bạn**: growth, máu, đói, khát, thể lực, dinh dưỡng
   Carb/Đạm/Béo và Prime progress (có dịch tiếng Việt) từ hệ thống IslePilot;
   thanh chỉ số + bảng nhiệm vụ Prime gọn ngay dưới minimap. Đăng nhập Steam
@@ -45,19 +81,51 @@ Việt/Anh · cài một lần, tự cập nhật.
 - **Garage (Gacha) với xem 3D**: mỗi dino đã park là một card có **model 3D
   xoay/phóng được, đúng màu skin** + growth + nút Park/Restore/Đổi tên/Bán;
   model tải một lần rồi cache, mở lại tức thì và offline được.
-- **Phím tắt toàn cục** đổi được trong app, song ngữ Việt/Anh, tự cập nhật phiên bản mới.
+- **Phím tắt toàn cục** đổi được trong app, song ngữ Việt/Anh; riêng HUD có
+  `Ctrl+Alt+H` và thanh chỉnh độ đậm trong Cài đặt.
 
-## Cài đặt
+## Cài đặt nhanh
 
-Tải file `TheIsle Overlay_x.x.x_x64-setup.exe` từ
-[Releases](https://github.com/toantranct/theisle-overlay/releases) và chạy.
-Lần đầu mở app sẽ tải dữ liệu bản đồ (~3 MB) về máy.
+1. Mở [Releases của fork](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
+   và tải file `TheIsle Overlay_1.6.0_x64-setup.exe` trong bản
+   **v1.6.0-navigation-hud**.
+2. Nếu đang chạy một bản Overlay khác, thoát nó từ khay hệ thống rồi chạy bộ
+   cài. Dữ liệu settings và waypoint cũ được installer giữ lại.
+3. Nếu Windows SmartScreen cảnh báo, chọn **More info → Run anyway**. Bộ cài
+   chưa ký số; SHA-256 chính thức được ghi ngay trong trang Release.
+4. Trong The Isle, chọn **Windowed** hoặc **Borderless Fullscreen**. Exclusive
+   Fullscreen không cho cửa sổ overlay của Windows hiện đè lên game.
+5. Mở app một lần. Lần đầu app tải dữ liệu bản đồ khoảng 3 MB.
 
 Yêu cầu: **Windows 10/11 64-bit**. WebView2 (thường đã có sẵn trên Windows 11;
 nếu thiếu, installer tự tải về).
 
-> Windows có thể hiện cảnh báo SmartScreen vì installer chưa ký số.
-> Bấm **More info → Run anyway**.
+Fork này cập nhật **thủ công**. Không bấm cập nhật lên upstream 2.x nếu bạn muốn
+giữ Navigation HUD; hãy cài bản mới từ Releases của fork khi có thông báo.
+
+## Dùng Navigation HUD và dẫn đường
+
+1. Kết nối IslePilot theo hướng dẫn bên dưới. Server có live map sẽ tự cập nhật
+   vị trí mỗi 5 giây; server không hỗ trợ thì vào game bấm `Tab` →
+   **Asset Location** khi cần lấy mẫu mới.
+2. Mở bản đồ lớn bằng `Ctrl+Alt+F`.
+3. Bấm chuột phải tại nơi muốn tới để tạo waypoint, hoặc chọn waypoint đã lưu.
+4. Trong menu waypoint, chọn **Dẫn đường tới điểm này**.
+5. Quay lại game. HUD hiển thị hướng nhìn, mũi tên cần rẽ và khoảng cách; minimap
+   có mũi tên cùng đích. Chọn **Dừng dẫn đường** khi xong.
+
+| Phím | Tác dụng |
+|---|---|
+| `Ctrl+Alt+H` | Bật/tắt Navigation HUD |
+| `Ctrl+Alt+M` | Bật/tắt minimap |
+| `Ctrl+Alt+F` | Mở/ẩn bản đồ lớn |
+| `Ctrl+Alt+R` | Tải lại giao diện khi minimap/HUD không vẽ |
+| `Ctrl+Alt+C` | Bật/tắt click-through của minimap |
+| `Ctrl+Alt+Up/Down` | Tăng/giảm độ đậm minimap |
+| `Ctrl+Alt+Left/Right` | Tăng/giảm kích thước minimap |
+
+Các phím đều đổi được trong **Cài đặt**. HUD tự ẩn khi game không ở foreground;
+đây là hành vi bình thường, không phải ứng dụng bị tắt.
 
 ## Kết nối "Khủng long của bạn" (IslePilot)
 
@@ -107,22 +175,17 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Số đo thật trên máy: **Intel Core i5-14400F (10 nhân/16 luồng), 32 GB RAM,
-RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản release v1.0.0:
+Artifact v1.6.0 Navigation HUD đã phát hành được đo trực tiếp sau khi build:
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt | **4,3 MB** |
-| File chạy sau khi cài | 17,8 MB |
+| File cài đặt NSIS | **5.731.151 byte (~5,7 MB)** |
+| File chạy sau khi cài | **21.093.888 byte (~21,1 MB)** |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
-| **Tổng chiếm ổ cứng** | **~21 MB** |
 
-| Lúc chạy | RAM (working set) | CPU lúc rảnh |
-|---|---|---|
-| Mở cả bản đồ lớn + minimap | **522 MB** (8 tiến trình) | 0,18% |
-| Ẩn bản đồ lớn bằng `Ctrl+Alt+F` (kịch bản khi đang chơi) | **448 MB** | 0,08% |
-
-**CPU gần như bằng 0** vì app không có vòng lặp vẽ lại — chỉ vẽ khi có dữ liệu mới.
+HUD giới hạn ghi DOM khoảng 30 FPS và chỉ dự đoán khi đang có mẫu chuyển động;
+không chạy bộ đọc game hoặc quét bộ nhớ nền. Mức RAM thực tế phụ thuộc WebView2,
+số tab đang mở và model 3D đã tải, nên fork không công bố một con số RAM cố định.
 
 ## Lưu ý cần biết
 
@@ -130,11 +193,12 @@ RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản rel
    độc quyền (Exclusive Fullscreen)** — đây là giới hạn của Windows với mọi
    overlay ngoài tiến trình. Hãy dùng **Cửa sổ** hoặc **Toàn màn hình không viền**.
    App tự đọc cấu hình game và cảnh báo nếu bạn đang để sai chế độ.
-2. **Vị trí không tự động cập nhật**: bạn phải tự bấm `Tab` → **Asset Location**
-   trong game mỗi khi muốn cập nhật vị trí. Đây là *chủ đích*, không phải thiếu sót
-   — xem mục an toàn anti-cheat bên dưới.
-3. **Hướng đi cần hai lần chép tọa độ** cách nhau ít nhất 20 m; mẫu cũ quá 10 phút
-   thì hướng hết hạn để tránh chỉ sai.
+2. **Vị trí tự động phụ thuộc server**: IslePilot live map xác nhận vị trí mặc
+   định mỗi 5 giây. Giữa hai lần đó app chỉ ước tính tối đa 4 giây. Server tắt
+   live map thì bạn phải bấm `Tab` → **Asset Location** để cập nhật thủ công.
+3. **Hướng nhìn ưu tiên yaw server**. Khi server không gửi yaw, app cần ít nhất
+   hai mẫu di chuyển hợp lệ để suy ra hướng; dữ liệu quá cũ sẽ chuyển sang
+   **MẤT TÍN HIỆU** thay vì tiếp tục chỉ bừa.
 4. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
 5. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm
@@ -155,23 +219,24 @@ RTX 3060 Ti, Windows 11 Pro build 26200, độ phân giải 100%** — bản rel
    chọn tắt/bật thủ công của bạn luôn được tôn trọng.
 9. **Token/cookie đăng nhập** được mã hóa bằng Windows DPAPI, chỉ giải được
    bằng tài khoản Windows của bạn trên chính máy đó.
-10. **SmartScreen** sẽ cảnh báo ở lần cài đầu vì installer chưa ký số (chứng chỉ ký
-   số tốn phí hằng năm). Bản cập nhật tự động về sau không bị hỏi lại.
+10. **SmartScreen** có thể cảnh báo vì installer chưa ký số. Đối chiếu SHA-256
+    trên trang Release và cập nhật fork bằng installer thủ công.
 
 ## An toàn với anti-cheat
 
 Game chạy Easy Anti-Cheat cấp kernel. App này an toàn vì **không bao giờ đụng
 vào tiến trình game**:
 
-- Vị trí chỉ lấy từ **clipboard** khi bạn tự bấm Tab → "Asset Location" trong
-  game — app chỉ đọc lại thứ game tự đưa ra.
+- Vị trí lấy qua **HTTPS từ IslePilot live map** khi server cho phép, hoặc từ
+  **clipboard** sau khi bạn tự bấm `Tab` → **Asset Location**. Cả hai đều là
+  dữ liệu server/game chủ động cung cấp ngoài tiến trình game.
 - Phím tắt dùng `RegisterHotKey` (API hợp tác của Windows), **không phải**
   keyboard hook.
 - Chỉ số khủng long / Garage / model 3D lấy qua **HTTPS tới hệ thống IslePilot**
   (API islepilot.eu hoặc website của server) — cũng không liên quan gì tới tiến
   trình game.
 - Không bao giờ: đọc bộ nhớ game, inject DLL, hook DirectX, giả lập phím,
-  bắt gói mạng, tự chép tọa độ theo timer, chia sẻ vị trí giữa người chơi.
+  bắt gói mạng, tự chép tọa độ từ game theo timer, chia sẻ vị trí giữa người chơi.
 
 CI có bước grep chặn mọi call site API cấm (`scripts/check-forbidden-apis.ps1`).
 Danh sách API được phép nằm ở đầu `src-tauri/src/win/mod.rs`.
@@ -216,16 +281,24 @@ cá nhân trên máy bạn, không phải bản phát hành lại.
 
 Không liên kết với Afterthought LLC.
 
-## Liên hệ & Ủng hộ
+## Nguồn gốc, giấy phép và liên hệ
 
-Được phát triển bởi **Trần Quốc Toản**.
+- Fork Navigation HUD: duy trì bởi
+  [@nguyenduytamgithub](https://github.com/nguyenduytamgithub); báo lỗi của fork
+  tại [GitHub Issues](https://github.com/nguyenduytamgithub/theisle-overlay/issues).
+- Dự án và mã gốc v1.5.2: **Trần Quốc Toản** —
+  [`toantranct/theisle-overlay`](https://github.com/toantranct/theisle-overlay).
+- Upstream hiện không có file `LICENSE`. Fork này không tự gán một giấy phép
+  mới; việc mã nguồn được xem công khai không thay thế điều khoản cấp phép.
+
+Liên hệ và mục ủng hộ dưới đây thuộc về **tác giả upstream**, được giữ nguyên để
+ghi công đúng nguồn:
 
 - 📧 Email: toantranct1@gmail.com
 - 💬 Facebook: https://www.facebook.com/satann247/
-- 🐛 Báo lỗi / góp ý: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
+- 🐛 Upstream Issues: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
 
-App miễn phí và mã nguồn mở. Nếu thấy hữu ích, bạn có thể mời tác giả một ly
-cà phê:
+Nếu thấy nền tảng gốc hữu ích, bạn có thể mời tác giả upstream một ly cà phê:
 
 <img src="docs/qr_donate.png" alt="VietQR — Techcombank 8866886767 TRAN QUOC TOAN" width="280">
 
