@@ -5,6 +5,8 @@ import {
   advanceAngleDeg,
   effectiveProjectionAgeS,
   freshnessForAge,
+  localizeFreshness,
+  localizeManeuver,
   NavigationEstimator,
   shortestDeltaDeg,
 } from "./estimator.ts";
@@ -166,4 +168,14 @@ test("large or explicit relocation snaps and resets projection", () => {
   relocated.snapshot(0);
   relocated.accept(sample({ xCm: 2_000, px: 20, confirmedAtMs: 5_000, relocated: true }));
   assert.equal(relocated.snapshot(5_000).xCm, 2_000);
+});
+
+test("Vietnamese newbie copy is explicit and nontechnical", () => {
+  assert.equal(localizeManeuver("slight-left", "vi"), "CHẾCH TRÁI");
+  assert.equal(
+    localizeManeuver("hold-cardinal", "vi", "ĐÔNG BẮC"),
+    "GIỮ HƯỚNG ĐÔNG BẮC",
+  );
+  assert.equal(localizeFreshness("estimating", "vi"), "ĐANG ƯỚC LƯỢNG");
+  assert.equal(localizeFreshness("waiting", "vi"), "CHỜ SERVER");
 });

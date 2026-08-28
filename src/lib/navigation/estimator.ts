@@ -1,4 +1,5 @@
 export type NavigationFreshness = "tracking" | "estimating" | "waiting";
+export type NavigationLanguage = "vi" | "en";
 
 export interface ConfirmedNavigationSample {
   xCm: number;
@@ -31,6 +32,65 @@ export type NavigationManeuver =
   | "turn-back"
   | "hold-cardinal"
   | "arrived";
+
+const MANEUVER_COPY: Record<
+  NavigationLanguage,
+  Record<Exclude<NavigationManeuver, "hold-cardinal">, string>
+> = {
+  vi: {
+    straight: "ĐI THẲNG",
+    "slight-left": "CHẾCH TRÁI",
+    "slight-right": "CHẾCH PHẢI",
+    left: "RẼ TRÁI",
+    right: "RẼ PHẢI",
+    "turn-back": "QUAY LẠI",
+    arrived: "ĐÃ TỚI KHU VỰC ĐÍCH",
+  },
+  en: {
+    straight: "GO STRAIGHT",
+    "slight-left": "BEAR LEFT",
+    "slight-right": "BEAR RIGHT",
+    left: "TURN LEFT",
+    right: "TURN RIGHT",
+    "turn-back": "TURN AROUND",
+    arrived: "DESTINATION AREA REACHED",
+  },
+};
+
+const FRESHNESS_COPY: Record<
+  NavigationLanguage,
+  Record<NavigationFreshness, string>
+> = {
+  vi: {
+    tracking: "ĐANG BÁM",
+    estimating: "ĐANG ƯỚC LƯỢNG",
+    waiting: "CHỜ SERVER",
+  },
+  en: {
+    tracking: "TRACKING",
+    estimating: "ESTIMATING",
+    waiting: "WAITING FOR SERVER",
+  },
+};
+
+export function localizeManeuver(
+  maneuver: NavigationManeuver,
+  language: NavigationLanguage,
+  cardinal?: string,
+): string {
+  if (maneuver === "hold-cardinal") {
+    const prefix = language === "vi" ? "GIỮ HƯỚNG" : "HOLD";
+    return cardinal ? `${prefix} ${cardinal}` : prefix;
+  }
+  return MANEUVER_COPY[language][maneuver];
+}
+
+export function localizeFreshness(
+  freshness: NavigationFreshness,
+  language: NavigationLanguage,
+): string {
+  return FRESHNESS_COPY[language][freshness];
+}
 
 export interface NavigationSnapshot {
   xCm: number;
