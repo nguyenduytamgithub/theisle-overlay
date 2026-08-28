@@ -269,7 +269,7 @@ async function loadData() {
   draw();
 }
 
-/// Waypoints for the disc + the nearest-waypoint rim arrow. Both piggyback
+/// Waypoints for the disc + the selected navigation-target rim arrow. Both piggyback
 /// on events (waypoints://changed, position updates) — no polling.
 interface WaypointPx {
   id: string;
@@ -297,17 +297,17 @@ async function refreshWaypoints() {
     color: w.color,
     glyph: waypointGlyph(w.name),
   }));
-  await refreshNearest();
+  await refreshNavigation();
   draw();
 }
 
-async function refreshNearest() {
+async function refreshNavigation() {
   try {
     const near = await invoke<{
       id: string;
       bearingDeg: number;
       distanceM: number;
-    } | null>("nearest_waypoint");
+    } | null>("active_navigation");
     const target = near ? waypointsPx.find((w) => w.id === near.id) : undefined;
     state.nearestWaypoint = near
       ? {
@@ -360,11 +360,12 @@ async function init() {
     lastHeadingDeg = p.headingDeg;
     refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
     draw();
-    // The rim arrow re-aims from the new position; repaints once more when
+    // The selected-target rim arrow re-aims from the new position; repaints once more when
     // the answer arrives (still purely event-driven).
-    void refreshNearest().then(draw);
+    void refreshNavigation().then(draw);
   });
   await listen("waypoints://changed", () => void refreshWaypoints());
+  await listen("navigation://changed", () => void refreshNavigation().then(draw));
   await listen<{ segmentsPx: [number, number][][] }>("trail://changed", (e) => {
     state.trailPx = e.payload.segmentsPx;
     draw();

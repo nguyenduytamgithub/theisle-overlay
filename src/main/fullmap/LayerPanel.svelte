@@ -1,7 +1,7 @@
 <script lang="ts">
   // Right-side panel: layer toggles (persisted), position status, and the
   // waypoint list with rename/delete — the CRUD UI the old app never had.
-  import type { NearestWaypoint, PositionUpdate, Waypoint, WaypointPx } from "$lib/api";
+  import type { NavigationTarget, PositionUpdate, Waypoint, WaypointPx } from "$lib/api";
   import { compassLabel, formatDistance, locale, t } from "$lib/i18n";
   import { LAYER_COLORS, LAYER_ORDER } from "$lib/theme";
 
@@ -10,7 +10,7 @@
     layers,
     zoneLabels,
     position,
-    nearest,
+    navigation,
     waypoints,
     places,
     islepilotNote = null,
@@ -19,6 +19,7 @@
     onrename,
     ondelete,
     onfocus,
+    onnavigate,
     oncleartrail,
     onsetcolor,
     onlocate,
@@ -28,7 +29,7 @@
     layers: Record<string, boolean>;
     zoneLabels: boolean;
     position: PositionUpdate | null;
-    nearest: NearestWaypoint | null;
+    navigation: NavigationTarget | null;
     waypoints: WaypointPx[];
     places: { label: string; px: number; py: number; kind: string }[];
     /** Why IslePilot server POIs are unavailable (already localized). */
@@ -38,6 +39,7 @@
     onrename: (id: string, name: string) => void;
     ondelete: (wp: Waypoint) => void;
     onfocus: (wp: Waypoint) => void;
+    onnavigate: (wp: Waypoint) => void;
     oncleartrail: () => void;
     onsetcolor: (wp: Waypoint, color: string | null) => void;
     onlocate: (px: number, py: number) => void;
@@ -284,15 +286,21 @@
       {:else}
         <div>{$t("heading.unknown")}</div>
       {/if}
-      {#if nearest}
+      {#if navigation}
         <div class="mt-2 border-t pt-2" style="border-color: var(--color-border)">
-          <div style="color: var(--color-text)">{nearest.name}</div>
-          <div>
-            {$t("wp.distance", {
-              dir: compassLabel($locale, nearest.compassKey),
-              dist: formatDistance($locale, nearest.distanceM),
-            })}
+          <div class="font-semibold" style="color: var(--color-text)">
+            {$t("nav.active")}: {navigation.name}
           </div>
+          {#if navigation.arrived}
+            <div style="color: #66bb6a">{$t("nav.arrived")}</div>
+          {:else}
+            <div>
+              {$t("wp.distance", {
+                dir: compassLabel($locale, navigation.compassKey),
+                dist: formatDistance($locale, navigation.distanceM),
+              })}
+            </div>
+          {/if}
         </div>
       {/if}
     {:else}
@@ -312,7 +320,7 @@
       {#each waypoints as wp (wp.id)}
         <li
           class="rounded border p-1.5 text-sm"
-          style="border-color: var(--color-border); background: var(--color-bg)"
+          style="border-color: {navigation?.id === wp.id ? 'var(--color-accent)' : 'var(--color-border)'}; background: var(--color-bg)"
         >
           {#if editingId === wp.id}
             <!-- svelte-ignore a11y_autofocus -->
@@ -335,6 +343,15 @@
                 onclick={() => onfocus(wp)}
               >
                 {wp.name}
+              </button>
+              <button
+                class="shrink-0 cursor-pointer rounded px-1 text-xs opacity-80 hover:opacity-100"
+                style="color: {navigation?.id === wp.id ? '#66bb6a' : 'var(--color-accent)'}"
+                title={navigation?.id === wp.id ? $t("nav.stop") : $t("nav.start")}
+                aria-label={navigation?.id === wp.id ? $t("nav.stop") : $t("nav.start")}
+                onclick={() => onnavigate(wp)}
+              >
+                {navigation?.id === wp.id ? "■" : "➤"}
               </button>
               <button
                 class="size-3.5 shrink-0 cursor-pointer rounded-full border opacity-80 hover:opacity-100"

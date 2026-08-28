@@ -15,8 +15,8 @@
     getBasemapUrls,
     getCurrentPosition,
     getCurrentTrail,
+    getActiveNavigation,
     getMapInfo,
-    getNearestWaypoint,
     getPoisRender,
     getPreviousTrail,
     getSettings,
@@ -28,12 +28,14 @@
     resolveCoordinates,
     setWaypointColor,
     onFetchFinished,
+    onNavigationChanged,
     onWaypointsChanged,
     onPositionUpdate,
     onSettingsChanged,
     onTrailChanged,
     renameWaypoint,
-    type NearestWaypoint,
+    setNavigationTarget,
+    type NavigationTarget,
     type OverlayRender,
     type PoiLayer,
     type PositionUpdate,
@@ -97,12 +99,13 @@
   let waypointGroup: L.LayerGroup | undefined;
   let currentTrail: L.LayerGroup | undefined;
   let previousTrail: L.LayerGroup | undefined;
+  let navigationGroup: L.LayerGroup | undefined;
   let playerMarker: L.Marker | undefined;
   let playerArrowEl: HTMLElement | null = null;
 
   let settings = $state<Settings | null>(null);
   let position = $state<PositionUpdate | null>(null);
-  let nearest = $state<NearestWaypoint | null>(null);
+  let navigation = $state<NavigationTarget | null>(null);
   // The newest sample/trail that arrived while the tab was hidden. Nothing is
   // painted for them until the tab shows again: keeping the map alive must
   // not become a map that pans, re-projects and round-trips to Rust for the
@@ -408,6 +411,45 @@
     }
   }
 
+  function drawNavigation() {
+    if (!navigationGroup) return;
+    navigationGroup.clearLayers();
+    if (!position || !navigation) return;
+
+    const color = navigation.arrived ? "#66bb6a" : (navigation.color ?? COLORS.waypoint);
+    const from = toLatLng(position.px, position.py);
+    const to = toLatLng(navigation.px, navigation.py);
+    L.polyline([from, to], {
+      color,
+      weight: 3,
+      opacity: 0.92,
+      dashArray: navigation.arrived ? undefined : "10 7",
+      interactive: false,
+    }).addTo(navigationGroup);
+
+    if (!navigation.arrived) {
+      const mid = toLatLng(
+        (position.px + navigation.px) / 2,
+        (position.py + navigation.py) / 2,
+      );
+      L.marker(mid, {
+        icon: L.divIcon({
+          className: "navigation-arrow",
+          html: `<span style="color:${color};transform:rotate(${navigation.bearingDeg}deg)">▲</span>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(navigationGroup);
+    }
+  }
+
+  async function refreshNavigation() {
+    navigation = await getActiveNavigation();
+    drawNavigation();
+  }
+
   let waypointsPx = $state<WaypointPx[]>([]);
 
   async function refreshWaypoints() {
@@ -443,7 +485,7 @@
         .bindTooltip(wp.name)
         .addTo(waypointGroup);
     }
-    nearest = await getNearestWaypoint();
+    await refreshNavigation();
   }
 
   // The last layer state actually applied. Two callers hit this per layer
@@ -505,6 +547,11 @@
     if (!yes) return;
     await deleteWaypoint(wp.id);
     await refreshWaypoints();
+  }
+
+  async function onNavigate(wp: Waypoint) {
+    const nextId = navigation?.id === wp.id ? null : wp.id;
+    if (await setNavigationTarget(nextId)) await refreshNavigation();
   }
 
   function focusWaypoint(wp: Waypoint) {
@@ -594,6 +641,7 @@
     position = p;
     if (!map) return;
     upsertPlayer(p);
+    drawNavigation();
     if (follow) map.panTo(toLatLng(p.px, p.py), { animate });
     updateEdgeArrow();
   }
@@ -605,7 +653,7 @@
   $effect(() => {
     if (!visible || !map) return;
     // untrack: the work below both writes and reads $state (position,
-    // edgeArrow, nearest via applyPosition). Tracked, that made this effect
+    // edgeArrow, navigation via applyPosition). Tracked, that made this effect
     // depend on `position` and re-run itself on the next sample after every
     // show. Its only real input is `visible`, read above.
     untrack(() => {
@@ -623,9 +671,7 @@
       parkedPosition = null;
       if (p) {
         applyPosition(p, false);
-        void getNearestWaypoint().then((n) => {
-          if (!destroyed) nearest = n;
-        });
+        void refreshNavigation();
       }
     });
   });
@@ -672,6 +718,7 @@
 
       previousTrail = L.layerGroup().addTo(map);
       currentTrail = L.layerGroup().addTo(map);
+      navigationGroup = L.layerGroup().addTo(map);
       waypointGroup = L.layerGroup().addTo(map);
 
       try {
@@ -704,7 +751,7 @@
             return;
           }
           applyPosition(p);
-          nearest = await getNearestWaypoint();
+          await refreshNavigation();
         }),
       );
       await bag.add(
@@ -724,6 +771,7 @@
       );
       // Hotkey "mark here" adds waypoints from Rust — refresh on its signal.
       await bag.add(onWaypointsChanged(() => void refreshWaypoints()));
+      await bag.add(onNavigationChanged(() => void refreshNavigation()));
       // A re-download or the silent top-up finished: new overlays/POI layers
       // (animal, fresh water) appear live without leaving the tab.
       await bag.add(
@@ -746,7 +794,7 @@
         position = p;
         upsertPlayer(p);
         map.panTo(toLatLng(p.px, p.py));
-        nearest = await getNearestWaypoint();
+        await refreshNavigation();
       }
     })();
 
@@ -799,7 +847,7 @@
     layers={settings?.layers ?? {}}
     zoneLabels={zoneLabelsOn(settings)}
     {position}
-    {nearest}
+    {navigation}
     waypoints={waypointsPx}
     places={searchPlaces}
     {islepilotNote}
@@ -808,6 +856,7 @@
     onrename={onRename}
     ondelete={onDelete}
     onfocus={focusWaypoint}
+    onnavigate={(wp) => void onNavigate(wp)}
     oncleartrail={() => void onClearTrail()}
     onsetcolor={(wp, color) => void onSetColor(wp, color)}
     onlocate={locatePx}
@@ -962,6 +1011,24 @@
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
     background: none;
     border: none;
+  }
+
+  :global(.navigation-arrow) {
+    background: none;
+    border: none;
+    pointer-events: none;
+  }
+  :global(.navigation-arrow span) {
+    display: block;
+    width: 22px;
+    height: 22px;
+    font-size: 18px;
+    line-height: 22px;
+    text-align: center;
+    transform-origin: 50% 50%;
+    text-shadow:
+      0 0 3px rgba(0, 0, 0, 1),
+      0 0 8px rgba(0, 0, 0, 0.75);
   }
 
   /* Self-marker: the INNER element rotates (Leaflet owns the outer icon's

@@ -147,6 +147,10 @@ pub fn default_settings() -> Value {
             "break_after_metres": 200,
             "min_node_distance_m": 5,
         },
+        "navigation": {
+            "target_waypoint_id": null,
+            "arrival_radius_m": 15.0,
+        },
         // Anonymous usage counts + crash reports. No IP is stored (the
         // edge supplies a country code and the address is dropped), no game
         // position ever leaves the machine, and Windows account names are
@@ -308,6 +312,8 @@ mod tests {
         assert_eq!(merged["number_format"], "eu");
         assert_eq!(merged["language"], "vi", "new key gets its default");
         assert_eq!(merged["map"]["basemap"], "vulnona", "new key gets its default");
+        assert!(merged["navigation"]["target_waypoint_id"].is_null());
+        assert_eq!(merged["navigation"]["arrival_radius_m"], 15.0);
         assert_eq!(
             active_source(&merged),
             overlay_core::MapSource::Vulnona,

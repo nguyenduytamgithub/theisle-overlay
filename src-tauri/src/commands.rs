@@ -3,12 +3,15 @@
 
 use overlay_core::{
     bearing_to_compass_key, pixel_to_world, world_to_pixel, Calibration, MapSource,
+    PositionTracker,
 };
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 
-use crate::events::{PositionUpdate, TrailPayload, SETTINGS_CHANGED};
+use crate::events::{
+    PositionUpdate, TrailPayload, NAVIGATION_CHANGED, SETTINGS_CHANGED,
+};
 use crate::pipeline;
 use crate::settings;
 use crate::state::{AppState, LockExt};
@@ -208,13 +211,31 @@ pub fn set_waypoint_color(
 
 #[tauri::command]
 pub fn delete_waypoint(app: AppHandle, state: State<AppState>, id: String) -> bool {
-    let mut waypoints = state.waypoints.lock_safe();
-    let before = waypoints.len();
-    waypoints.retain(|w| w.id != id);
-    let removed = waypoints.len() != before;
+    let removed = {
+        let mut waypoints = state.waypoints.lock_safe();
+        let before = waypoints.len();
+        waypoints.retain(|w| w.id != id);
+        let removed = waypoints.len() != before;
+        if removed {
+            persist_waypoints(&app, &waypoints);
+        }
+        removed
+    };
     if removed {
         telemetry::counters::track("waypoint_delete");
-        persist_waypoints(&app, &waypoints);
+        let selected = {
+            let settings = state.settings.lock_safe();
+            settings::get_path(&settings, &["navigation", "target_waypoint_id"])
+                .and_then(Value::as_str)
+                .is_some_and(|target| target == id)
+        };
+        if selected {
+            apply_settings_patch(
+                &app,
+                serde_json::json!({"navigation": {"target_waypoint_id": null}}),
+            );
+        }
+        crate::events::emit_all(&app, NAVIGATION_CHANGED, ());
     }
     removed
 }
@@ -848,6 +869,7 @@ pub fn simulate_position(app: AppHandle, x: f64, y: f64, z: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use overlay_core::{PositionTracker, TrailConfig};
     use serde_json::json;
 
     fn cal() -> &'static Calibration {
@@ -930,4 +952,166 @@ mod tests {
         let out = poi_render_item(&item, "point", cal()).expect("point must survive");
         assert_eq!((out.label_px, out.label_py), (None, None));
     }
+
+    fn waypoint(id: &str, name: &str, x: f64, y: f64) -> Waypoint {
+        Waypoint {
+            id: id.to_string(),
+            name: name.to_string(),
+            x,
+            y,
+            z: 0.0,
+            color: Some("#4fc3f7".to_string()),
+            created: None,
+        }
+    }
+
+    #[test]
+    fn navigation_uses_the_selected_waypoint_not_the_nearest_one() {
+        let mut tracker = PositionTracker::new(cal().clone(), TrailConfig::default());
+        tracker.add_sample(0.0, 0.0, 0.0, 0.0);
+        let waypoints = vec![
+            waypoint("near", "Gần", 1_000.0, 0.0),
+            waypoint("selected", "Đích đã ghim", 0.0, 50_000.0),
+        ];
+
+        let nav = navigation_target_for(Some("selected"), &waypoints, &tracker, cal())
+            .expect("selected waypoint should resolve");
+
+        assert_eq!(nav.id, "selected");
+        assert_eq!(nav.name, "Đích đã ghim");
+        assert!((nav.bearing_deg - 90.0).abs() < 1e-6);
+        assert!((nav.distance_m - 500.0).abs() < 1e-6);
+        assert!(!nav.arrived);
+    }
+
+    #[test]
+    fn navigation_reports_arrival_inside_fifteen_metres() {
+        let mut tracker = PositionTracker::new(cal().clone(), TrailConfig::default());
+        tracker.add_sample(0.0, 0.0, 0.0, 0.0);
+        let waypoints = vec![waypoint("camp", "Trại", 1_499.0, 0.0)];
+
+        let nav = navigation_target_for(Some("camp"), &waypoints, &tracker, cal()).unwrap();
+
+        assert!(nav.arrived);
+        assert!(nav.distance_m < 15.0);
+    }
+
+    #[test]
+    fn navigation_clears_when_selected_waypoint_no_longer_exists() {
+        let mut tracker = PositionTracker::new(cal().clone(), TrailConfig::default());
+        tracker.add_sample(0.0, 0.0, 0.0, 0.0);
+
+        assert!(navigation_target_for(Some("deleted"), &[], &tracker, cal()).is_none());
+    }
+}
+
+const DEFAULT_ARRIVAL_RADIUS_M: f64 = 15.0;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NavigationTarget {
+    pub id: String,
+    pub name: String,
+    pub x_cm: f64,
+    pub y_cm: f64,
+    pub z_cm: f64,
+    pub px: f64,
+    pub py: f64,
+    pub color: Option<String>,
+    pub bearing_deg: f64,
+    pub compass_key: &'static str,
+    pub distance_m: f64,
+    pub arrived: bool,
+}
+
+fn navigation_target_for_radius(
+    target_id: Option<&str>,
+    waypoints: &[Waypoint],
+    tracker: &PositionTracker,
+    cal: &Calibration,
+    arrival_radius_m: f64,
+) -> Option<NavigationTarget> {
+    let waypoint = waypoints.iter().find(|wp| Some(wp.id.as_str()) == target_id)?;
+    let (bearing_deg, distance_m) = tracker.bearing_to(waypoint.x, waypoint.y)?;
+    let (px, py) = world_to_pixel(waypoint.x, waypoint.y, cal);
+    Some(NavigationTarget {
+        id: waypoint.id.clone(),
+        name: waypoint.name.clone(),
+        x_cm: waypoint.x,
+        y_cm: waypoint.y,
+        z_cm: waypoint.z,
+        px,
+        py,
+        color: waypoint.color.clone(),
+        bearing_deg,
+        compass_key: bearing_to_compass_key(bearing_deg),
+        distance_m,
+        arrived: distance_m <= arrival_radius_m.max(0.0),
+    })
+}
+
+#[cfg(test)]
+fn navigation_target_for(
+    target_id: Option<&str>,
+    waypoints: &[Waypoint],
+    tracker: &PositionTracker,
+    cal: &Calibration,
+) -> Option<NavigationTarget> {
+    navigation_target_for_radius(
+        target_id,
+        waypoints,
+        tracker,
+        cal,
+        DEFAULT_ARRIVAL_RADIUS_M,
+    )
+}
+
+#[tauri::command]
+pub fn active_navigation(state: State<AppState>) -> Option<NavigationTarget> {
+    let cal = state.active_calibration();
+    let (target_id, arrival_radius_m) = {
+        let settings = state.settings.lock_safe();
+        (
+            settings::get_path(&settings, &["navigation", "target_waypoint_id"])
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            settings::get_f64(
+                &settings,
+                &["navigation", "arrival_radius_m"],
+                DEFAULT_ARRIVAL_RADIUS_M,
+            ),
+        )
+    };
+    let waypoints = state.waypoints.lock_safe();
+    let tracker = state.tracker.lock_safe();
+    navigation_target_for_radius(
+        target_id.as_deref(),
+        &waypoints,
+        &tracker,
+        cal,
+        arrival_radius_m,
+    )
+}
+
+#[tauri::command]
+pub fn set_navigation_target(
+    app: AppHandle,
+    state: State<AppState>,
+    id: Option<String>,
+) -> bool {
+    if id.as_ref().is_some_and(|target_id| {
+        !state
+            .waypoints
+            .lock_safe()
+            .iter()
+            .any(|waypoint| waypoint.id == *target_id)
+    }) {
+        return false;
+    }
+    apply_settings_patch(
+        &app,
+        serde_json::json!({"navigation": {"target_waypoint_id": id}}),
+    );
+    crate::events::emit_all(&app, NAVIGATION_CHANGED, ());
+    true
 }

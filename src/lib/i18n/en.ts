@@ -58,6 +58,10 @@ export const en: Record<MsgKey, string> = {
   "wp.here": "My position",
   "wp.confirm_delete": "Delete waypoint “{name}”?",
   "wp.color": "Change color",
+  "nav.active": "Navigating",
+  "nav.start": "Navigate to this waypoint",
+  "nav.stop": "Stop navigation",
+  "nav.arrived": "Arrived (within 15 m)",
 
   "search.placeholder": "Search places or paste coords…",
   "search.goto_coords": "Go to these coordinates",

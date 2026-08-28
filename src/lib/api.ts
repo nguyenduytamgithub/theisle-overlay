@@ -55,6 +55,10 @@ export type Settings = Record<string, unknown> & {
     break_after_metres: number;
     min_node_distance_m: number;
   };
+  navigation: {
+    target_waypoint_id: string | null;
+    arrival_radius_m: number;
+  };
   number_format: "auto" | "us" | "eu";
   language: "vi" | "en";
   telemetry: { enabled: boolean };
@@ -251,6 +255,30 @@ export interface NearestWaypoint {
 
 export const getNearestWaypoint = () =>
   invoke<NearestWaypoint | null>("nearest_waypoint");
+
+export interface NavigationTarget {
+  id: string;
+  name: string;
+  xCm: number;
+  yCm: number;
+  zCm: number;
+  px: number;
+  py: number;
+  color: string | null;
+  bearingDeg: number;
+  compassKey: string;
+  distanceM: number;
+  arrived: boolean;
+}
+
+export const getActiveNavigation = () =>
+  invoke<NavigationTarget | null>("active_navigation");
+
+export const setNavigationTarget = (id: string | null) =>
+  invoke<boolean>("set_navigation_target", { id });
+
+export const onNavigationChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen("navigation://changed", () => cb());
 
 /** True when the spec parses AND the combination is currently free. */
 export const checkHotkeyAvailable = (spec: string) =>

@@ -94,6 +94,8 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::get_pois,
             commands::get_pois_render,
             commands::nearest_waypoint,
+            commands::active_navigation,
+            commands::set_navigation_target,
             commands::get_fullscreen_mode,
             commands::get_map_info,
             commands::check_hotkey_available,

@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter};
 pub const POSITION_UPDATE: &str = "position://update";
 pub const TRAIL_CHANGED: &str = "trail://changed";
 pub const SETTINGS_CHANGED: &str = "settings://changed";
+pub const NAVIGATION_CHANGED: &str = "navigation://changed";
 
 /// Every payload carries both raw cm and precomputed px: the frontend never
 /// runs a coordinate transform of its own.

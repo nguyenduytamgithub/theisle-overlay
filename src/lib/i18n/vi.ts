@@ -63,6 +63,10 @@ export const vi = {
   "wp.here": "Vị trí của tôi",
   "wp.confirm_delete": "Xóa điểm “{name}”?",
   "wp.color": "Đổi màu",
+  "nav.active": "Đang dẫn đường",
+  "nav.start": "Dẫn đường tới điểm này",
+  "nav.stop": "Dừng dẫn đường",
+  "nav.arrived": "Đã tới nơi (trong 15 m)",
 
   // --- tìm kiếm & điều hướng ---
   "search.placeholder": "Tìm địa danh hoặc dán tọa độ…",
