@@ -12,6 +12,7 @@ pub mod hotkeys;
 pub mod hud;
 pub mod islepilot;
 pub mod minimap;
+pub mod night_vision;
 pub mod pipeline;
 pub mod replay;
 pub mod settings;
