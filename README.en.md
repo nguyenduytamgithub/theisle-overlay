@@ -4,19 +4,31 @@
 
 Map overlay for **The Isle: Evrima** (Gateway). Circular minimap pinned to the
 game window · full map with POIs, place names, waypoints and travel trails ·
-dino stats + Garage (Gacha) with **3D preview** from the IslePilot system, one
-Steam login **for every server** · bilingual VI/EN interface · one-click
-install with auto-update.
+dino stats + Garage (Gacha) with **3D preview** · a **skin editor** for all ten
+colour zones, applied straight to the dino you are playing — all three from the
+IslePilot system, one Steam login **for every server** · bilingual VI/EN
+interface · one-click install with auto-update.
+
+**2.0.0** adds a realtime set behind the **paid Pro tier**: proximity **voice**
+over IsleVOIP, **friend positions** on the map, and your own position updating
+about twice a second (no more pressing Tab). See the "Pro / Support" tab in the
+app.
 
 ▶️ **Install & usage video guide** (Vietnamese):
 
 [![TheIsle Overlay video guide](https://img.youtube.com/vi/R2IzwqHapuw/hqdefault.jpg)](https://y2u.be/R2IzwqHapuw)
 
-![Minimap and dino stats over the running game](docs/screenshot-ingame.jpg)
+![Minimap with a friend marker, stat bars, Prime quests and the voice strip over the running game — the dino wears a skin just changed in the app](docs/screenshot-ingame.jpg)
 
 ![Full map with place names and POI layers](docs/screenshot-fullmap.png)
 
 ![Your Dino tab with stats and Prime progress](docs/screenshot-dino.png)
+
+![Garage (Gacha) tab: a parked dino in 3D with growth, stats and a Restore button](docs/screenshot-garage.png)
+
+![Skin editor: ten colour zones, a 3D preview of the species you are playing, applied live](docs/screenshot-skin.png)
+
+![Voice tab: proximity voice over IsleVOIP, device pickers and who is in earshot](docs/screenshot-voip.png)
 
 ## Features
 
@@ -45,6 +57,13 @@ install with auto-update.
 - **Garage (Gacha) with 3D preview**: each parked dino is a card with an
   orbitable **3D model in its own skin colours** + growth + Park/Restore/
   Rename/Sell; models download once and open instantly (and offline) after.
+- **Skin editor**: ten colour zones, a 3D preview of the species you are actually
+  playing, colour sets saved **on your own machine**, applied straight to the dino
+  in game (the server must have live skins enabled).
+- **Voice (IsleVOIP)** *(Pro)*: proximity voice, private channels by name,
+  push-to-talk, per-person volume — nothing else to install.
+- **Friend positions** *(Pro)*: pair both ways with an invite code and see each
+  other on the map while on the same voice server — any species.
 - **Global hotkeys** rebindable in-app, bilingual UI, automatic updates.
 
 ## Install
@@ -52,6 +71,11 @@ install with auto-update.
 Download `TheIsle Overlay_x.x.x_x64-setup.exe` from
 [Releases](https://github.com/toantranct/theisle-overlay/releases) and run it.
 On first launch the app downloads the map data (~3 MB) to your machine.
+
+> As of **2.0.0** the source is no longer published here — this repository keeps
+> the code of earlier versions and remains the place releases are published.
+> Installers and automatic updates still come from
+> [Releases](https://github.com/toantranct/theisle-overlay/releases) as before.
 
 Requires **Windows 10/11 64-bit**. WebView2 is already present on most Windows 11
 installs; the installer fetches it if missing.
@@ -228,7 +252,10 @@ Developed by **Trần Quốc Toản**.
 - 💬 Facebook: https://www.facebook.com/satann247/
 - 🐛 Bugs / suggestions: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
 
-The app is free and open source. If you find it useful, you can buy the
+The core map features are free; the realtime set (live position, friend
+position sharing, the Voice tab) is part of the paid Pro tier — the position
+relay and realtime infrastructure are paid for by the author. See the
+"Pro / Support" tab in the app. If you find it useful, you can also buy the
 author a coffee:
 
 <img src="docs/qr_donate.png" alt="VietQR — Techcombank 8866886767 TRAN QUOC TOAN" width="280">

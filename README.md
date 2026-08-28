@@ -4,19 +4,30 @@
 
 Bản đồ hiện đè lên màn hình khi chơi **The Isle: Evrima** (map Gateway).
 Minimap tròn bám theo cửa sổ game · bản đồ lớn với POI, tên địa danh, waypoint,
-vết đường đi · chỉ số khủng long + Garage (Gacha) với **xem 3D** từ hệ thống
+vết đường đi · chỉ số khủng long + Garage (Gacha) với **xem 3D** · **Skin
+editor** 10 vùng màu áp thẳng lên dino đang chơi — cả ba lấy từ hệ thống
 IslePilot, đăng nhập Steam **một lần dùng cho mọi server** · giao diện song ngữ
 Việt/Anh · cài một lần, tự cập nhật.
+
+Từ **2.0.0** có thêm nhóm tính năng realtime thuộc **gói Pro trả phí**: **Thoại**
+theo khoảng cách qua IsleVOIP, **vị trí bạn bè** trên bản đồ, và vị trí của chính
+bạn cập nhật ~2 lần/giây (khỏi bấm Tab). Chi tiết ở tab «Pro / Ủng hộ» trong app.
 
 ▶️ **Video hướng dẫn cài đặt & sử dụng:**
 
 [![Video hướng dẫn TheIsle Overlay](https://img.youtube.com/vi/R2IzwqHapuw/hqdefault.jpg)](https://y2u.be/R2IzwqHapuw)
 
-![Minimap và chỉ số khủng long đè lên game](docs/screenshot-ingame.jpg)
+![Minimap có chấm bạn bè, thanh chỉ số, nhiệm vụ Prime và thanh Thoại đè lên game — con dino đang mang skin vừa đổi trong app](docs/screenshot-ingame.jpg)
 
 ![Bản đồ lớn với tên địa danh và các lớp POI](docs/screenshot-fullmap.png)
 
 ![Tab Khủng long của bạn với chỉ số và Prime progress](docs/screenshot-dino.png)
+
+![Tab Garage (Gacha): dino đã gửi kho, xem 3D, growth và chỉ số, nút Restore](docs/screenshot-garage.png)
+
+![Skin editor: 10 vùng màu, xem trước 3D đúng loài đang chơi, áp trực tiếp lên dino](docs/screenshot-skin.png)
+
+![Tab Thoại: nói theo khoảng cách qua IsleVOIP, chọn micro và người trong tầm nghe](docs/screenshot-voip.png)
 
 ## Tính năng
 
@@ -45,6 +56,12 @@ Việt/Anh · cài một lần, tự cập nhật.
 - **Garage (Gacha) với xem 3D**: mỗi dino đã park là một card có **model 3D
   xoay/phóng được, đúng màu skin** + growth + nút Park/Restore/Đổi tên/Bán;
   model tải một lần rồi cache, mở lại tức thì và offline được.
+- **Skin editor**: 10 vùng màu, xem trước 3D đúng loài đang chơi, lưu bộ màu
+  **ngay trên máy bạn** và áp thẳng lên dino trong game (server phải bật skin live).
+- **Thoại (IsleVOIP)** *(gói Pro)*: nói theo khoảng cách, kênh riêng theo tên,
+  bấm-để-nói, chỉnh âm lượng từng người — không cần cài thêm app nào.
+- **Vị trí bạn bè** *(gói Pro)*: kết bạn hai chiều bằng mã mời, thấy nhau trên
+  bản đồ khi cùng một server thoại — khác loài vẫn được.
 - **Phím tắt toàn cục** đổi được trong app, song ngữ Việt/Anh, tự cập nhật phiên bản mới.
 
 ## Cài đặt
@@ -52,6 +69,10 @@ Việt/Anh · cài một lần, tự cập nhật.
 Tải file `TheIsle Overlay_x.x.x_x64-setup.exe` từ
 [Releases](https://github.com/toantranct/theisle-overlay/releases) và chạy.
 Lần đầu mở app sẽ tải dữ liệu bản đồ (~3 MB) về máy.
+
+> Từ bản **2.0.0**, mã nguồn không còn được công bố tại đây — kho này giữ lại mã
+> của các bản trước và tiếp tục là nơi phát hành. Bản cài và cập nhật tự động vẫn
+> ra ở mục [Releases](https://github.com/toantranct/theisle-overlay/releases) như cũ.
 
 Yêu cầu: **Windows 10/11 64-bit**. WebView2 (thường đã có sẵn trên Windows 11;
 nếu thiếu, installer tự tải về).
@@ -224,7 +245,10 @@ Không liên kết với Afterthought LLC.
 - 💬 Facebook: https://www.facebook.com/satann247/
 - 🐛 Báo lỗi / góp ý: [GitHub Issues](https://github.com/toantranct/theisle-overlay/issues)
 
-App miễn phí và mã nguồn mở. Nếu thấy hữu ích, bạn có thể mời tác giả một ly
+App miễn phí cho các tính năng bản đồ cốt lõi; riêng nhóm tính năng realtime
+(vị trí trực tiếp, chia sẻ vị trí bạn bè, tab Thoại) thuộc gói Pro trả phí —
+vì máy chủ relay và hạ tầng realtime do tác giả tự chi trả. Xem tab
+«Pro / Ủng hộ» trong app. Nếu thấy hữu ích, bạn cũng có thể mời tác giả một ly
 cà phê:
 
 <img src="docs/qr_donate.png" alt="VietQR — Techcombank 8866886767 TRAN QUOC TOAN" width="280">
