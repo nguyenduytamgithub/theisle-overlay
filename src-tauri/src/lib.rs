@@ -123,6 +123,7 @@ pub fn run(replay_file: Option<PathBuf>) {
             night_vision::get_night_vision_state,
             night_vision::toggle_night_vision,
             night_vision::set_night_vision_strength,
+            night_vision::prepare_night_vision_exit,
             telemetry::track_feature,
             telemetry::submit_feedback,
             telemetry::submit_crash,
@@ -130,7 +131,7 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::simulate_position,
         ]);
 
-    builder
+    let app = builder
         .setup(move |app| {
             settings::ensure_dirs()?;
             night_vision::initialize(app.handle());
@@ -215,6 +216,15 @@ pub fn run(replay_file: Option<PathBuf>) {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            let state = night_vision::restore_before_exit(app_handle);
+            if state.applied {
+                api.prevent_exit();
+            }
+        }
+    });
 }

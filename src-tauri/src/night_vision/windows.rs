@@ -18,6 +18,7 @@ use super::GammaRamp;
 pub(crate) enum NightVisionError {
     Driver(String),
     Recovery(RecoveryError),
+    RecoveryCleanup(String),
     ReadbackRejected,
     RestoreRejected,
 }
@@ -27,6 +28,7 @@ impl fmt::Display for NightVisionError {
         match self {
             Self::Driver(error) => formatter.write_str(error),
             Self::Recovery(error) => write!(formatter, "{error}"),
+            Self::RecoveryCleanup(error) => formatter.write_str(error),
             Self::ReadbackRejected => {
                 formatter.write_str("driver rejected the requested gamma ramp")
             }
@@ -116,7 +118,7 @@ impl<A: GammaApi> DisplayGamma<A> {
         match std::fs::remove_file(&self.recovery_path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(NightVisionError::Driver(format!(
+            Err(error) => Err(NightVisionError::RecoveryCleanup(format!(
                 "restored gamma but could not remove recovery record: {error}"
             ))),
         }
@@ -163,7 +165,7 @@ pub(crate) fn restore_recovery_record(path: &Path) -> Result<bool, NightVisionEr
         return Err(NightVisionError::RestoreRejected);
     }
     std::fs::remove_file(path).map_err(|error| {
-        NightVisionError::Driver(format!(
+        NightVisionError::RecoveryCleanup(format!(
             "recovery succeeded but record removal failed: {error}"
         ))
     })?;

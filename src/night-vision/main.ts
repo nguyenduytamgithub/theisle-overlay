@@ -103,9 +103,12 @@ async function init() {
   state = await invoke<NightVisionState>("get_night_vision_state");
   render();
   await emit("night-vision://ready", {});
+  await emit("night-vision://heartbeat", {});
+  window.setInterval(() => {
+    void emit("night-vision://heartbeat", {});
+  }, 2_000);
 }
 
 void init().catch((reason) => {
   void error(`[night-vision] init failed: ${reason}`).catch(() => {});
-  void emit("night-vision://ready", {});
 });

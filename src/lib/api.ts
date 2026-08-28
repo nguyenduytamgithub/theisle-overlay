@@ -171,6 +171,8 @@ export const toggleNightVision = () =>
   invoke<NightVisionState>("toggle_night_vision");
 export const setNightVisionStrength = (strength: number) =>
   invoke<NightVisionState>("set_night_vision_strength", { strength });
+export const prepareNightVisionExit = () =>
+  invoke<NightVisionState>("prepare_night_vision_exit");
 
 /** Last known position (null before the first sample) — for initial paint. */
 export const getCurrentPosition = () =>
