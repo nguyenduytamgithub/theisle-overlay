@@ -985,15 +985,15 @@ mod tests {
     }
 
     #[test]
-    fn navigation_reports_arrival_inside_fifteen_metres() {
+    fn navigation_reports_arrival_inside_default_twenty_five_metres() {
         let mut tracker = PositionTracker::new(cal().clone(), TrailConfig::default());
         tracker.add_sample(0.0, 0.0, 0.0, 0.0);
-        let waypoints = vec![waypoint("camp", "Trại", 1_499.0, 0.0)];
+        let waypoints = vec![waypoint("camp", "Trại", 2_499.0, 0.0)];
 
         let nav = navigation_target_for(Some("camp"), &waypoints, &tracker, cal()).unwrap();
 
         assert!(nav.arrived);
-        assert!(nav.distance_m < 15.0);
+        assert!(nav.distance_m < 25.0);
     }
 
     #[test]
@@ -1005,7 +1005,7 @@ mod tests {
     }
 }
 
-const DEFAULT_ARRIVAL_RADIUS_M: f64 = 15.0;
+const DEFAULT_ARRIVAL_RADIUS_M: f64 = 25.0;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -110,9 +110,11 @@ export interface NavigationSnapshot {
 type Coordinates = Pick<NavigationSnapshot, "xCm" | "yCm" | "px" | "py">;
 type CourseSource = "motion" | "server";
 
-const ARRIVAL_RADIUS_M = 25;
+const DEFAULT_ARRIVAL_RADIUS_M = 25;
+const ARRIVAL_EXIT_MARGIN_M = 5;
 const COURSE_SOURCE_STABLE_MS = 1_000;
 const MANEUVER_STABLE_MS = 600;
+const MANEUVER_TIMELINE_STEP_MS = 50;
 const NO_PROGRESS_WINDOW = 3;
 const NO_PROGRESS_METRES = 10;
 const LINEAR_HORIZON_S = 4;
@@ -121,6 +123,9 @@ const DECAY_TAU_S = 3;
 
 const finite = (value: number | null): value is number =>
   value !== null && Number.isFinite(value);
+
+const stableCoordinate = (value: number): number =>
+  Math.round(value * 1_000_000) / 1_000_000;
 
 const distanceMetres = (
   fromXcm: number,
@@ -223,6 +228,13 @@ function maneuverWithDeadband(
 export class NavigationEstimator {
   private sample: ConfirmedNavigationSample | null = null;
   private target: EstimatorTarget | null = null;
+  private arrivalRadiusM = DEFAULT_ARRIVAL_RADIUS_M;
+  private arrivalLatched = false;
+  private arrivalFromPrediction = false;
+  private arrivalPosition: Coordinates | null = null;
+  private latchedTargetBearingDeg: number | null = null;
+  private displayedTargetBearingDeg: number | null = null;
+  private targetBearingEvaluatedAtMs: number | null = null;
   private correctionFrom: Coordinates | null = null;
   private correctionStartedAtMs = 0;
   private correctionDurationMs = 0;
@@ -233,9 +245,20 @@ export class NavigationEstimator {
   private courseAnchorAtMs: number | null = null;
   private currentManeuver: NavigationManeuver | null = null;
   private pendingManeuver: { maneuver: NavigationManeuver; sinceMs: number } | null = null;
+  private maneuverEvaluatedAtMs: number | null = null;
   private confirmedDistancesM: number[] = [];
 
   accept(sample: ConfirmedNavigationSample): void {
+    if (this.sample
+        && this.targetBearingEvaluatedAtMs !== null
+        && sample.confirmedAtMs >= this.targetBearingEvaluatedAtMs) {
+      this.advanceTargetBearingTo(sample.confirmedAtMs);
+    }
+    if (this.sample
+        && this.maneuverEvaluatedAtMs !== null
+        && sample.confirmedAtMs >= this.maneuverEvaluatedAtMs) {
+      this.advanceManeuverTo(sample.confirmedAtMs);
+    }
     const previous = this.sample
       ? this.positionAt(sample.confirmedAtMs)
       : null;
@@ -244,7 +267,8 @@ export class NavigationEstimator {
       : 0;
     const reset = sample.relocated || correctionM > 100;
 
-    this.sample = { ...sample };
+    const accepted = reset ? this.withoutVelocity(sample) : { ...sample };
+    this.sample = accepted;
     if (!previous || reset) {
       this.correctionFrom = null;
       this.correctionDurationMs = 0;
@@ -254,9 +278,28 @@ export class NavigationEstimator {
       this.correctionDurationMs = correctionM < 30 ? 650 : 300;
     }
 
+    if (this.arrivalLatched && this.target) {
+      const confirmedDistanceM = distanceMetres(
+        accepted.xCm,
+        accepted.yCm,
+        this.target.xCm,
+        this.target.yCm,
+      );
+      if (confirmedDistanceM > this.arrivalRadiusM + ARRIVAL_EXIT_MARGIN_M) {
+        this.clearArrivalLatch();
+        this.resetManeuver();
+      }
+    }
+
     if (reset) this.resetGuidance();
-    this.updateCourseCandidate(sample);
-    this.recordConfirmedProgress(sample);
+    if (this.displayedTargetBearingDeg === null && this.target) {
+      this.displayedTargetBearingDeg = this.rawTargetBearingAt(accepted.confirmedAtMs);
+      this.targetBearingEvaluatedAtMs = accepted.confirmedAtMs;
+    }
+    this.updateCourseCandidate(accepted);
+    this.recordConfirmedProgress(accepted);
+    this.evaluateManeuverAt(accepted.confirmedAtMs);
+    this.maneuverEvaluatedAtMs = accepted.confirmedAtMs;
   }
 
   setTarget(target: EstimatorTarget | null): void {
@@ -266,37 +309,54 @@ export class NavigationEstimator {
     this.target = target ? { ...target } : null;
     if (changed) {
       this.confirmedDistancesM = [];
-      this.currentManeuver = null;
-      this.pendingManeuver = null;
+      this.clearArrivalLatch();
+      this.resetTargetBearing();
+      this.resetManeuver();
     }
+  }
+
+  setArrivalRadiusM(radiusM: number): void {
+    const next = Number.isFinite(radiusM) && radiusM >= 0
+      ? radiusM
+      : DEFAULT_ARRIVAL_RADIUS_M;
+    if (next === this.arrivalRadiusM) return;
+    this.arrivalRadiusM = next;
+    this.clearArrivalLatch();
+    this.resetManeuver();
+  }
+
+  /** Stop extrapolation after a rejected/outlier server observation. */
+  invalidatePrediction(): void {
+    if (!this.sample) return;
+    if (this.arrivalLatched && this.arrivalFromPrediction) {
+      this.clearArrivalLatch();
+      this.resetTargetBearing();
+    }
+    this.sample = this.withoutVelocity(this.sample);
+    this.correctionFrom = null;
+    this.correctionDurationMs = 0;
+    this.resetCourse();
+    this.updateCourseCandidate(this.sample);
+    this.resetManeuver();
   }
 
   snapshot(nowMs: number): NavigationSnapshot | null {
     if (!this.sample) return null;
+    const projectedPosition = this.projectedCoordinatesAt(nowMs);
+    this.updateArrivalLatch(projectedPosition);
     const position = this.positionAt(nowMs);
     const ageS = Math.max(0, (nowMs - this.sample.confirmedAtMs) / 1_000);
     const hasVelocity = this.hasCompleteVelocity(this.sample);
     const targetDistanceM = this.target
       ? distanceMetres(position.xCm, position.yCm, this.target.xCm, this.target.yCm)
       : null;
-    const arrived = targetDistanceM !== null && targetDistanceM <= ARRIVAL_RADIUS_M;
-    const targetBearingDeg = this.target
-      ? bearingTo(position.xCm, position.yCm, this.target.xCm, this.target.yCm)
-      : null;
+    const arrived = this.arrivalLatched;
+    const targetBearingDeg = arrived
+      ? this.latchedTargetBearingDeg
+      : this.advanceTargetBearingTo(nowMs);
     const guidanceCourseDeg = this.updateDisplayedCourse(nowMs);
-
-    let candidate: NavigationManeuver;
-    if (arrived) {
-      candidate = "arrived";
-    } else if (targetBearingDeg === null || guidanceCourseDeg === null) {
-      candidate = "hold-cardinal";
-    } else {
-      candidate = maneuverWithDeadband(
-        shortestDeltaDeg(guidanceCourseDeg, targetBearingDeg),
-        this.currentManeuver,
-      );
-    }
-    const maneuver = this.updateManeuver(candidate, nowMs, arrived);
+    this.advanceManeuverTo(nowMs);
+    const maneuver = this.currentManeuver ?? "hold-cardinal";
 
     return {
       ...position,
@@ -305,28 +365,21 @@ export class NavigationEstimator {
       targetDistanceM,
       maneuver,
       freshness: freshnessForAge(ageS),
-      predicting: hasVelocity && ageS > 0 && ageS <= HOLD_AFTER_S,
+      predicting: hasVelocity && !arrived && ageS > 0 && ageS <= HOLD_AFTER_S,
       arrived,
       noProgress: this.hasNoProgress(),
     };
   }
 
   private positionAt(nowMs: number): Coordinates {
-    const sample = this.sample!;
-    const ageS = Math.max(0, (nowMs - sample.confirmedAtMs) / 1_000);
-    const travelS = effectiveProjectionAgeS(
-      ageS,
-      LINEAR_HORIZON_S,
-      HOLD_AFTER_S,
-      DECAY_TAU_S,
-    );
-    const hasVelocity = this.hasCompleteVelocity(sample);
-    const target: Coordinates = {
-      xCm: sample.xCm + (hasVelocity ? sample.velocityXCmS! * travelS : 0),
-      yCm: sample.yCm + (hasVelocity ? sample.velocityYCmS! * travelS : 0),
-      px: sample.px + (hasVelocity ? sample.velocityPxXS! * travelS : 0),
-      py: sample.py + (hasVelocity ? sample.velocityPxYS! * travelS : 0),
-    };
+    if (this.arrivalLatched && this.arrivalPosition) {
+      return { ...this.arrivalPosition };
+    }
+    return this.rawPositionAt(nowMs);
+  }
+
+  private rawPositionAt(nowMs: number): Coordinates {
+    const target = this.projectedCoordinatesAt(nowMs);
     if (!this.correctionFrom || this.correctionDurationMs <= 0) return target;
 
     const t = smoothstep(
@@ -339,6 +392,24 @@ export class NavigationEstimator {
       yCm: lerp(this.correctionFrom.yCm, target.yCm),
       px: lerp(this.correctionFrom.px, target.px),
       py: lerp(this.correctionFrom.py, target.py),
+    };
+  }
+
+  private projectedCoordinatesAt(nowMs: number): Coordinates {
+    const sample = this.sample!;
+    const ageS = Math.max(0, (nowMs - sample.confirmedAtMs) / 1_000);
+    const travelS = effectiveProjectionAgeS(
+      ageS,
+      LINEAR_HORIZON_S,
+      HOLD_AFTER_S,
+      DECAY_TAU_S,
+    );
+    const hasVelocity = this.hasCompleteVelocity(sample);
+    return {
+      xCm: sample.xCm + (hasVelocity ? sample.velocityXCmS! * travelS : 0),
+      yCm: sample.yCm + (hasVelocity ? sample.velocityYCmS! * travelS : 0),
+      px: sample.px + (hasVelocity ? sample.velocityPxXS! * travelS : 0),
+      py: sample.py + (hasVelocity ? sample.velocityPxYS! * travelS : 0),
     };
   }
 
@@ -368,7 +439,7 @@ export class NavigationEstimator {
   private updateCourseCandidate(sample: ConfirmedNavigationSample): void {
     const desired = this.desiredCourse(sample);
     if (!desired) {
-      this.pendingCourse = null;
+      this.resetCourse();
       return;
     }
     if (desired.source === this.currentCourseSource) {
@@ -393,6 +464,10 @@ export class NavigationEstimator {
   }
 
   private updateDisplayedCourse(nowMs: number): number | null {
+    if (this.sample
+        && nowMs - this.sample.confirmedAtMs > HOLD_AFTER_S * 1_000) {
+      return null;
+    }
     if (this.pendingCourse
         && nowMs - this.pendingCourse.sinceMs >= COURSE_SOURCE_STABLE_MS) {
       const switchAtMs = this.pendingCourse.sinceMs + COURSE_SOURCE_STABLE_MS;
@@ -421,29 +496,82 @@ export class NavigationEstimator {
     );
   }
 
-  private updateManeuver(
-    candidate: NavigationManeuver,
-    nowMs: number,
-    arrived: boolean,
-  ): NavigationManeuver {
-    if (arrived || this.currentManeuver === null) {
+  private evaluateManeuverAt(nowMs: number): void {
+    const candidate = this.maneuverCandidateAt(nowMs);
+    if (candidate === "arrived"
+        || candidate === "hold-cardinal"
+        || this.currentManeuver === null
+        || this.currentManeuver === "hold-cardinal") {
       this.currentManeuver = candidate;
       this.pendingManeuver = null;
-      return candidate;
+      return;
     }
     if (candidate === this.currentManeuver) {
       this.pendingManeuver = null;
-      return this.currentManeuver;
+      return;
     }
     if (this.pendingManeuver?.maneuver !== candidate) {
       this.pendingManeuver = { maneuver: candidate, sinceMs: nowMs };
-      return this.currentManeuver;
+      return;
     }
     if (nowMs - this.pendingManeuver.sinceMs >= MANEUVER_STABLE_MS) {
       this.currentManeuver = candidate;
       this.pendingManeuver = null;
     }
-    return this.currentManeuver;
+  }
+
+  private advanceManeuverTo(nowMs: number): void {
+    if (this.currentManeuver === "arrived" && this.arrivalLatched) {
+      this.maneuverEvaluatedAtMs = nowMs;
+      return;
+    }
+    if (this.maneuverEvaluatedAtMs === null || nowMs < this.maneuverEvaluatedAtMs) {
+      this.evaluateManeuverAt(nowMs);
+      this.maneuverEvaluatedAtMs = nowMs;
+      return;
+    }
+    const activeUntilMs = this.sample
+      ? this.sample.confirmedAtMs + HOLD_AFTER_S * 1_000
+      : nowMs;
+    const steppedUntilMs = Math.min(nowMs, activeUntilMs);
+    let nextMs = (Math.floor(
+      this.maneuverEvaluatedAtMs / MANEUVER_TIMELINE_STEP_MS,
+    ) + 1) * MANEUVER_TIMELINE_STEP_MS;
+    while (nextMs <= steppedUntilMs) {
+      this.evaluateManeuverAt(nextMs);
+      nextMs += MANEUVER_TIMELINE_STEP_MS;
+    }
+    this.maneuverEvaluatedAtMs = Math.max(
+      this.maneuverEvaluatedAtMs,
+      nextMs - MANEUVER_TIMELINE_STEP_MS,
+    );
+    if (nowMs > activeUntilMs
+        && this.maneuverEvaluatedAtMs < activeUntilMs) {
+      this.evaluateManeuverAt(activeUntilMs);
+      this.maneuverEvaluatedAtMs = activeUntilMs;
+    }
+    if (nowMs > steppedUntilMs) {
+      this.evaluateManeuverAt(nowMs);
+      this.maneuverEvaluatedAtMs = nowMs;
+    }
+  }
+
+  private maneuverCandidateAt(nowMs: number): NavigationManeuver {
+    if (this.arrivalLatched) return "arrived";
+    if (!this.target) return "hold-cardinal";
+    const position = this.positionAt(nowMs);
+    const targetBearingDeg = bearingTo(
+      position.xCm,
+      position.yCm,
+      this.target.xCm,
+      this.target.yCm,
+    );
+    const guidanceCourseDeg = this.updateDisplayedCourse(nowMs);
+    if (guidanceCourseDeg === null) return "hold-cardinal";
+    return maneuverWithDeadband(
+      shortestDeltaDeg(guidanceCourseDeg, targetBearingDeg),
+      this.currentManeuver,
+    );
   }
 
   private recordConfirmedProgress(sample: ConfirmedNavigationSample): void {
@@ -467,13 +595,154 @@ export class NavigationEstimator {
   }
 
   private resetGuidance(): void {
+    this.resetCourse();
+    this.resetTargetBearing();
+    this.resetManeuver();
+    this.confirmedDistancesM = [];
+  }
+
+  private resetCourse(): void {
     this.currentCourseSource = null;
     this.pendingCourse = null;
     this.courseTargetDeg = null;
     this.courseAnchorDeg = null;
     this.courseAnchorAtMs = null;
+  }
+
+  private resetManeuver(): void {
     this.currentManeuver = null;
     this.pendingManeuver = null;
-    this.confirmedDistancesM = [];
+    this.maneuverEvaluatedAtMs = null;
+  }
+
+  private resetTargetBearing(): void {
+    this.displayedTargetBearingDeg = null;
+    this.targetBearingEvaluatedAtMs = null;
+  }
+
+  private rawTargetBearingAt(nowMs: number): number | null {
+    if (!this.sample || !this.target) return null;
+    const position = this.positionAt(nowMs);
+    return bearingTo(
+      position.xCm,
+      position.yCm,
+      this.target.xCm,
+      this.target.yCm,
+    );
+  }
+
+  private advanceTargetBearingTo(nowMs: number): number | null {
+    if (!this.sample || !this.target) {
+      this.resetTargetBearing();
+      return null;
+    }
+    const rawNow = this.rawTargetBearingAt(nowMs)!;
+    if (this.displayedTargetBearingDeg === null
+        || this.targetBearingEvaluatedAtMs === null
+        || nowMs < this.targetBearingEvaluatedAtMs) {
+      this.displayedTargetBearingDeg = rawNow;
+      this.targetBearingEvaluatedAtMs = nowMs;
+      return rawNow;
+    }
+
+    const activeUntilMs = this.sample.confirmedAtMs + HOLD_AFTER_S * 1_000;
+    const steppedUntilMs = Math.min(nowMs, activeUntilMs);
+    let nextMs = (Math.floor(
+      this.targetBearingEvaluatedAtMs / MANEUVER_TIMELINE_STEP_MS,
+    ) + 1) * MANEUVER_TIMELINE_STEP_MS;
+    while (nextMs <= steppedUntilMs) {
+      const target = this.rawTargetBearingAt(nextMs)!;
+      this.displayedTargetBearingDeg = advanceAngleDeg(
+        this.displayedTargetBearingDeg,
+        target,
+        (nextMs - this.targetBearingEvaluatedAtMs) / 1_000,
+      );
+      this.targetBearingEvaluatedAtMs = nextMs;
+      nextMs += MANEUVER_TIMELINE_STEP_MS;
+    }
+    if (nowMs > activeUntilMs
+        && this.targetBearingEvaluatedAtMs < activeUntilMs) {
+      const target = this.rawTargetBearingAt(activeUntilMs)!;
+      this.displayedTargetBearingDeg = advanceAngleDeg(
+        this.displayedTargetBearingDeg,
+        target,
+        (activeUntilMs - this.targetBearingEvaluatedAtMs) / 1_000,
+      );
+      this.targetBearingEvaluatedAtMs = activeUntilMs;
+    }
+    if (nowMs > steppedUntilMs) {
+      this.displayedTargetBearingDeg = advanceAngleDeg(
+        this.displayedTargetBearingDeg,
+        rawNow,
+        (nowMs - this.targetBearingEvaluatedAtMs) / 1_000,
+      );
+      this.targetBearingEvaluatedAtMs = nowMs;
+    }
+    return this.displayedTargetBearingDeg;
+  }
+
+  private withoutVelocity(
+    sample: ConfirmedNavigationSample,
+  ): ConfirmedNavigationSample {
+    return {
+      ...sample,
+      velocityXCmS: null,
+      velocityYCmS: null,
+      velocityPxXS: null,
+      velocityPxYS: null,
+      motionCourseDeg: null,
+    };
+  }
+
+  private clearArrivalLatch(): void {
+    this.arrivalLatched = false;
+    this.arrivalFromPrediction = false;
+    this.arrivalPosition = null;
+    this.latchedTargetBearingDeg = null;
+  }
+
+  private updateArrivalLatch(position: Coordinates): void {
+    if (this.arrivalLatched
+        || !this.sample
+        || !this.target) return;
+    const start = this.sample;
+    const dx = position.xCm - start.xCm;
+    const dy = position.yCm - start.yCm;
+    const radiusCm = this.arrivalRadiusM * 100;
+    const fromTargetX = start.xCm - this.target.xCm;
+    const fromTargetY = start.yCm - this.target.yCm;
+    const c = fromTargetX * fromTargetX
+      + fromTargetY * fromTargetY
+      - radiusCm * radiusCm;
+    let entryT: number | null = c <= 0 ? 0 : null;
+    const a = dx * dx + dy * dy;
+    if (entryT === null && a > Number.EPSILON) {
+      const b = 2 * (fromTargetX * dx + fromTargetY * dy);
+      const discriminant = b * b - 4 * a * c;
+      if (discriminant >= 0) {
+        const candidate = (-b - Math.sqrt(discriminant)) / (2 * a);
+        if (candidate >= 0 && candidate <= 1) entryT = candidate;
+      }
+    }
+    if (entryT === null) return;
+
+    const entry: Coordinates = {
+      xCm: stableCoordinate(start.xCm + dx * entryT),
+      yCm: stableCoordinate(start.yCm + dy * entryT),
+      px: stableCoordinate(start.px + (position.px - start.px) * entryT),
+      py: stableCoordinate(start.py + (position.py - start.py) * entryT),
+    };
+
+    this.arrivalLatched = true;
+    this.arrivalFromPrediction = entryT > Number.EPSILON;
+    this.arrivalPosition = entry;
+    this.latchedTargetBearingDeg = bearingTo(
+      start.xCm,
+      start.yCm,
+      this.target.xCm,
+      this.target.yCm,
+    );
+    this.currentManeuver = "arrived";
+    this.pendingManeuver = null;
   }
 }

@@ -61,6 +61,7 @@ let lastConfirmedForDiagnostics: Pick<PositionUpdate, "xCm" | "yCm"> | null = nu
 function applySettings(settings: Record<string, unknown>) {
   language = settings.language === "en" ? "en" : "vi";
   const navigationSettings = settings.navigation as Record<string, unknown> | undefined;
+  estimator.setArrivalRadiusM(Number(navigationSettings?.arrival_radius_m ?? 25));
   const opacity = Number(navigationSettings?.hud_opacity ?? 0.92);
   hud.style.opacity = String(Math.max(0.35, Math.min(1, opacity)));
 }
@@ -114,7 +115,7 @@ function paintNavigation(view: NavigationSnapshot) {
   }
   const cardinal = compassPoint(view.targetBearingDeg, language);
   targetNameEl.textContent = navigation.name;
-  targetDetailEl.textContent = `${cardinal} · ${fmtDistance(view.targetDistanceM)}`;
+  targetDetailEl.textContent = `${cardinal} ${Math.round(view.targetBearingDeg)}° · ${fmtDistance(view.targetDistanceM)}`;
   instructionEl.textContent = localizeManeuver(view.maneuver, language, cardinal);
 
   progressWarningEl.classList.toggle("hidden", !view.noProgress || view.arrived);
@@ -193,6 +194,13 @@ async function init() {
     acceptPosition(event.payload);
     // A persisted target can become resolvable on the first confirmed sample.
     if (!navigation) void refreshNavigation();
+  });
+  await listen<{ resetReason: string }>("position://quality", (event) => {
+    estimator.invalidatePrediction();
+    void info(
+      `[hud-nav] state=quality-reset source=server reset=${event.payload.resetReason}`,
+    ).catch(() => {});
+    paintNow();
   });
   await listen("navigation://changed", () => void refreshNavigation());
   await listen("waypoints://changed", () => void refreshNavigation());

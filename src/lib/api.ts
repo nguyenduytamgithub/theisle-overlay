@@ -32,6 +32,10 @@ export interface PositionUpdate {
   inBounds: boolean;
 }
 
+export interface PositionQuality {
+  resetReason: string;
+}
+
 export interface TrailPayload {
   segmentsCm: [number, number][][];
   segmentsPx: [number, number][][];
@@ -84,6 +88,13 @@ export type Settings = Record<string, unknown> & {
 export const onPositionUpdate = (
   cb: (p: PositionUpdate) => void,
 ): Promise<UnlistenFn> => listen<PositionUpdate>("position://update", (e) => cb(e.payload));
+
+export const onPositionQuality = (
+  cb: (quality: PositionQuality) => void,
+): Promise<UnlistenFn> => listen<PositionQuality>(
+  "position://quality",
+  (e) => cb(e.payload),
+);
 
 export const onTrailChanged = (
   cb: (t: TrailPayload) => void,

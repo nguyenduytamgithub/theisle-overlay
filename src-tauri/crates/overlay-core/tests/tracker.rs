@@ -163,6 +163,22 @@ fn impossible_spike_is_quarantined_and_return_to_route_is_accepted() {
 }
 
 #[test]
+fn quarantined_spike_invalidates_previous_prediction_velocity() {
+    let mut t = tracker();
+    t.add_sample(0.0, 0.0, 0.0, 0.0);
+    t.add_sample(100.0, 0.0, 0.0, 1.0);
+    assert_eq!(t.velocity_cm_s(), Some((100.0, 0.0)));
+
+    let spike = t.add_sample(500_000.0, 500_000.0, 0.0, 2.0);
+    assert!(spike.rejected_outlier);
+    assert_eq!(
+        t.velocity_cm_s(),
+        None,
+        "an outlier must stop extrapolation from the prior route",
+    );
+}
+
+#[test]
 fn two_consistent_far_samples_confirm_a_relocation_without_a_connecting_line() {
     let mut t = tracker();
     t.add_sample(0.0, 0.0, 0.0, 0.0);

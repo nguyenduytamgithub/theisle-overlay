@@ -148,6 +148,7 @@ impl PositionTracker {
         let mut outcome = SampleOutcome::default();
 
         if !x.is_finite() || !y.is_finite() || !z.is_finite() || !now_s.is_finite() {
+            self.velocity_cm_s = None;
             outcome.rejected_outlier = true;
             return outcome;
         }
@@ -156,6 +157,7 @@ impl PositionTracker {
             let moved = distance_m(current.x, current.y, x, y);
             let gap_s = now_s - current.at_s;
             if gap_s <= 0.0 {
+                self.velocity_cm_s = None;
                 outcome.rejected_outlier = true;
                 return outcome;
             }
@@ -195,6 +197,7 @@ impl PositionTracker {
             let plausible_m = POSITION_UNCERTAINTY_M + MAX_PLAUSIBLE_SPEED_MPS * gap_s;
             if moved > plausible_m {
                 self.pending_jump = Some(sample);
+                self.velocity_cm_s = None;
                 outcome.rejected_outlier = true;
                 return outcome;
             }

@@ -11,7 +11,8 @@ use overlay_core::{
 use tauri::{AppHandle, Manager};
 
 use crate::events::{
-    emit_all, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED, TRAIL_CHANGED,
+    emit_all, PositionQuality, PositionUpdate, TrailPayload, POSITION_QUALITY, POSITION_UPDATE,
+    SETTINGS_CHANGED, TRAIL_CHANGED,
 };
 use crate::state::{AppState, LockExt};
 
@@ -60,6 +61,9 @@ pub fn ingest_sample_with_heading(
     };
 
     if !should_publish(outcome) {
+        if let Some(quality) = quality_reset_for(outcome) {
+            emit_all(app, POSITION_QUALITY, quality);
+        }
         log::warn!("navigation state=quarantined reset=outlier");
         return;
     }
@@ -119,6 +123,12 @@ fn should_publish(outcome: SampleOutcome) -> bool {
 
 fn should_persist(outcome: SampleOutcome) -> bool {
     outcome.accepted && !outcome.refreshed_only
+}
+
+fn quality_reset_for(outcome: SampleOutcome) -> Option<PositionQuality> {
+    outcome.rejected_outlier.then_some(PositionQuality {
+        reset_reason: "outlier",
+    })
 }
 
 const PREDICTION_HORIZON_S: f64 = 4.0;
@@ -267,6 +277,18 @@ mod tests {
         };
         assert!(!super::should_publish(rejected));
         assert!(!super::should_persist(rejected));
+    }
+
+    #[test]
+    fn quarantined_sample_requests_coordinate_free_quality_reset() {
+        let rejected = SampleOutcome {
+            rejected_outlier: true,
+            ..SampleOutcome::default()
+        };
+        assert_eq!(
+            super::quality_reset_for(rejected).map(|quality| quality.reset_reason),
+            Some("outlier"),
+        );
     }
 
     #[test]

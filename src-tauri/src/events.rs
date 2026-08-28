@@ -6,6 +6,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 pub const POSITION_UPDATE: &str = "position://update";
+pub const POSITION_QUALITY: &str = "position://quality";
 pub const TRAIL_CHANGED: &str = "trail://changed";
 pub const SETTINGS_CHANGED: &str = "settings://changed";
 pub const NAVIGATION_CHANGED: &str = "navigation://changed";
@@ -39,6 +40,13 @@ pub struct PositionUpdate {
     pub relocated: bool,
     pub refreshed_only: bool,
     pub in_bounds: bool,
+}
+
+/// Coordinate-free signal telling every webview to stop local extrapolation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionQuality {
+    pub reset_reason: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

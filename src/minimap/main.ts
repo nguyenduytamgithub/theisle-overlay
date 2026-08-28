@@ -174,6 +174,7 @@ function acceptConfirmedPosition(position: PositionUpdate) {
 
 function applySettings(s: Settings) {
   settings = s;
+  estimator.setArrivalRadiusM(Number(s.navigation?.arrival_radius_m ?? 25));
   const mm = s.minimap ?? {};
   state.sizePx = Number(mm.size_px ?? 260);
   state.radiusM = Number(mm.radius_m ?? 600);
@@ -414,6 +415,7 @@ async function reloadMapSource() {
       // interpolate between the old and new pixel frames.
       if (predictionTimer !== null) window.clearTimeout(predictionTimer);
       estimator = new NavigationEstimator();
+      estimator.setArrivalRadiusM(Number(settings.navigation?.arrival_radius_m ?? 25));
       if (state.nearestWaypoint) {
         estimator.setTarget({
           id: "active",
@@ -444,6 +446,10 @@ async function init() {
     const p = e.payload;
     acceptConfirmedPosition(p);
     if (!state.nearestWaypoint) void refreshNavigation().then(draw);
+  });
+  await listen<{ resetReason: string }>("position://quality", () => {
+    estimator.invalidatePrediction();
+    paintPredictedNow();
   });
   await listen("waypoints://changed", () => void refreshWaypoints());
   await listen("navigation://changed", () => void refreshNavigation().then(draw));

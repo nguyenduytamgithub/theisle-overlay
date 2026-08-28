@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { performance } from "node:perf_hooks";
 
 import {
   advanceAngleDeg,
@@ -132,9 +133,9 @@ test("maneuver changes only after six hundred milliseconds of stability", () => 
   nav.accept(sample({ serverFacingDeg: 90, confirmedAtMs: 0 }));
   assert.equal(nav.snapshot(1_000).maneuver, "straight");
   nav.accept(sample({ serverFacingDeg: 0, confirmedAtMs: 2_000 }));
-  assert.equal(nav.snapshot(3_000).maneuver, "straight");
-  assert.equal(nav.snapshot(3_599).maneuver, "straight");
-  assert.equal(nav.snapshot(3_600).maneuver, "right");
+  assert.equal(nav.snapshot(2_299).maneuver, "straight");
+  assert.equal(nav.snapshot(2_899).maneuver, "straight");
+  assert.equal(nav.snapshot(2_900).maneuver, "right");
 });
 
 test("ordinary correction eases over 650 ms", () => {
@@ -213,4 +214,145 @@ test("course at a timestamp does not depend on how often a webview painted", () 
   }
   for (let nowMs = 2_000; nowMs <= 3_500; nowMs += 100) dense.snapshot(nowMs);
   assert.equal(dense.snapshot(3_500).guidanceCourseDeg, sparse.snapshot(3_500).guidanceCourseDeg);
+});
+
+test("projected pass-through latches arrival and cannot flip the target arrow", () => {
+  const nav = estimatorWithTargetAt(3_000, 0);
+  nav.accept(sample({
+    velocityXCmS: 1_000,
+    velocityYCmS: 0,
+    velocityPxXS: 10,
+    velocityPxYS: 0,
+  }));
+  const before = nav.snapshot(0);
+  const inside = nav.snapshot(1_000);
+  const after = nav.snapshot(12_000);
+  assert.equal(before.targetBearingDeg, 180);
+  assert.equal(inside.arrived, true);
+  assert.equal(after.arrived, true);
+  assert.equal(after.maneuver, "arrived");
+  assert.equal(after.targetBearingDeg, 180);
+
+  nav.accept(sample({ xCm: 7_000, px: 70, confirmedAtMs: 15_000 }));
+  const departed = nav.snapshot(15_000);
+  assert.equal(departed.arrived, false);
+  assert.notEqual(departed.maneuver, "arrived");
+});
+
+test("arrival entry point and full snapshot are independent of paint cadence", () => {
+  const dense = estimatorWithTargetAt(3_000, 0);
+  const sparse = estimatorWithTargetAt(3_000, 0);
+  const moving = sample({
+    velocityXCmS: 1_000,
+    velocityYCmS: 0,
+    velocityPxXS: 10,
+    velocityPxYS: 0,
+  });
+  dense.accept(moving);
+  sparse.accept(moving);
+  for (let nowMs = 0; nowMs <= 12_000; nowMs += 50) dense.snapshot(nowMs);
+  assert.deepEqual(dense.snapshot(12_000), sparse.snapshot(12_000));
+});
+
+test("complete maneuver snapshot is independent of paint cadence", () => {
+  const dense = estimatorWithEastTarget();
+  const sparse = estimatorWithEastTarget();
+  for (const nav of [dense, sparse]) {
+    nav.accept(sample({ serverFacingDeg: 90, confirmedAtMs: 0 }));
+    nav.snapshot(1_000);
+    nav.accept(sample({ serverFacingDeg: 0, confirmedAtMs: 2_000 }));
+  }
+  for (let nowMs = 2_000; nowMs <= 3_600; nowMs += 100) dense.snapshot(nowMs);
+  assert.deepEqual(dense.snapshot(3_600), sparse.snapshot(3_600));
+});
+
+test("stopped or stale samples do not keep an old course alive", () => {
+  const stale = estimatorWithEastTarget();
+  stale.accept(sample({
+    velocityXCmS: 100,
+    velocityYCmS: 0,
+    velocityPxXS: 1,
+    velocityPxYS: 0,
+    motionCourseDeg: 180,
+  }));
+  assert.equal(stale.snapshot(1_000).guidanceCourseDeg, 180);
+  const waiting = stale.snapshot(13_000);
+  assert.equal(waiting.freshness, "waiting");
+  assert.equal(waiting.guidanceCourseDeg, null);
+  assert.equal(waiting.maneuver, "hold-cardinal");
+
+  const stopped = estimatorWithEastTarget();
+  stopped.accept(sample({ serverFacingDeg: 90 }));
+  assert.equal(stopped.snapshot(1_000).guidanceCourseDeg, 90);
+  stopped.accept(sample({ confirmedAtMs: 5_000 }));
+  assert.equal(stopped.snapshot(5_000).guidanceCourseDeg, null);
+});
+
+test("a custom arrival radius is honored by the estimator", () => {
+  const nav = estimatorWithTargetAt(3_500, 0);
+  nav.setArrivalRadiusM(40);
+  nav.accept(sample());
+  assert.equal(nav.snapshot(0).arrived, true);
+});
+
+test("relocation clears inherited velocity until a later normal confirmation", () => {
+  const nav = new NavigationEstimator();
+  nav.accept(sample());
+  nav.snapshot(0);
+  nav.accept(sample({
+    xCm: 11_000,
+    px: 110,
+    velocityXCmS: 100,
+    velocityYCmS: 0,
+    velocityPxXS: 1,
+    velocityPxYS: 0,
+    confirmedAtMs: 5_000,
+  }));
+  assert.equal(nav.snapshot(9_000).xCm, 11_000);
+});
+
+test("quality reset stops local projection without changing confirmed truth", () => {
+  const nav = estimatorWithVelocity(100);
+  assert.equal(nav.snapshot(4_000).xCm, 400);
+  nav.invalidatePrediction();
+  assert.equal(nav.snapshot(8_000).xCm, 0);
+});
+
+test("quality reset clears arrival reached only by local projection", () => {
+  const nav = estimatorWithTargetAt(3_000, 0);
+  nav.accept(sample({
+    velocityXCmS: 1_000,
+    velocityYCmS: 0,
+    velocityPxXS: 10,
+    velocityPxYS: 0,
+  }));
+  assert.equal(nav.snapshot(1_000).arrived, true);
+  nav.invalidatePrediction();
+  assert.equal(nav.snapshot(1_000).arrived, false);
+});
+
+test("ordinary correction cannot rotate target bearing faster than 120 degrees per second", () => {
+  const nav = estimatorWithEastTarget();
+  nav.accept(sample());
+  const before = nav.snapshot(5_000).targetBearingDeg;
+  nav.accept(sample({ xCm: 10_000, px: 100, confirmedAtMs: 5_000 }));
+  const after = nav.snapshot(5_300).targetBearingDeg;
+  assert.ok(Math.abs(shortestDeltaDeg(before, after)) <= 36.001);
+});
+
+test("a zero-metre arrival radius does not silently become twenty-five metres", () => {
+  const nav = estimatorWithTargetAt(2_400, 0);
+  nav.setArrivalRadiusM(0);
+  nav.accept(sample());
+  assert.equal(nav.snapshot(0).arrived, false);
+});
+
+test("a one-day resume has bounded maneuver catch-up work", () => {
+  const nav = estimatorWithEastTarget();
+  nav.accept(sample({ serverFacingDeg: 0 }));
+  const started = performance.now();
+  const view = nav.snapshot(86_400_000);
+  const elapsedMs = performance.now() - started;
+  assert.equal(view.freshness, "waiting");
+  assert.ok(elapsedMs < 50, `one-day catch-up took ${elapsedMs.toFixed(1)} ms`);
 });
