@@ -122,9 +122,8 @@ test("course source must remain valid for one second before switching", () => {
     confirmedAtMs: 2_000,
   }));
   assert.equal(nav.snapshot(2_999).guidanceCourseDeg, 0);
-  const switched = nav.snapshot(3_000).guidanceCourseDeg;
-  assert.ok(switched > 0 && switched < 1);
-  assert.ok(Math.abs(nav.snapshot(3_500).guidanceCourseDeg - 60.12) < 0.001);
+  assert.equal(nav.snapshot(3_000).guidanceCourseDeg, 0);
+  assert.equal(nav.snapshot(3_500).guidanceCourseDeg, 60);
   assert.equal(nav.snapshot(3_750).guidanceCourseDeg, 90);
 });
 
@@ -133,9 +132,9 @@ test("maneuver changes only after six hundred milliseconds of stability", () => 
   nav.accept(sample({ serverFacingDeg: 90, confirmedAtMs: 0 }));
   assert.equal(nav.snapshot(1_000).maneuver, "straight");
   nav.accept(sample({ serverFacingDeg: 0, confirmedAtMs: 2_000 }));
-  assert.equal(nav.snapshot(2_000).maneuver, "straight");
-  assert.equal(nav.snapshot(2_599).maneuver, "straight");
-  assert.equal(nav.snapshot(2_600).maneuver, "right");
+  assert.equal(nav.snapshot(3_000).maneuver, "straight");
+  assert.equal(nav.snapshot(3_599).maneuver, "straight");
+  assert.equal(nav.snapshot(3_600).maneuver, "right");
 });
 
 test("ordinary correction eases over 650 ms", () => {
@@ -178,4 +177,40 @@ test("Vietnamese newbie copy is explicit and nontechnical", () => {
   );
   assert.equal(localizeFreshness("estimating", "vi"), "ĐANG ƯỚC LƯỢNG");
   assert.equal(localizeFreshness("waiting", "vi"), "CHỜ SERVER");
+});
+
+test("independent consumers return equivalent snapshots for one event and timestamp", () => {
+  const a = estimatorWithEastTarget();
+  const b = estimatorWithEastTarget();
+  const position = sample({
+    confirmedAtMs: 1_000,
+    velocityXCmS: 100,
+    velocityYCmS: 0,
+    velocityPxXS: 1,
+    velocityPxYS: 0,
+    motionCourseDeg: 180,
+  });
+  a.accept(position);
+  b.accept(position);
+  assert.deepEqual(a.snapshot(7_500), b.snapshot(7_500));
+});
+
+test("course at a timestamp does not depend on how often a webview painted", () => {
+  const dense = estimatorWithEastTarget();
+  const sparse = estimatorWithEastTarget();
+  for (const nav of [dense, sparse]) {
+    nav.accept(sample({ serverFacingDeg: 0, confirmedAtMs: 0 }));
+    nav.snapshot(1_000);
+    nav.accept(sample({
+      serverFacingDeg: 0,
+      motionCourseDeg: 90,
+      velocityXCmS: 100,
+      velocityYCmS: 0,
+      velocityPxXS: 1,
+      velocityPxYS: 0,
+      confirmedAtMs: 2_000,
+    }));
+  }
+  for (let nowMs = 2_000; nowMs <= 3_500; nowMs += 100) dense.snapshot(nowMs);
+  assert.equal(dense.snapshot(3_500).guidanceCourseDeg, sparse.snapshot(3_500).guidanceCourseDeg);
 });

@@ -229,8 +229,8 @@ export class NavigationEstimator {
   private currentCourseSource: CourseSource | null = null;
   private pendingCourse: { source: CourseSource; sinceMs: number; angleDeg: number } | null = null;
   private courseTargetDeg: number | null = null;
-  private displayedCourseDeg: number | null = null;
-  private coursePaintedAtMs: number | null = null;
+  private courseAnchorDeg: number | null = null;
+  private courseAnchorAtMs: number | null = null;
   private currentManeuver: NavigationManeuver | null = null;
   private pendingManeuver: { maneuver: NavigationManeuver; sinceMs: number } | null = null;
   private confirmedDistancesM: number[] = [];
@@ -372,6 +372,11 @@ export class NavigationEstimator {
       return;
     }
     if (desired.source === this.currentCourseSource) {
+      const current = this.courseAt(sample.confirmedAtMs);
+      if (current !== null) {
+        this.courseAnchorDeg = current;
+        this.courseAnchorAtMs = sample.confirmedAtMs;
+      }
       this.courseTargetDeg = desired.angleDeg;
       this.pendingCourse = null;
       return;
@@ -390,28 +395,30 @@ export class NavigationEstimator {
   private updateDisplayedCourse(nowMs: number): number | null {
     if (this.pendingCourse
         && nowMs - this.pendingCourse.sinceMs >= COURSE_SOURCE_STABLE_MS) {
+      const switchAtMs = this.pendingCourse.sinceMs + COURSE_SOURCE_STABLE_MS;
+      const priorAtSwitch = this.courseAt(switchAtMs);
       this.currentCourseSource = this.pendingCourse.source;
+      this.courseAnchorDeg = priorAtSwitch ?? this.pendingCourse.angleDeg;
+      this.courseAnchorAtMs = switchAtMs;
       this.courseTargetDeg = this.pendingCourse.angleDeg;
       this.pendingCourse = null;
-      if (this.displayedCourseDeg === null) {
-        this.displayedCourseDeg = this.courseTargetDeg;
-      }
     }
-    if (this.displayedCourseDeg === null || this.courseTargetDeg === null) {
-      return this.displayedCourseDeg;
+    return this.courseAt(nowMs);
+  }
+
+  private courseAt(nowMs: number): number | null {
+    if (this.courseAnchorDeg === null
+        || this.courseAnchorAtMs === null
+        || this.courseTargetDeg === null) {
+      return null;
     }
-    const elapsedS = this.coursePaintedAtMs === null
-      ? 0
-      : Math.max(0, (nowMs - this.coursePaintedAtMs) / 1_000);
-    this.displayedCourseDeg = advanceAngleDeg(
-      this.displayedCourseDeg,
+    return advanceAngleDeg(
+      this.courseAnchorDeg,
       this.courseTargetDeg,
-      elapsedS,
+      Math.max(0, (nowMs - this.courseAnchorAtMs) / 1_000),
       120,
       4,
     );
-    this.coursePaintedAtMs = nowMs;
-    return this.displayedCourseDeg;
   }
 
   private updateManeuver(
@@ -463,8 +470,8 @@ export class NavigationEstimator {
     this.currentCourseSource = null;
     this.pendingCourse = null;
     this.courseTargetDeg = null;
-    this.displayedCourseDeg = null;
-    this.coursePaintedAtMs = null;
+    this.courseAnchorDeg = null;
+    this.courseAnchorAtMs = null;
     this.currentManeuver = null;
     this.pendingManeuver = null;
     this.confirmedDistancesM = [];

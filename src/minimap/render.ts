@@ -49,6 +49,8 @@ export interface MinimapState {
   position: { xCm: number; yCm: number; px: number; py: number; headingDeg: number | null } | null;
   /** Trail segments in basemap px. */
   trailPx: [number, number][][];
+  /** Presentation-only line from the latest confirmed point to local estimate. */
+  predictionTailPx: [[number, number], [number, number]] | null;
   /** Point POIs already filtered by layer visibility (not by distance). */
   pois: PoiDot[];
   /** Saved waypoints (cm + basemap px + user colour; glyph = icon pins). */
@@ -231,6 +233,22 @@ function drawMap(
       ctx.lineTo(x, y);
     }
     ctx.stroke();
+  }
+
+  // Never append this presentation-only estimate to the confirmed trail.
+  if (state.showTrail && state.predictionTailPx) {
+    const [from, to] = state.predictionTailPx;
+    const [x0, y0] = toWidget(from[0], from[1]);
+    const [x1, y1] = toWidget(to[0], to[1]);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(79, 195, 247, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
   }
 
   // POI dots, distance-filtered (in metres, straight from cm).
