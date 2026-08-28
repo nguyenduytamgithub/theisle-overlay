@@ -6,6 +6,11 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { error } from "@tauri-apps/plugin-log";
 import { installGlobalErrorLog } from "../lib/errlog";
+import {
+  projectedPosition,
+  smoothedPosition,
+  type ProjectedPosition,
+} from "../lib/navigation/prediction";
 import { ANIMAL_GLYPHS, waypointGlyph } from "../lib/theme";
 import {
   PANEL_H,
@@ -30,6 +35,13 @@ interface PositionUpdate {
   py: number;
   headingDeg: number | null;
   compassKey: string | null;
+  velocityXCmS: number | null;
+  velocityYCmS: number | null;
+  velocityPxXS: number | null;
+  velocityPxYS: number | null;
+  confirmedAtMs: number;
+  predictionHorizonS: number;
+  staleAfterS: number;
 }
 interface PoiLayer {
   key: string;
@@ -105,6 +117,45 @@ const state: MinimapState = {
 
 let lastHeadingKey: string | null = null;
 let lastHeadingDeg: number | null = null;
+let confirmedPosition: PositionUpdate | null = null;
+let displayedPosition: ProjectedPosition | null = null;
+let correctionFrom: ProjectedPosition | null = null;
+let correctionStartedAtMs = 0;
+let predictionFrame: number | null = null;
+
+function paintPredictedPosition(nowMs: number) {
+  predictionFrame = null;
+  if (!confirmedPosition) return;
+  const projected = projectedPosition(confirmedPosition, nowMs);
+  const shown = smoothedPosition(
+    projected,
+    correctionFrom,
+    correctionStartedAtMs,
+    nowMs,
+  );
+  displayedPosition = shown;
+  state.position = {
+    xCm: shown.xCm,
+    yCm: shown.yCm,
+    px: shown.px,
+    py: shown.py,
+    headingDeg: confirmedPosition.headingDeg,
+  };
+  draw();
+
+  const correcting = nowMs - correctionStartedAtMs < 350;
+  if (projected.predicting || correcting) {
+    predictionFrame = requestAnimationFrame(() => paintPredictedPosition(Date.now()));
+  }
+}
+
+function acceptConfirmedPosition(position: PositionUpdate) {
+  if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
+  correctionFrom = displayedPosition;
+  correctionStartedAtMs = Date.now();
+  confirmedPosition = position;
+  paintPredictedPosition(correctionStartedAtMs);
+}
 
 function applySettings(s: Settings) {
   settings = s;
@@ -305,6 +356,8 @@ async function refreshNavigation() {
   try {
     const near = await invoke<{
       id: string;
+      xCm: number;
+      yCm: number;
       bearingDeg: number;
       distanceM: number;
     } | null>("active_navigation");
@@ -313,6 +366,8 @@ async function refreshNavigation() {
       ? {
           bearingDeg: near.bearingDeg,
           distanceM: near.distanceM,
+          xCm: near.xCm,
+          yCm: near.yCm,
           color: target?.color ?? null,
           glyph: target ? waypointGlyph(target.name) : undefined,
         }
@@ -335,7 +390,7 @@ async function reloadMapSource() {
   try {
     const p = await invoke<PositionUpdate | null>("get_current_position");
     if (p) {
-      state.position = { xCm: p.xCm, yCm: p.yCm, px: p.px, py: p.py, headingDeg: p.headingDeg };
+      acceptConfirmedPosition(p);
     }
     const trail = await invoke<{ segmentsPx: [number, number][][] }>("get_current_trail");
     state.trailPx = trail.segmentsPx;
@@ -355,11 +410,10 @@ async function init() {
 
   await listen<PositionUpdate>("position://update", (e) => {
     const p = e.payload;
-    state.position = { xCm: p.xCm, yCm: p.yCm, px: p.px, py: p.py, headingDeg: p.headingDeg };
+    acceptConfirmedPosition(p);
     lastHeadingKey = p.compassKey;
     lastHeadingDeg = p.headingDeg;
     refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
-    draw();
     // The selected-target rim arrow re-aims from the new position; repaints once more when
     // the answer arrives (still purely event-driven).
     void refreshNavigation().then(draw);
@@ -436,7 +490,7 @@ async function init() {
   try {
     const p = await invoke<PositionUpdate | null>("get_current_position");
     if (p) {
-      state.position = { xCm: p.xCm, yCm: p.yCm, px: p.px, py: p.py, headingDeg: p.headingDeg };
+      acceptConfirmedPosition(p);
       lastHeadingKey = p.compassKey;
       lastHeadingDeg = p.headingDeg;
       refreshHeadingLabel(settings.language === "en" ? "en" : "vi");

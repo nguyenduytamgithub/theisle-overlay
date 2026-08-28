@@ -4,7 +4,8 @@
 // put. The player's heading is shown by the arrow and the readout pill.
 // Drawn with one drawImage cropping the region around the player out of the
 // preloaded bitmap (vulnona 975 px tier, or a downscaled islemaps decode).
-// No repaint timers: draw only on new data.
+// Between confirmed samples the entrypoint may repaint a short, bounded
+// prediction window; the renderer itself remains pure and timer-free.
 
 export interface PoiDot {
   xCm: number;
@@ -59,8 +60,10 @@ export interface MinimapState {
     color: string | null;
     glyph?: string;
   }[];
-  /** Rim arrow target: the closest saved waypoint, or null. */
+  /** Rim arrow target: the explicitly selected waypoint, or null. */
   nearestWaypoint: {
+    xCm: number;
+    yCm: number;
     bearingDeg: number;
     distanceM: number;
     color: string | null;
@@ -279,7 +282,7 @@ function drawMap(
   }
 }
 
-/** Rim arrow + distance toward the closest waypoint OUTSIDE the view radius
+/** Rim arrow + distance toward the selected waypoint OUTSIDE the view radius
  * (inside it, its dot is already visible). North is always up, so the screen
  * angle IS the compass bearing. */
 export function drawWaypointArrow(
@@ -290,9 +293,13 @@ export function drawWaypointArrow(
 ): void {
   const wp = state.nearestWaypoint;
   if (!state.showWaypoints || !wp || !state.position) return;
-  if (wp.distanceM <= state.radiusM) return;
+  const dxCm = wp.xCm - state.position.xCm;
+  const dyCm = wp.yCm - state.position.yCm;
+  const distanceM = Math.hypot(dxCm, dyCm) / 100;
+  if (distanceM <= state.radiusM) return;
   const color = wp.color ?? COLORS.waypoint;
-  const rad = ((wp.bearingDeg - 90) * Math.PI) / 180;
+  const bearingDeg = (Math.atan2(dyCm, -dxCm) * 180) / Math.PI;
+  const rad = ((bearingDeg - 90) * Math.PI) / 180;
   const ax = c + (radius - 9) * Math.cos(rad);
   const ay = c + (radius - 9) * Math.sin(rad);
 
@@ -315,7 +322,7 @@ export function drawWaypointArrow(
   // Distance label just inside the arrow, with the compass-letter shadow
   // trick. Icon pins prefix their icon: "💧 850 m" says what you're chasing.
   const distText =
-    wp.distanceM >= 1000 ? `${(wp.distanceM / 1000).toFixed(1)} km` : `${Math.round(wp.distanceM)} m`;
+    distanceM >= 1000 ? `${(distanceM / 1000).toFixed(1)} km` : `${Math.round(distanceM)} m`;
   const dist = wp.glyph ? `${wp.glyph} ${distText}` : distText;
   const tx = c + (radius - 24) * Math.cos(rad);
   const ty = c + (radius - 24) * Math.sin(rad);

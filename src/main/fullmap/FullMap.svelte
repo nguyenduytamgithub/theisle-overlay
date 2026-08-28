@@ -58,6 +58,11 @@
   } from "$lib/theme";
   import LayerPanel from "./LayerPanel.svelte";
   import NamePrompt from "./NamePrompt.svelte";
+  import {
+    projectedPosition,
+    smoothedPosition,
+    type ProjectedPosition,
+  } from "$lib/navigation/prediction";
   import { t, tNow } from "$lib/i18n";
   import { ask } from "@tauri-apps/plugin-dialog";
 
@@ -106,6 +111,11 @@
   let settings = $state<Settings | null>(null);
   let position = $state<PositionUpdate | null>(null);
   let navigation = $state<NavigationTarget | null>(null);
+  let confirmedPosition: PositionUpdate | null = null;
+  let displayedPosition: ProjectedPosition | null = null;
+  let correctionFrom: ProjectedPosition | null = null;
+  let correctionStartedAtMs = 0;
+  let predictionFrame: number | null = null;
   // The newest sample/trail that arrived while the tab was hidden. Nothing is
   // painted for them until the tab shows again: keeping the map alive must
   // not become a map that pans, re-projects and round-trips to Rust for the
@@ -435,7 +445,10 @@
       L.marker(mid, {
         icon: L.divIcon({
           className: "navigation-arrow",
-          html: `<span style="color:${color};transform:rotate(${navigation.bearingDeg}deg)">▲</span>`,
+          html: `<span style="color:${color};transform:rotate(${(
+            (Math.atan2(navigation.px - position.px, -(navigation.py - position.py)) * 180) /
+            Math.PI
+          ).toFixed(2)}deg)">▲</span>`,
           iconSize: [22, 22],
           iconAnchor: [11, 11],
         }),
@@ -637,13 +650,43 @@
     return true;
   }
 
-  function applyPosition(p: PositionUpdate, animate = true) {
+  function paintPredictedPosition(nowMs: number) {
+    predictionFrame = null;
+    if (!confirmedPosition || !visible) return;
+    const projected = projectedPosition(confirmedPosition, nowMs);
+    const shown = smoothedPosition(
+      projected,
+      correctionFrom,
+      correctionStartedAtMs,
+      nowMs,
+    );
+    displayedPosition = shown;
+    const p: PositionUpdate = {
+      ...confirmedPosition,
+      xCm: shown.xCm,
+      yCm: shown.yCm,
+      px: shown.px,
+      py: shown.py,
+    };
     position = p;
     if (!map) return;
     upsertPlayer(p);
     drawNavigation();
-    if (follow) map.panTo(toLatLng(p.px, p.py), { animate });
+    if (follow) map.panTo(toLatLng(p.px, p.py), { animate: false });
     updateEdgeArrow();
+
+    const correcting = nowMs - correctionStartedAtMs < 350;
+    if (projected.predicting || correcting) {
+      predictionFrame = requestAnimationFrame(() => paintPredictedPosition(Date.now()));
+    }
+  }
+
+  function acceptConfirmedPosition(p: PositionUpdate) {
+    if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
+    correctionFrom = displayedPosition;
+    correctionStartedAtMs = Date.now();
+    confirmedPosition = p;
+    paintPredictedPosition(correctionStartedAtMs);
   }
 
   // Coming back from display:none. Leaflet measured a 0x0 container while
@@ -653,7 +696,7 @@
   $effect(() => {
     if (!visible || !map) return;
     // untrack: the work below both writes and reads $state (position,
-    // edgeArrow, navigation via applyPosition). Tracked, that made this effect
+    // edgeArrow, navigation via the prediction paint). Tracked, that made this effect
     // depend on `position` and re-run itself on the next sample after every
     // show. Its only real input is `visible`, read above.
     untrack(() => {
@@ -670,8 +713,10 @@
       const p = parkedPosition;
       parkedPosition = null;
       if (p) {
-        applyPosition(p, false);
+        acceptConfirmedPosition(p);
         void refreshNavigation();
+      } else if (confirmedPosition) {
+        paintPredictedPosition(Date.now());
       }
     });
   });
@@ -750,7 +795,7 @@
             parkedPosition = p;
             return;
           }
-          applyPosition(p);
+          acceptConfirmedPosition(p);
           await refreshNavigation();
         }),
       );
@@ -791,9 +836,7 @@
       // an F5 the marker would wait for the player's next manual copy.
       const p = await getCurrentPosition();
       if (p && map) {
-        position = p;
-        upsertPlayer(p);
-        map.panTo(toLatLng(p.px, p.py));
+        acceptConfirmedPosition(p);
         await refreshNavigation();
       }
     })();
@@ -803,6 +846,7 @@
 
   onDestroy(() => {
     destroyed = true;
+    if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
     try {
       if (map) {
         // Leaflet ends a zoom animation on a 250 ms timer (Map._animateZoom,
