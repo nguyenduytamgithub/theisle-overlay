@@ -279,7 +279,7 @@ fn read_config(app: &AppHandle) -> PollConfig {
         enabled: settings::get_bool(&s, &["islepilot", "enabled"], false),
         auth_mode: settings::get_str(&s, &["islepilot", "auth_mode"], "legacy").to_string(),
         domain: settings::get_str(&s, &["islepilot", "domain"], "").to_string(),
-        interval_s: settings::get_f64(&s, &["islepilot", "poll_interval_s"], 10.0)
+        interval_s: settings::get_f64(&s, &["islepilot", "poll_interval_s"], 5.0)
             .max(MIN_INTERVAL_S),
         use_map_position: settings::get_bool(&s, &["islepilot", "use_map_position"], false),
     }

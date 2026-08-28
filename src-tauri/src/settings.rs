@@ -149,6 +149,7 @@ pub fn default_settings() -> Value {
             "min_node_distance_m": 5,
         },
         "navigation": {
+            "schema_version": 1,
             "target_waypoint_id": null,
             "arrival_radius_m": 15.0,
             "hud_visible": true,
@@ -168,7 +169,7 @@ pub fn default_settings() -> Value {
             "enabled": false,
             "auth_mode": "legacy",       // token (one login, every server) | legacy (per-server cookie)
             "domain": "https://mixi.islepilot.eu",
-            "poll_interval_s": 10,
+            "poll_interval_s": 5,
             "use_map_position": false,   // auto-managed: on when the server has a live map
             "map_pref_user_set": false,  // true once the USER touches the toggle — stops auto-on
             "show_overlay_panel": true,  // compact stats under the minimap
@@ -208,9 +209,34 @@ pub fn load_settings() -> Value {
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
     match loaded {
-        Some(over @ Value::Object(_)) => merge(&default_settings(), &over),
+        Some(over @ Value::Object(_)) => {
+            let legacy_ten_second_poll = get_path(&over, &["navigation", "schema_version"])
+                .is_none()
+                && get_path(&over, &["islepilot", "poll_interval_s"])
+                    .and_then(Value::as_f64)
+                    == Some(10.0);
+            let merged = merge_loaded_settings(&over);
+            if legacy_ten_second_poll {
+                if let Err(error) = save_settings(&merged) {
+                    log::warn!("saving migrated poll interval failed: {error}");
+                }
+            }
+            merged
+        }
         _ => default_settings(),
     }
+}
+
+fn merge_loaded_settings(over: &Value) -> Value {
+    let mut merged = merge(&default_settings(), over);
+    let legacy_navigation = get_path(over, &["navigation", "schema_version"]).is_none();
+    let legacy_default_poll = get_path(over, &["islepilot", "poll_interval_s"])
+        .and_then(Value::as_f64)
+        == Some(10.0);
+    if legacy_navigation && legacy_default_poll {
+        merged["islepilot"]["poll_interval_s"] = json!(5.0);
+    }
+    merged
 }
 
 /// Atomic write: write to a temp file then rename over, so a power cut cannot
@@ -325,5 +351,20 @@ mod tests {
             overlay_core::MapSource::Vulnona,
             "legacy settings resolve to the default imagery"
         );
+    }
+
+    #[test]
+    fn legacy_ten_second_poll_is_migrated_to_five_seconds() {
+        let legacy = json!({"islepilot": {"poll_interval_s": 10}});
+        let merged = merge_loaded_settings(&legacy);
+        assert_eq!(merged["islepilot"]["poll_interval_s"], 5.0);
+        assert_eq!(merged["navigation"]["schema_version"], 1);
+    }
+
+    #[test]
+    fn custom_poll_interval_survives_navigation_migration() {
+        let custom = json!({"islepilot": {"poll_interval_s": 20}});
+        let merged = merge_loaded_settings(&custom);
+        assert_eq!(merged["islepilot"]["poll_interval_s"], 20);
     }
 }

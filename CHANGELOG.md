@@ -4,6 +4,26 @@ Mọi thay đổi đáng chú ý của TheIsle Overlay được ghi tại đây,
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/) và đánh số phiên bản
 [SemVer](https://semver.org/lang/vi/). Mã trong ngoặc là commit tương ứng.
 
+## [1.6.0] — 2026-08-28
+
+### Thêm
+
+- **HUD la bàn trong game**: luôn ghi rõ BẮC–ĐÔNG–NAM–TÂY, hướng đang nhìn,
+  mũi tên rẽ tới waypoint đã chọn và khoảng cách; tự ẩn khi Alt-Tab, click-through,
+  bật/tắt bằng `Ctrl+Alt+H`.
+- **Dẫn đường tới đúng waypoint được chọn**: bản đồ lớn vẽ đường nối và mũi tên;
+  minimap và HUD dùng cùng một đích, tự dừng khi waypoint bị xóa.
+
+### Sửa
+
+- **Loại điểm vị trí nhảy sai** và chỉ xác nhận di chuyển xa sau hai mẫu nhất quán;
+  đường mòn không còn nối qua điểm lỗi hàng kilomet.
+- **Giữ hướng yaw của server** và dùng hướng di chuyển làm dự phòng.
+- **Chuyển động mượt giữa các mẫu server**: dự đoán hiển thị tối đa 4 giây, hiệu chỉnh
+  mềm 350 ms, không ghi điểm dự đoán vào lịch sử; dữ liệu quá cũ được báo rõ.
+- **Chu kỳ cập nhật mặc định 5 giây**; người dùng 10 giây mặc định cũ được nâng tự động,
+  còn giá trị tùy chỉnh khác được giữ nguyên.
+
 ## [1.5.2] — 2026-08-25
 
 ### Thay đổi
