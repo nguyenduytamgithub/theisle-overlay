@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>navigation hud</title>
+    <link rel="stylesheet" href="/src/hud/style.css" />
+  </head>
+  <body>
+    <main id="hud" class="hud waiting" aria-live="off">
+      <div class="cardinals" aria-hidden="true">
+        <span>BẮC <small>0°</small></span>
+        <span>ĐÔNG <small>90°</small></span>
+        <span>NAM <small>180°</small></span>
+        <span>TÂY <small>270°</small></span>
+      </div>
+      <div class="heading-row">
+        <span class="heading-arrow">▲</span>
+        <strong id="heading">CHỜ VỊ TRÍ</strong>
+        <span id="freshness" class="freshness">SERVER</span>
+      </div>
+      <div id="navigation" class="navigation hidden">
+        <span id="target-arrow" class="target-arrow">▲</span>
+        <span class="target-copy">
+          <strong id="target-name"></strong>
+          <small id="target-detail"></small>
+        </span>
+        <strong id="turn" class="turn"></strong>
+      </div>
+    </main>
+    <script type="module" src="/src/hud/main.ts"></script>
+  </body>
+</html>

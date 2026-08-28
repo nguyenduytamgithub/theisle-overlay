@@ -4,8 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 
-// Two entries on purpose: the minimap overlay webview must stay minimal (no
-// Skeleton, no Leaflet), so it is its own HTML entry with a tiny bundle.
+// Separate entries on purpose: overlay webviews stay minimal (no Skeleton,
+// no Leaflet), so the minimap and compass HUD each have a tiny bundle.
 export default defineConfig({
   plugins: [svelte(), tailwindcss()],
   define: {
@@ -22,6 +22,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         minimap: fileURLToPath(new URL("./minimap.html", import.meta.url)),
+        hud: fileURLToPath(new URL("./hud.html", import.meta.url)),
       },
     },
   },
