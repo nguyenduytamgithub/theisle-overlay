@@ -272,6 +272,7 @@ fn dispatch(app: &AppHandle, action: &str) {
     match action {
         "toggle_minimap" => toggle_setting(app, "visible"),
         "toggle_hud" => toggle_navigation_setting(app, "hud_visible"),
+        "toggle_night_vision" => crate::night_vision::toggle_from_app(app),
         "toggle_click_through" => toggle_setting(app, "click_through"),
         // Lives under "islepilot", not "minimap", so toggle_setting can't
         // serve it. Default false must match settings.rs.
@@ -427,6 +428,7 @@ mod tests {
     fn parses_the_default_table() {
         // (mods | MOD_NOREPEAT, vk)
         assert_eq!(parse_hotkey("Ctrl+Alt+M"), Some((0x2 | 0x1 | 0x4000, b'M' as u32)));
+        assert_eq!(parse_hotkey("Ctrl+Alt+N"), Some((0x2 | 0x1 | 0x4000, b'N' as u32)));
         assert_eq!(parse_hotkey("Ctrl+Alt+Up"), Some((0x2 | 0x1 | 0x4000, 0x26)));
         assert_eq!(parse_hotkey("Ctrl+Shift+F5"), Some((0x2 | 0x4 | 0x4000, 0x74)));
         assert_eq!(parse_hotkey("Win+Plus"), Some((0x8 | 0x4000, 0xBB)));

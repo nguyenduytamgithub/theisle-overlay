@@ -76,10 +76,12 @@ impl<A: GammaApi> DisplayGamma<A> {
         &self.display_name
     }
 
+    #[cfg(feature = "devtools")]
     pub(crate) fn original(&self) -> &GammaRamp {
         &self.original
     }
 
+    #[cfg(feature = "devtools")]
     pub(crate) fn read_current(&mut self) -> Result<GammaRamp, NightVisionError> {
         self.api.read(&self.display_name)
     }
