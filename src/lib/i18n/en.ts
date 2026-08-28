@@ -84,6 +84,7 @@ export const en: Record<MsgKey, string> = {
   "warn.no_data": "No map data on this machine yet. It needs to be downloaded once before use.",
 
   "hotkey.toggle_minimap": "Show/hide minimap",
+  "hotkey.toggle_night_vision": "Toggle Night Vision",
   "hotkey.toggle_fullmap": "Open/close full map",
   "hotkey.toggle_click_through": "Toggle click-through",
   "hotkey.mark_here": "Mark current position",
@@ -96,6 +97,17 @@ export const en: Record<MsgKey, string> = {
 
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Minimap",
+  "settings.night_vision": "Night Vision",
+  "settings.night_vision_toggle": "Toggle Night Vision",
+  "settings.night_vision_strength": "Strength",
+  "settings.night_vision_show_button": "Show in-game button",
+  "settings.night_vision_hint":
+    "Display-gamma only; never reads game memory. Alt-Tab or quitting restores the original color. Unsupported HDR/driver paths are reported truthfully.",
+  "night_vision.status_applied": "Applied",
+  "night_vision.status_waiting": "Waiting for game",
+  "night_vision.status_off": "Off",
+  "night_vision.status_unavailable": "Unavailable (driver/HDR)",
+  "night_vision.status_recovery_error": "Original color was not restored — restart the app",
   "settings.visible": "Show minimap",
   "settings.require_game": "Only show while you are in the game (hides on Alt-Tab)",
   "settings.click_through": "Click-through (never blocks gameplay)",

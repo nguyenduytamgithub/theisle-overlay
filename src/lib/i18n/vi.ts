@@ -95,6 +95,7 @@ export const vi = {
 
   // --- phím tắt (tên hành động) ---
   "hotkey.toggle_minimap": "Hiện/ẩn bản đồ nhỏ",
+  "hotkey.toggle_night_vision": "Bật/tắt nhìn đêm",
   "hotkey.toggle_fullmap": "Mở/đóng bản đồ lớn",
   "hotkey.toggle_click_through": "Bật/tắt chế độ bấm được",
   "hotkey.mark_here": "Đánh dấu vị trí hiện tại",
@@ -108,6 +109,17 @@ export const vi = {
   // --- cài đặt ---
   "settings.language": "Ngôn ngữ · Language",
   "settings.minimap": "Bản đồ nhỏ",
+  "settings.night_vision": "Nhìn đêm",
+  "settings.night_vision_toggle": "Bật/Tắt nhìn đêm",
+  "settings.night_vision_strength": "Cường độ",
+  "settings.night_vision_show_button": "Hiện nút trong game",
+  "settings.night_vision_hint":
+    "Chỉ chỉnh gamma màn hình, không đọc bộ nhớ game. Alt-Tab hoặc thoát sẽ tự phục hồi màu gốc. HDR/driver không hỗ trợ sẽ được báo rõ.",
+  "night_vision.status_applied": "Đã áp dụng",
+  "night_vision.status_waiting": "Đang chờ game",
+  "night_vision.status_off": "Đang tắt",
+  "night_vision.status_unavailable": "Không hỗ trợ (driver/HDR)",
+  "night_vision.status_recovery_error": "Chưa phục hồi được màu gốc — hãy khởi động lại app",
   "settings.visible": "Hiện bản đồ nhỏ",
   "settings.require_game": "Chỉ hiện khi đang trong game (Alt-Tab ra là tự ẩn)",
   "settings.click_through": "Chuột bấm xuyên qua (không cản trở lúc chơi)",
