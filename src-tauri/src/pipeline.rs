@@ -10,8 +10,7 @@ use overlay_core::{
 use tauri::{AppHandle, Manager};
 
 use crate::events::{
-    emit_all, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED,
-    TRAIL_CHANGED,
+    emit_all, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED, TRAIL_CHANGED,
 };
 use crate::state::{AppState, LockExt};
 
@@ -32,16 +31,26 @@ pub fn ingest_sample_with_heading(
     let now_s = state.now_s();
     let cal = state.active_calibration();
 
-    let (outcome, current, heading, velocity, trail) = {
+    let (outcome, current, heading, server_facing, motion_course, velocity, trail) = {
         let mut tracker = state.tracker.lock_safe();
         let outcome = tracker.add_sample_with_heading(x, y, z, heading_deg, now_s);
         let current = tracker.current;
         let heading = tracker.heading_with_source(now_s);
+        let server_facing = tracker.server_facing(now_s);
+        let motion_course = tracker.motion_course(now_s);
         let velocity = tracker.velocity_cm_s();
         let trail = outcome
             .trail_changed
             .then(|| trail_payload(&tracker.segments, cal));
-        (outcome, current, heading, velocity, trail)
+        (
+            outcome,
+            current,
+            heading,
+            server_facing,
+            motion_course,
+            velocity,
+            trail,
+        )
     };
 
     if !should_publish(outcome) {
@@ -61,7 +70,10 @@ pub fn ingest_sample_with_heading(
     let payload = position_payload(
         current.expect("accepted sample is current"),
         heading,
+        server_facing,
+        motion_course,
         velocity,
+        outcome,
         now_s,
         cal,
     );
@@ -92,22 +104,24 @@ fn heading_source_key(source: HeadingSource) -> &'static str {
 fn position_payload(
     current: Sample,
     heading: Option<(f64, HeadingSource)>,
+    server_facing_deg: Option<f64>,
+    motion_course_deg: Option<f64>,
     velocity: Option<(f64, f64)>,
+    outcome: SampleOutcome,
     now_s: f64,
     cal: &Calibration,
 ) -> PositionUpdate {
     let (px, py) = world_to_pixel(current.x, current.y, cal);
-    let ((velocity_x_cm_s, velocity_y_cm_s), (velocity_px_x_s, velocity_px_y_s)) =
-        match velocity {
-            Some((vx, vy)) => {
-                let (next_px, next_py) = world_to_pixel(current.x + vx, current.y + vy, cal);
-                (
-                    (Some(vx), Some(vy)),
-                    (Some(next_px - px), Some(next_py - py)),
-                )
-            }
-            None => ((None, None), (None, None)),
-        };
+    let ((velocity_x_cm_s, velocity_y_cm_s), (velocity_px_x_s, velocity_px_y_s)) = match velocity {
+        Some((vx, vy)) => {
+            let (next_px, next_py) = world_to_pixel(current.x + vx, current.y + vy, cal);
+            (
+                (Some(vx), Some(vy)),
+                (Some(next_px - px), Some(next_py - py)),
+            )
+        }
+        None => ((None, None), (None, None)),
+    };
     let age_ms = ((now_s - current.at_s).max(0.0) * 1000.0).round() as i64;
     let heading_deg = heading.map(|(degrees, _)| degrees);
     PositionUpdate {
@@ -119,6 +133,8 @@ fn position_payload(
         heading_deg,
         heading_source: heading.map(|(_, source)| heading_source_key(source)),
         compass_key: heading_deg.map(bearing_to_compass_key),
+        server_facing_deg,
+        motion_course_deg,
         velocity_x_cm_s,
         velocity_y_cm_s,
         velocity_px_x_s,
@@ -126,6 +142,8 @@ fn position_payload(
         confirmed_at_ms: chrono::Utc::now().timestamp_millis() - age_ms,
         prediction_horizon_s: PREDICTION_HORIZON_S,
         stale_after_s: STALE_AFTER_S,
+        relocated: outcome.relocated,
+        refreshed_only: outcome.refreshed_only,
         in_bounds: overlay_core::is_in_bounds(px, py, cal),
     }
 }
@@ -137,16 +155,27 @@ fn position_payload(
 pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
     let now_s = state.now_s();
     let cal = state.active_calibration();
-    let (current, heading, velocity) = {
+    let (current, heading, server_facing, motion_course, velocity) = {
         let tracker = state.tracker.lock_safe();
         (
             tracker.current,
             tracker.heading_with_source(now_s),
+            tracker.server_facing(now_s),
+            tracker.motion_course(now_s),
             tracker.velocity_cm_s(),
         )
     };
     let cur = current?;
-    Some(position_payload(cur, heading, velocity, now_s, cal))
+    Some(position_payload(
+        cur,
+        heading,
+        server_facing,
+        motion_course,
+        velocity,
+        SampleOutcome::default(),
+        now_s,
+        cal,
+    ))
 }
 
 /// Re-send the full current state to every window. Belt-and-braces: hidden
@@ -188,7 +217,7 @@ pub fn trail_payload(segments_cm: &[Vec<(f64, f64)>], cal: &Calibration) -> Trai
 
 #[cfg(test)]
 mod tests {
-    use overlay_core::SampleOutcome;
+    use overlay_core::{Calibration, HeadingSource, Sample, SampleOutcome};
 
     #[test]
     fn quarantined_sample_is_not_published_or_persisted() {
@@ -209,5 +238,36 @@ mod tests {
         };
         assert!(super::should_publish(refreshed));
         assert!(!super::should_persist(refreshed));
+    }
+
+    #[test]
+    fn payload_keeps_independent_heading_and_sample_outcome_metadata() {
+        let outcome = SampleOutcome {
+            accepted: true,
+            relocated: true,
+            refreshed_only: true,
+            ..SampleOutcome::default()
+        };
+        let payload = super::position_payload(
+            Sample {
+                x: 0.0,
+                y: 10_000.0,
+                z: 0.0,
+                at_s: 10.0,
+                heading_deg: Some(5.0),
+            },
+            Some((5.0, HeadingSource::Server)),
+            Some(5.0),
+            Some(90.0),
+            None,
+            outcome,
+            10.0,
+            Calibration::gateway(),
+        );
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["serverFacingDeg"], 5.0);
+        assert_eq!(json["motionCourseDeg"], 90.0);
+        assert_eq!(json["relocated"], true);
+        assert_eq!(json["refreshedOnly"], true);
     }
 }

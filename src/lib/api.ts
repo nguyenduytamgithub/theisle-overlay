@@ -18,6 +18,8 @@ export interface PositionUpdate {
   headingDeg: number | null;
   headingSource: "server" | "motion" | null;
   compassKey: string | null;
+  serverFacingDeg: number | null;
+  motionCourseDeg: number | null;
   velocityXCmS: number | null;
   velocityYCmS: number | null;
   velocityPxXS: number | null;
@@ -25,6 +27,8 @@ export interface PositionUpdate {
   confirmedAtMs: number;
   predictionHorizonS: number;
   staleAfterS: number;
+  relocated: boolean;
+  refreshedOnly: boolean;
   inBounds: boolean;
 }
 

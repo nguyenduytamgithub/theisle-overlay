@@ -208,6 +208,15 @@ fn fresh_server_heading_wins_and_motion_is_the_fallback() {
 }
 
 #[test]
+fn motion_course_is_independent_from_server_facing() {
+    let mut t = tracker();
+    t.add_sample_with_heading(0.0, 0.0, 0.0, Some(270.0), 0.0);
+    t.add_sample_with_heading(0.0, 10_000.0, 0.0, Some(5.0), 10.0);
+    assert_eq!(t.server_facing(10.0), Some(5.0));
+    assert_eq!(t.motion_course(10.0), Some(90.0));
+}
+
+#[test]
 fn unreal_yaw_converts_to_north_up_compass_bearing() {
     assert!((game_yaw_to_bearing(0.0) - 180.0).abs() < 1e-9);
     assert!((game_yaw_to_bearing(90.0) - 90.0).abs() < 1e-9);
