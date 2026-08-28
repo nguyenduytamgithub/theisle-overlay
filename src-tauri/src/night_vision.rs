@@ -3,10 +3,13 @@ mod recovery;
 mod windows;
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager, State};
+use tauri::{
+    AppHandle, Listener, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindowBuilder,
+};
 
 use crate::settings::GAME_PROCESS_NAME;
 use crate::state::AppState;
@@ -22,6 +25,9 @@ pub(crate) struct GameTarget {
 }
 
 pub const CHANGED_EVENT: &str = "night-vision://changed";
+const BUTTON_WIDTH: f64 = 164.0;
+const BUTTON_HEIGHT: f64 = 42.0;
+const BUTTON_MARGIN: f64 = 12.0;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -322,6 +328,201 @@ pub fn restore_before_exit(app: &AppHandle) {
         log::error!("night vision: gamma restore on exit was not verified");
     }
     emit_state(app, &state);
+}
+
+pub fn create_button(app: &AppHandle) -> tauri::Result<()> {
+    let app_handle = app.clone();
+    let started = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let ready_guard = started.clone();
+    app.listen_any("night-vision://ready", move |_| {
+        if ready_guard.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        spawn_button_supervisor(app_handle.clone());
+    });
+
+    build_button_window(app)?;
+
+    let fallback_app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(5));
+        if !started.swap(true, Ordering::SeqCst) {
+            log::warn!("night-vision://ready never arrived; starting button supervisor anyway");
+            spawn_button_supervisor(fallback_app);
+        }
+    });
+    Ok(())
+}
+
+fn build_button_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
+    let window = WebviewWindowBuilder::new(
+        app,
+        "night-vision",
+        WebviewUrl::App("night-vision.html".into()),
+    )
+    .title("night vision")
+    .inner_size(BUTTON_WIDTH, BUTTON_HEIGHT)
+    .transparent(true)
+    .decorations(false)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .focused(false)
+    .focusable(false)
+    .visible(false)
+    .build()?;
+
+    if let Ok(hwnd) = window.hwnd() {
+        let raw = hwnd.0 as isize;
+        crate::win::vis::register("night-vision", raw);
+        crate::win::overlay::assert_overlay_styles(raw);
+    }
+    let _ = window.set_ignore_cursor_events(false);
+    Ok(window)
+}
+
+fn button_should_show(show_button: bool, game_active: bool, main_in_front: bool) -> bool {
+    show_button && game_active && !main_in_front
+}
+
+fn button_anchor(
+    game_rect: (i32, i32, i32, i32),
+    scale: f64,
+    logical_size: (f64, f64),
+    logical_margin: f64,
+) -> (i32, i32) {
+    let (left, top, width, height) = game_rect;
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let window_width = (logical_size.0.max(0.0) * scale).round() as i32;
+    let window_height = (logical_size.1.max(0.0) * scale).round() as i32;
+    let margin = (logical_margin.max(0.0) * scale).round() as i32;
+    let max_x = (left + width - window_width).max(left);
+    let max_y = (top + height - window_height).max(top);
+    let x = (left + width - window_width - margin).clamp(left, max_x);
+    let y = (top + margin).clamp(top, max_y);
+    (x, y)
+}
+
+fn spawn_button_supervisor(app: AppHandle) {
+    std::thread::spawn(move || {
+        const TICK_MS: u64 = 250;
+        const GAME_SEARCH_MS: u64 = 1000;
+        const RECREATE_MS: u64 = 5000;
+        const TOPMOST_MS: u64 = 2000;
+        let mut game_hwnd = None;
+        let mut since_search = GAME_SEARCH_MS;
+        let mut since_recreate = RECREATE_MS;
+        let mut since_topmost = 0u64;
+        let mut unfocused_ticks: u8 = 2;
+        let mut effective_previous = false;
+        let mut last_rect = None;
+
+        loop {
+            std::thread::sleep(Duration::from_millis(TICK_MS));
+            let Some(window) = app.get_webview_window("night-vision") else {
+                since_recreate = since_recreate.saturating_add(TICK_MS);
+                if since_recreate >= RECREATE_MS {
+                    since_recreate = 0;
+                    match build_button_window(&app) {
+                        Ok(_) => {
+                            effective_previous = false;
+                            last_rect = None;
+                        }
+                        Err(error) => log::warn!("night vision button recreate failed: {error}"),
+                    }
+                }
+                continue;
+            };
+            since_recreate = 0;
+            since_search = since_search.saturating_add(TICK_MS);
+            since_topmost = since_topmost.saturating_add(TICK_MS);
+
+            if since_search >= GAME_SEARCH_MS {
+                since_search = 0;
+                game_hwnd = crate::win::game_window::find_game_window(GAME_PROCESS_NAME);
+            }
+            let game_present = game_hwnd
+                .is_some_and(|hwnd| !crate::win::game_window::is_iconic(hwnd));
+            if game_present
+                && game_hwnd.is_some_and(crate::win::game_window::is_foreground)
+            {
+                unfocused_ticks = 0;
+            } else {
+                unfocused_ticks = unfocused_ticks.saturating_add(1);
+            }
+            let game_active = game_present && unfocused_ticks < 2;
+            let show_button = {
+                let state = app.state::<AppState>();
+                let settings = state.settings.lock_safe();
+                crate::settings::get_bool(
+                    &settings,
+                    &["night_vision", "show_button"],
+                    true,
+                )
+            };
+            let effective = button_should_show(
+                show_button,
+                game_active,
+                crate::win::vis::is_foreground("main"),
+            );
+
+            if effective != effective_previous {
+                if effective {
+                    crate::webview_mem::on_shown(&window);
+                    if window.show().is_ok() {
+                        effective_previous = true;
+                        if let Some(hwnd) = crate::win::vis::hwnd("night-vision") {
+                            crate::win::overlay::force_topmost(hwnd);
+                        }
+                        emit_state(&app, &app.state::<NightVision>().controller.state());
+                        last_rect = None;
+                    }
+                } else if window.hide().is_ok() {
+                    effective_previous = false;
+                    crate::webview_mem::on_hidden(&window);
+                }
+            } else if effective
+                && crate::win::vis::is_visible("night-vision") == Some(false)
+            {
+                crate::webview_mem::on_shown(&window);
+                if window.show().is_ok() {
+                    if let Some(hwnd) = crate::win::vis::hwnd("night-vision") {
+                        crate::win::overlay::force_topmost(hwnd);
+                    }
+                }
+            }
+
+            if !effective_previous {
+                continue;
+            }
+            if let Some(hwnd) = game_hwnd {
+                if let Some(rect) = crate::win::game_window::client_rect_on_screen(hwnd) {
+                    if last_rect != Some(rect) {
+                        last_rect = Some(rect);
+                        let scale = window.scale_factor().unwrap_or(1.0);
+                        let (x, y) = button_anchor(
+                            rect,
+                            scale,
+                            (BUTTON_WIDTH, BUTTON_HEIGHT),
+                            BUTTON_MARGIN,
+                        );
+                        let _ = window.set_position(PhysicalPosition::new(x, y));
+                    }
+                }
+            }
+            if since_topmost >= TOPMOST_MS {
+                since_topmost = 0;
+                if let Some(hwnd) = crate::win::vis::hwnd("night-vision") {
+                    crate::win::overlay::ensure_topmost(hwnd);
+                }
+            }
+        }
+    });
 }
 
 fn active_game_target() -> Option<GameTarget> {
@@ -713,5 +914,25 @@ mod tests {
             state.error_key.as_deref(),
             Some("night_vision.driver_rejected")
         );
+    }
+
+    #[test]
+    fn button_visibility_requires_user_setting_and_foreground_game() {
+        assert!(super::button_should_show(true, true, false));
+        assert!(!super::button_should_show(false, true, false));
+        assert!(!super::button_should_show(true, false, false));
+        assert!(!super::button_should_show(true, true, true));
+    }
+
+    #[test]
+    fn button_anchor_stays_inside_game_top_right_at_display_scale() {
+        let rect = (100, 200, 1920, 1080);
+        let (x, y) = super::button_anchor(rect, 1.5, (164.0, 42.0), 12.0);
+
+        assert_eq!((x, y), (1756, 218));
+        assert!(x >= rect.0);
+        assert!(y >= rect.1);
+        assert!(x + (164.0_f64 * 1.5).round() as i32 <= rect.0 + rect.2);
+        assert!(y + (42.0_f64 * 1.5).round() as i32 <= rect.1 + rect.3);
     }
 }

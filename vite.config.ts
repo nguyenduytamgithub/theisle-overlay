@@ -23,6 +23,7 @@ export default defineConfig({
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         minimap: fileURLToPath(new URL("./minimap.html", import.meta.url)),
         hud: fileURLToPath(new URL("./hud.html", import.meta.url)),
+        nightVision: fileURLToPath(new URL("./night-vision.html", import.meta.url)),
       },
     },
   },
