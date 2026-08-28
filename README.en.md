@@ -181,7 +181,7 @@ The published v1.6.0 Navigation HUD artifacts were measured directly after build
 
 | Item | Size |
 |---|---|
-| NSIS installer | **5,731,151 bytes (~5.7 MB)** |
+| NSIS installer | **5,728,468 bytes (~5.7 MB)** |
 | Installed executable | **21,093,888 bytes (~21.1 MB)** |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 

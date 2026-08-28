@@ -179,7 +179,7 @@ Artifact v1.6.0 Navigation HUD đã phát hành được đo trực tiếp sau k
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt NSIS | **5.731.151 byte (~5,7 MB)** |
+| File cài đặt NSIS | **5.728.468 byte (~5,7 MB)** |
 | File chạy sau khi cài | **21.093.888 byte (~21,1 MB)** |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 
