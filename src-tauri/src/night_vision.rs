@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{
-    AppHandle, Listener, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Listener, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
+    WebviewWindowBuilder,
 };
 
 use crate::settings::GAME_PROCESS_NAME;
@@ -26,6 +27,12 @@ pub(crate) struct GameTarget {
 
 pub const CHANGED_EVENT: &str = "night-vision://changed";
 pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-visual-boost-a");
+const FILTER_LABEL: &str = "night-vision-filter";
+const FILTER_READY_EVENT: &str = "night-vision-filter://ready";
+const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";
+const FILTER_PAINT_EVENT: &str = "night-vision-filter://paint";
+const FILTER_PAINTED_EVENT: &str = "night-vision-filter://painted";
+const FILTER_COLOR: &str = "rgb(235, 240, 230)";
 const BUTTON_WIDTH: f64 = 164.0;
 const BUTTON_HEIGHT: f64 = 42.0;
 const BUTTON_MARGIN: f64 = 12.0;
@@ -209,6 +216,11 @@ impl<F: DisplayFactory> NightVisionController<F> {
         if inner.recovery_blocked || !inner.state.requested || !inner.state.visual_boost_ready {
             return None;
         }
+        if let Some((request_id, strength)) = inner.pending_visual_request {
+            if strength == inner.state.strength {
+                return Some(request_id);
+            }
+        }
         inner.next_visual_request = inner.next_visual_request.wrapping_add(1).max(1);
         let request_id = inner.next_visual_request;
         let strength = inner.state.strength;
@@ -264,6 +276,16 @@ impl<F: DisplayFactory> NightVisionController<F> {
         inner.state.applied = false;
         inner.state.supported = false;
         inner.state.error_key = Some("night_vision.filter_unavailable".to_string());
+        inner.state.clone()
+    }
+
+    pub(crate) fn mark_filter_cleanup_failed(&self) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        inner.state.requested = false;
+        inner.state.visual_boost_applied = true;
+        inner.state.applied = true;
+        inner.state.supported = false;
+        inner.state.error_key = Some("night_vision.filter_cleanup_error".to_string());
         inner.state.clone()
     }
 
@@ -352,6 +374,10 @@ impl<F: DisplayFactory> NightVisionController<F> {
         if restore_session(&mut inner) {
             inner.state.gamma_applied = false;
             inner.state.error_key = None;
+        } else {
+            // `applied` is also the normal-exit safety gate. A gamma ramp that
+            // could not be restored must keep shutdown/relaunch blocked.
+            inner.state.applied = true;
         }
         inner.state.clone()
     }
@@ -448,8 +474,12 @@ pub fn initialize(app: &AppHandle) {
 
 pub fn restore_before_exit(app: &AppHandle) -> NightVisionState {
     let night_vision = app.state::<NightVision>();
-    let state = night_vision.controller.restore_for_exit();
-    if state.applied {
+    let filter_hidden = hide_filter_window(app);
+    let mut state = night_vision.controller.restore_for_exit();
+    if !filter_hidden {
+        state = night_vision.controller.mark_filter_cleanup_failed();
+        log::error!("night vision: visual filter hide on exit was not verified");
+    } else if state.gamma_applied {
         log::error!("night vision: gamma restore on exit was not verified");
     }
     emit_state(app, &state);
@@ -461,12 +491,314 @@ pub fn prepare_night_vision_exit(app: AppHandle) -> NightVisionState {
     restore_before_exit(&app)
 }
 
-struct ButtonHealth {
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FilterPaintRequest {
+    request_id: u64,
+    strength: u8,
+    alpha: f64,
+    color: &'static str,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FilterPainted {
+    request_id: u64,
+    strength: u8,
+}
+
+pub fn create_filter(app: &AppHandle) -> tauri::Result<()> {
+    let health = Arc::new(WindowHealth::new());
+
+    let ready_health = health.clone();
+    let ready_app = app.clone();
+    app.listen_any(FILTER_READY_EVENT, move |_| {
+        ready_health.mark_ready();
+        let state = ready_app
+            .state::<NightVision>()
+            .controller
+            .mark_filter_ready();
+        emit_state(&ready_app, &state);
+    });
+
+    let heartbeat_health = health.clone();
+    app.listen_any(FILTER_HEARTBEAT_EVENT, move |_| {
+        heartbeat_health.mark_heartbeat();
+    });
+
+    let painted_app = app.clone();
+    app.listen_any(FILTER_PAINTED_EVENT, move |event| {
+        let payload = match serde_json::from_str::<FilterPainted>(event.payload()) {
+            Ok(payload) => payload,
+            Err(error) => {
+                log::warn!("night vision filter sent an invalid painted ack: {error}");
+                return;
+            }
+        };
+        let visible = crate::win::vis::is_visible(FILTER_LABEL) == Some(true);
+        let state = painted_app
+            .state::<NightVision>()
+            .controller
+            .accept_visual_paint(payload.request_id, payload.strength, visible);
+        if state.visual_boost_applied {
+            log::info!(
+                "night vision: visual boost painted request={} strength={} fingerprint={}",
+                payload.request_id,
+                payload.strength,
+                state.build_fingerprint
+            );
+        }
+        emit_state(&painted_app, &state);
+    });
+
+    build_filter_window(app, &health)?;
+    spawn_filter_supervisor(app.clone(), health);
+    Ok(())
+}
+
+fn build_filter_window(
+    app: &AppHandle,
+    health: &WindowHealth,
+) -> tauri::Result<tauri::WebviewWindow> {
+    health.reset();
+    let window = WebviewWindowBuilder::new(
+        app,
+        FILTER_LABEL,
+        WebviewUrl::App("night-vision-filter.html".into()),
+    )
+    .title("night vision filter")
+    .inner_size(1.0, 1.0)
+    .transparent(true)
+    .decorations(false)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .focused(false)
+    .focusable(false)
+    .visible(false)
+    .build()?;
+
+    let hwnd = window.hwnd()?;
+    let raw = hwnd.0 as isize;
+    crate::win::vis::register(FILTER_LABEL, raw);
+    crate::win::overlay::assert_overlay_styles(raw);
+    crate::win::overlay::set_click_through(raw, true);
+    window.set_ignore_cursor_events(true)?;
+    Ok(window)
+}
+
+fn filter_should_show(
+    requested: bool,
+    ready: bool,
+    game_active: bool,
+    main_in_front: bool,
+) -> bool {
+    requested && ready && game_active && !main_in_front
+}
+
+fn wait_filter_hidden(timeout_ms: u64) -> bool {
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    loop {
+        if crate::win::vis::is_visible(FILTER_LABEL) != Some(true) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn hide_filter_window(app: &AppHandle) -> bool {
+    let Some(window) = app.get_webview_window(FILTER_LABEL) else {
+        return crate::win::vis::is_visible(FILTER_LABEL) != Some(true);
+    };
+    crate::webview_mem::on_hidden(&window);
+    window.hide().is_ok() && wait_filter_hidden(250)
+}
+
+fn force_overlay_stack() {
+    for label in [FILTER_LABEL, "minimap", "hud", "night-vision"] {
+        if let Some(hwnd) = crate::win::vis::hwnd(label) {
+            crate::win::overlay::force_topmost(hwnd);
+        }
+    }
+}
+
+fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
+    std::thread::spawn(move || {
+        const TICK_MS: u64 = 250;
+        const GAME_SEARCH_MS: u64 = 1000;
+        const RECREATE_MS: u64 = 5000;
+        const PAINT_RETRY_MS: u64 = 1000;
+        const TOPMOST_MS: u64 = 2000;
+
+        let mut game_hwnd = None;
+        let mut since_search = GAME_SEARCH_MS;
+        let mut since_recreate = RECREATE_MS;
+        let mut since_paint = PAINT_RETRY_MS;
+        let mut since_topmost = TOPMOST_MS;
+        let mut unfocused_ticks: u8 = 2;
+        let mut effective_previous = false;
+        let mut last_rect = None;
+        let mut last_strength = None;
+
+        loop {
+            std::thread::sleep(Duration::from_millis(TICK_MS));
+            since_search = since_search.saturating_add(TICK_MS);
+            since_recreate = since_recreate.saturating_add(TICK_MS);
+            since_paint = since_paint.saturating_add(TICK_MS);
+            since_topmost = since_topmost.saturating_add(TICK_MS);
+
+            let Some(window) = app.get_webview_window(FILTER_LABEL) else {
+                let state = app
+                    .state::<NightVision>()
+                    .controller
+                    .mark_filter_failed();
+                emit_state(&app, &state);
+                if since_recreate >= RECREATE_MS {
+                    since_recreate = 0;
+                    match build_filter_window(&app, &health) {
+                        Ok(_) => {
+                            effective_previous = false;
+                            last_rect = None;
+                            last_strength = None;
+                        }
+                        Err(error) => {
+                            log::warn!("night vision filter recreate failed: {error}");
+                        }
+                    }
+                }
+                continue;
+            };
+            since_recreate = 0;
+
+            if since_search >= GAME_SEARCH_MS {
+                since_search = 0;
+                game_hwnd = crate::win::game_window::find_game_window(GAME_PROCESS_NAME);
+            }
+            let game_present =
+                game_hwnd.is_some_and(|hwnd| !crate::win::game_window::is_iconic(hwnd));
+            if game_present && game_hwnd.is_some_and(crate::win::game_window::is_foreground) {
+                unfocused_ticks = 0;
+            } else {
+                unfocused_ticks = unfocused_ticks.saturating_add(1);
+            }
+            let game_active = game_present && unfocused_ticks < 2;
+            let state = app.state::<NightVision>().controller.state();
+            let (ready, heartbeat_age_ms) = health.snapshot();
+            let effective = filter_should_show(
+                state.requested,
+                ready,
+                game_active,
+                crate::win::vis::is_foreground("main"),
+            );
+
+            if ready && heartbeat_age_ms >= 6_000 {
+                log::warn!("night vision filter heartbeat stale; recreating owned window");
+                let _ = window.close();
+                let failed = app
+                    .state::<NightVision>()
+                    .controller
+                    .mark_filter_failed();
+                emit_state(&app, &failed);
+                continue;
+            }
+
+            if !effective {
+                if crate::win::vis::is_visible(FILTER_LABEL) == Some(true) {
+                    hide_filter_window(&app);
+                }
+                if effective_previous || state.visual_boost_applied {
+                    let hidden = app
+                        .state::<NightVision>()
+                        .controller
+                        .clear_visual_applied("night_vision.waiting_for_game");
+                    emit_state(&app, &hidden);
+                }
+                effective_previous = false;
+                last_rect = None;
+                continue;
+            }
+
+            let Some(rect) = game_hwnd
+                .and_then(crate::win::game_window::client_rect_on_screen)
+                .filter(|(_, _, width, height)| *width > 0 && *height > 0)
+            else {
+                continue;
+            };
+
+            if last_rect != Some(rect) {
+                let (left, top, width, height) = rect;
+                if window
+                    .set_position(PhysicalPosition::new(left, top))
+                    .and_then(|_| {
+                        window.set_size(PhysicalSize::new(width as u32, height as u32))
+                    })
+                    .is_err()
+                {
+                    let failed = app
+                        .state::<NightVision>()
+                        .controller
+                        .mark_filter_failed();
+                    emit_state(&app, &failed);
+                    continue;
+                }
+                last_rect = Some(rect);
+                since_paint = PAINT_RETRY_MS;
+            }
+
+            if crate::win::vis::is_visible(FILTER_LABEL) != Some(true) {
+                crate::webview_mem::on_shown(&window);
+                if window.show().is_err() || !crate::win::vis::wait_visible(FILTER_LABEL, 500) {
+                    let failed = app
+                        .state::<NightVision>()
+                        .controller
+                        .mark_filter_failed();
+                    emit_state(&app, &failed);
+                    continue;
+                }
+                force_overlay_stack();
+                since_paint = PAINT_RETRY_MS;
+            }
+
+            let current = app.state::<NightVision>().controller.state();
+            if (!current.visual_boost_applied || last_strength != Some(current.strength))
+                && since_paint >= PAINT_RETRY_MS
+            {
+                since_paint = 0;
+                if let Some(request_id) = app
+                    .state::<NightVision>()
+                    .controller
+                    .begin_visual_request()
+                {
+                    let request = FilterPaintRequest {
+                        request_id,
+                        strength: current.strength,
+                        alpha: visual_boost_alpha(current.strength),
+                        color: FILTER_COLOR,
+                    };
+                    crate::events::emit_all(&app, FILTER_PAINT_EVENT, request);
+                    last_strength = Some(current.strength);
+                }
+            }
+
+            if since_topmost >= TOPMOST_MS {
+                since_topmost = 0;
+                force_overlay_stack();
+            }
+            effective_previous = true;
+        }
+    });
+}
+
+struct WindowHealth {
     ready: AtomicBool,
     last_signal: Mutex<Instant>,
 }
 
-impl ButtonHealth {
+impl WindowHealth {
     fn new() -> Self {
         Self {
             ready: AtomicBool::new(false),
@@ -498,7 +830,7 @@ impl ButtonHealth {
 }
 
 pub fn create_button(app: &AppHandle) -> tauri::Result<()> {
-    let health = Arc::new(ButtonHealth::new());
+    let health = Arc::new(WindowHealth::new());
     let ready_health = health.clone();
     app.listen_any("night-vision://ready", move |_| {
         ready_health.mark_ready();
@@ -515,7 +847,7 @@ pub fn create_button(app: &AppHandle) -> tauri::Result<()> {
 
 fn build_button_window(
     app: &AppHandle,
-    health: &ButtonHealth,
+    health: &WindowHealth,
 ) -> tauri::Result<tauri::WebviewWindow> {
     health.reset();
     let window = WebviewWindowBuilder::new(
@@ -581,7 +913,7 @@ fn button_anchor(
     (x, y)
 }
 
-fn spawn_button_supervisor(app: AppHandle, health: Arc<ButtonHealth>) {
+fn spawn_button_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
     std::thread::spawn(move || {
         const TICK_MS: u64 = 250;
         const GAME_SEARCH_MS: u64 = 1000;
@@ -1033,6 +1365,33 @@ mod tests {
         assert!(state.applied && state.visual_boost_applied);
         assert!(!state.gamma_applied);
         assert!(state.supported);
+    }
+
+    #[test]
+    fn filter_visibility_requires_request_ready_and_foreground_game() {
+        assert!(super::filter_should_show(true, true, true, false));
+        assert!(!super::filter_should_show(false, true, true, false));
+        assert!(!super::filter_should_show(true, false, true, false));
+        assert!(!super::filter_should_show(true, true, false, false));
+        assert!(!super::filter_should_show(true, true, true, true));
+    }
+
+    #[test]
+    fn hidden_filter_clears_visual_applied_but_preserves_request() {
+        let (controller, _) = controller(false);
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        let request_id = controller.begin_visual_request().unwrap();
+        controller.accept_visual_paint(request_id, 70, true);
+
+        let state = controller.clear_visual_applied("night_vision.waiting_for_game");
+
+        assert!(state.requested);
+        assert!(!state.applied && !state.visual_boost_applied);
+        assert_eq!(
+            state.error_key.as_deref(),
+            Some("night_vision.waiting_for_game")
+        );
     }
 
     #[test]
