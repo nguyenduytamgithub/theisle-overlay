@@ -25,6 +25,7 @@ pub(crate) struct GameTarget {
 }
 
 pub const CHANGED_EVENT: &str = "night-vision://changed";
+pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-visual-boost-a");
 const BUTTON_WIDTH: f64 = 164.0;
 const BUTTON_HEIGHT: f64 = 42.0;
 const BUTTON_MARGIN: f64 = 12.0;
@@ -37,6 +38,19 @@ pub struct NightVisionState {
     pub supported: bool,
     pub strength: u8,
     pub error_key: Option<String>,
+    pub visual_boost_ready: bool,
+    pub visual_boost_applied: bool,
+    pub gamma_applied: bool,
+    pub build_fingerprint: &'static str,
+}
+
+pub(crate) fn visual_boost_alpha(strength: u8) -> f64 {
+    let strength = strength.min(100);
+    if strength == 0 {
+        0.0
+    } else {
+        0.05 + 0.0025 * f64::from(strength)
+    }
 }
 
 pub(crate) trait GammaSession: Send {
@@ -88,8 +102,11 @@ struct ControllerInner<S: GammaSession> {
     state: NightVisionState,
     session: Option<S>,
     applied_strength: Option<u8>,
+    gamma_supported: bool,
     recovery_blocked: bool,
     restore_pending: bool,
+    next_visual_request: u64,
+    pending_visual_request: Option<(u64, u8)>,
 }
 
 pub(crate) struct NightVisionController<F: DisplayFactory> {
@@ -110,11 +127,18 @@ impl<F: DisplayFactory> NightVisionController<F> {
                     supported: true,
                     strength: strength.min(100),
                     error_key: None,
+                    visual_boost_ready: false,
+                    visual_boost_applied: false,
+                    gamma_applied: false,
+                    build_fingerprint: BUILD_FINGERPRINT,
                 },
                 session: None,
                 applied_strength: None,
+                gamma_supported: true,
                 recovery_blocked: false,
                 restore_pending: false,
+                next_visual_request: 0,
+                pending_visual_request: None,
             }),
         }
     }
@@ -129,10 +153,14 @@ impl<F: DisplayFactory> NightVisionController<F> {
             return inner.state.clone();
         }
         inner.state.requested = !inner.state.requested;
+        inner.state.visual_boost_applied = false;
+        inner.state.applied = false;
+        inner.pending_visual_request = None;
         if !inner.restore_pending {
             inner.state.error_key = None;
             if inner.state.requested {
                 inner.state.supported = true;
+                inner.gamma_supported = true;
             }
         }
         inner.state.clone()
@@ -144,6 +172,8 @@ impl<F: DisplayFactory> NightVisionController<F> {
         inner.restore_pending = false;
         inner.state.requested = false;
         inner.state.applied = false;
+        inner.state.visual_boost_applied = false;
+        inner.state.gamma_applied = false;
         inner.state.supported = false;
         inner.state.error_key = Some("night_vision.recovery_error".to_string());
         inner.state.clone()
@@ -155,7 +185,85 @@ impl<F: DisplayFactory> NightVisionController<F> {
         if inner.state.strength != strength {
             inner.state.strength = strength;
             inner.applied_strength = None;
+            inner.state.visual_boost_applied = false;
+            inner.state.applied = false;
+            inner.pending_visual_request = None;
         }
+        inner.state.clone()
+    }
+
+    pub(crate) fn mark_filter_ready(&self) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        inner.state.visual_boost_ready = true;
+        if !inner.recovery_blocked {
+            inner.state.supported = true;
+            if inner.state.error_key.as_deref() == Some("night_vision.filter_unavailable") {
+                inner.state.error_key = None;
+            }
+        }
+        inner.state.clone()
+    }
+
+    pub(crate) fn begin_visual_request(&self) -> Option<u64> {
+        let mut inner = self.inner.lock_safe();
+        if inner.recovery_blocked || !inner.state.requested || !inner.state.visual_boost_ready {
+            return None;
+        }
+        inner.next_visual_request = inner.next_visual_request.wrapping_add(1).max(1);
+        let request_id = inner.next_visual_request;
+        let strength = inner.state.strength;
+        inner.pending_visual_request = Some((request_id, strength));
+        inner.state.visual_boost_applied = false;
+        inner.state.applied = false;
+        Some(request_id)
+    }
+
+    pub(crate) fn accept_visual_paint(
+        &self,
+        request_id: u64,
+        strength: u8,
+        window_visible: bool,
+    ) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        let expected = inner.pending_visual_request;
+        if expected == Some((request_id, strength.min(100)))
+            && inner.state.requested
+            && inner.state.visual_boost_ready
+            && window_visible
+        {
+            inner.pending_visual_request = None;
+            inner.state.visual_boost_applied = true;
+            inner.state.applied = true;
+            inner.state.supported = true;
+            if matches!(
+                inner.state.error_key.as_deref(),
+                Some("night_vision.waiting_for_game" | "night_vision.filter_unavailable")
+            ) {
+                inner.state.error_key = None;
+            }
+        }
+        inner.state.clone()
+    }
+
+    pub(crate) fn clear_visual_applied(&self, error_key: &str) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        inner.pending_visual_request = None;
+        inner.state.visual_boost_applied = false;
+        inner.state.applied = false;
+        if inner.state.requested {
+            inner.state.error_key = Some(error_key.to_string());
+        }
+        inner.state.clone()
+    }
+
+    pub(crate) fn mark_filter_failed(&self) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        inner.pending_visual_request = None;
+        inner.state.visual_boost_ready = false;
+        inner.state.visual_boost_applied = false;
+        inner.state.applied = false;
+        inner.state.supported = false;
+        inner.state.error_key = Some("night_vision.filter_unavailable".to_string());
         inner.state.clone()
     }
 
@@ -168,7 +276,7 @@ impl<F: DisplayFactory> NightVisionController<F> {
 
         if !inner.state.requested {
             if restore_session(&mut inner) {
-                inner.state.applied = false;
+                inner.state.gamma_applied = false;
                 inner.state.error_key = None;
             }
             return inner.state.clone();
@@ -176,7 +284,7 @@ impl<F: DisplayFactory> NightVisionController<F> {
 
         let Some(target) = game else {
             if restore_session(&mut inner) {
-                inner.state.applied = false;
+                inner.state.gamma_applied = false;
                 inner.state.error_key = Some("night_vision.waiting_for_game".to_string());
             }
             return inner.state.clone();
@@ -190,7 +298,7 @@ impl<F: DisplayFactory> NightVisionController<F> {
             return inner.state.clone();
         }
 
-        if !inner.state.supported {
+        if !inner.gamma_supported {
             return inner.state.clone();
         }
 
@@ -205,7 +313,7 @@ impl<F: DisplayFactory> NightVisionController<F> {
         }
 
         let strength = inner.state.strength;
-        if !inner.state.applied || inner.applied_strength != Some(strength) {
+        if !inner.state.gamma_applied || inner.applied_strength != Some(strength) {
             let ramp = curve::lifted_ramp(strength);
             let result = inner
                 .session
@@ -214,9 +322,14 @@ impl<F: DisplayFactory> NightVisionController<F> {
                 .apply(&ramp);
             match result {
                 Ok(()) => {
-                    inner.state.applied = true;
-                    inner.state.supported = true;
-                    inner.state.error_key = None;
+                    inner.state.gamma_applied = true;
+                    inner.gamma_supported = true;
+                    if inner.state.visual_boost_ready {
+                        inner.state.supported = true;
+                    }
+                    if !inner.state.visual_boost_applied {
+                        inner.state.error_key = None;
+                    }
                     inner.applied_strength = Some(strength);
                 }
                 Err(error) => {
@@ -233,8 +346,11 @@ impl<F: DisplayFactory> NightVisionController<F> {
     pub(crate) fn restore_for_exit(&self) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         inner.state.requested = false;
+        inner.pending_visual_request = None;
+        inner.state.visual_boost_applied = false;
+        inner.state.applied = false;
         if restore_session(&mut inner) {
-            inner.state.applied = false;
+            inner.state.gamma_applied = false;
             inner.state.error_key = None;
         }
         inner.state.clone()
@@ -681,25 +797,27 @@ fn restore_session<S: GammaSession>(inner: &mut ControllerInner<S>) -> bool {
                 // next supervisor tick can retry instead of silently abandoning
                 // the only in-process restore handle.
                 inner.restore_pending = true;
-                inner.state.applied = true;
+                inner.state.gamma_applied = true;
+                inner.gamma_supported = false;
                 inner.state.supported = false;
                 inner.state.error_key = Some(error_key(&error).to_string());
                 return false;
             }
         }
-        inner.state.supported = true;
+        inner.gamma_supported = true;
     }
     inner.restore_pending = false;
     inner.session = None;
-    inner.state.applied = false;
+    inner.state.gamma_applied = false;
     inner.applied_strength = None;
     true
 }
 
 fn mark_failed<S: GammaSession>(inner: &mut ControllerInner<S>, error: &NightVisionError) {
     inner.restore_pending = false;
-    inner.state.applied = false;
-    inner.state.supported = false;
+    inner.state.gamma_applied = false;
+    inner.gamma_supported = false;
+    inner.state.supported = inner.state.visual_boost_ready;
     inner.state.error_key = Some(error_key(error).to_string());
     inner.applied_strength = None;
 }
@@ -879,6 +997,45 @@ mod tests {
     }
 
     #[test]
+    fn visual_boost_alpha_has_the_approved_bounds_and_default() {
+        assert_eq!(super::visual_boost_alpha(0), 0.0);
+        assert!((super::visual_boost_alpha(1) - 0.0525).abs() < f64::EPSILON);
+        assert!((super::visual_boost_alpha(70) - 0.225).abs() < f64::EPSILON);
+        assert!((super::visual_boost_alpha(100) - 0.30).abs() < f64::EPSILON);
+        assert!((super::visual_boost_alpha(u8::MAX) - 0.30).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn stale_paint_ack_never_turns_visual_boost_on() {
+        let (controller, _) = controller(false);
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        let request_id = controller.begin_visual_request().unwrap();
+
+        assert!(
+            !controller
+                .accept_visual_paint(request_id - 1, 70, true)
+                .applied
+        );
+        assert!(controller.accept_visual_paint(request_id, 70, true).applied);
+    }
+
+    #[test]
+    fn gamma_failure_does_not_disable_ready_visual_fallback() {
+        let (controller, _) = controller(true);
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        controller.reconcile(Some(target("DISPLAY1", 101)));
+        let request_id = controller.begin_visual_request().unwrap();
+
+        let state = controller.accept_visual_paint(request_id, 70, true);
+
+        assert!(state.applied && state.visual_boost_applied);
+        assert!(!state.gamma_applied);
+        assert!(state.supported);
+    }
+
+    #[test]
     fn startup_is_off_and_active_game_toggle_applies_strength_70() {
         let (controller, trace) = controller(false);
         assert!(!controller.state().requested);
@@ -889,7 +1046,9 @@ mod tests {
         let state = controller.reconcile(Some(target("DISPLAY1", 101)));
 
         assert!(state.requested);
-        assert!(state.applied);
+        assert!(!state.applied);
+        assert!(!state.visual_boost_applied);
+        assert!(state.gamma_applied);
         assert!(state.supported);
         assert_eq!(state.strength, 70);
         assert_eq!(trace.lock().unwrap().operations.len(), 2);
@@ -910,7 +1069,8 @@ mod tests {
         );
 
         let back = controller.reconcile(Some(target("DISPLAY1", 101)));
-        assert!(back.requested && back.applied);
+        assert!(back.requested && back.gamma_applied);
+        assert!(!back.applied);
         assert_eq!(
             trace.lock().unwrap().operations,
             vec![
@@ -940,7 +1100,8 @@ mod tests {
             .position(|entry| entry == "open:DISPLAY2")
             .unwrap();
         assert!(restore_index < open_index);
-        assert!(controller.state().applied);
+        assert!(controller.state().gamma_applied);
+        assert!(!controller.state().applied);
     }
 
     #[test]
@@ -961,7 +1122,8 @@ mod tests {
 
         let state = controller.reconcile(Some(target("DISPLAY2", 202)));
 
-        assert!(state.applied);
+        assert!(state.gamma_applied);
+        assert!(!state.applied);
         assert!(!state.supported);
         assert_eq!(
             state.error_key.as_deref(),
@@ -1050,7 +1212,8 @@ mod tests {
         controller.toggle_requested();
         let state = controller.reconcile(None);
 
-        assert!(state.applied);
+        assert!(state.gamma_applied);
+        assert!(!state.applied);
         assert!(!state.supported);
         assert_eq!(
             state.error_key.as_deref(),
@@ -1059,7 +1222,8 @@ mod tests {
 
         controller.toggle_requested();
         let retried = controller.reconcile(Some(target("DISPLAY1", 101)));
-        assert!(retried.applied);
+        assert!(retried.gamma_applied);
+        assert!(!retried.applied);
         assert!(retried.requested);
         assert!(!retried.supported);
         let restore_attempts = controller
@@ -1109,7 +1273,8 @@ mod tests {
 
         controller.toggle_requested();
         let reapplied = controller.reconcile(Some(target("DISPLAY1", 101)));
-        assert!(reapplied.requested && reapplied.applied && reapplied.supported);
+        assert!(reapplied.requested && reapplied.gamma_applied && reapplied.supported);
+        assert!(!reapplied.applied);
     }
 
     #[test]
