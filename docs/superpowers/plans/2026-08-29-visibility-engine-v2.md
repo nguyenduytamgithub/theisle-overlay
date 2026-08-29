@@ -491,7 +491,7 @@ npm run tauri build -- --config src-tauri\tauri.conf.json
 Require every non-live test PASS, 0 frontend diagnostics, no Clippy warning,
 successful NSIS bundle, and no new file outside the documented build/repo paths.
 
-- [ ] **Step 6: Record artifacts and commit**
+- [x] **Step 6: Record artifacts and commit**
 
 Record commit/version/fingerprint, paths, sizes, SHA-256, test counts, ignored
 live tests, and truthful PARTIAL status pending real nighttime proof.
