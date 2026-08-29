@@ -2,6 +2,7 @@ use std::ffi::c_void;
 use std::fmt;
 use std::sync::OnceLock;
 
+use super::visibility::VisibilityPreset;
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::Magnification::{
     MagGetColorEffect, MagGetWindowSource, MagInitialize, MagSetColorEffect,
@@ -20,11 +21,36 @@ const SOURCE_REFRESH_TIMER_ID: usize = 1;
 const SOURCE_REFRESH_INTERVAL_MS: u32 = 16;
 static INITIALIZED: OnceLock<Result<(), String>> = OnceLock::new();
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MagnifierProfile {
+    pub(crate) gain: f32,
+    pub(crate) black_translation: f32,
+    pub(crate) cross_channel_luma: f32,
+}
+
+pub(crate) fn fallback_profile(
+    preset: VisibilityPreset,
+    strength: u8,
+) -> MagnifierProfile {
+    let amount = f32::from(strength.min(100)) / 100.0;
+    let (gain_range, black_translation, cross_channel_luma) = match preset {
+        VisibilityPreset::Balanced => (3.0, 0.010, 0.020),
+        VisibilityPreset::Clear => (4.0, 0.030, 0.040),
+        VisibilityPreset::Ultra => (5.0, 0.060, 0.060),
+    };
+    MagnifierProfile {
+        gain: 1.0 + gain_range * amount,
+        black_translation: black_translation * amount,
+        cross_channel_luma: cross_channel_luma * amount,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MagnifierReadback {
     pub(crate) host: isize,
     pub(crate) source: (i32, i32, i32, i32),
     pub(crate) gain: f32,
+    pub(crate) profile: MagnifierProfile,
     pub(crate) child: isize,
     pub(crate) excluded: Vec<isize>,
     pub(crate) refresh_interval_ms: u32,
@@ -47,14 +73,23 @@ impl std::error::Error for MagnifierError {}
 pub(crate) fn configure(
     host: isize,
     source: (i32, i32, i32, i32),
-    gain: f32,
+    profile: MagnifierProfile,
     excluded: &[isize],
 ) -> Result<MagnifierReadback, MagnifierError> {
     let (_, _, width, height) = source;
-    if host == 0 || width <= 0 || height <= 0 || !gain.is_finite() || !(1.0..=5.0).contains(&gain) {
+    if host == 0
+        || width <= 0
+        || height <= 0
+        || !profile.gain.is_finite()
+        || !(1.0..=6.0).contains(&profile.gain)
+        || !profile.black_translation.is_finite()
+        || !(0.0..=0.08).contains(&profile.black_translation)
+        || !profile.cross_channel_luma.is_finite()
+        || !(0.0..=0.08).contains(&profile.cross_channel_luma)
+    {
         return Err(MagnifierError {
             operation: "validate magnifier configuration",
-            detail: format!("host={host} source={source:?} gain={gain}"),
+            detail: format!("host={host} source={source:?} profile={profile:?}"),
         });
     }
     ensure_initialized()?;
@@ -82,7 +117,7 @@ pub(crate) fn configure(
         detail: error.to_string(),
     })?;
 
-    let configured = configure_child(child, host, source, gain, excluded);
+    let configured = configure_child(child, host, source, profile, excluded);
     if configured.is_err() {
         let _ = unsafe { DestroyWindow(child) };
     }
@@ -93,7 +128,7 @@ fn configure_child(
     child: HWND,
     host: HWND,
     source: (i32, i32, i32, i32),
-    gain: f32,
+    profile: MagnifierProfile,
     excluded: &[isize],
 ) -> Result<MagnifierReadback, MagnifierError> {
     let (_, _, width, height) = source;
@@ -111,7 +146,7 @@ fn configure_child(
         unsafe { MagSetWindowTransform(child, &mut transform) }.as_bool(),
     )?;
 
-    let mut effect = color_effect(gain);
+    let mut effect = color_effect(profile);
     bool_result(
         "MagSetColorEffect",
         unsafe { MagSetColorEffect(child, &mut effect) }.as_bool(),
@@ -197,7 +232,8 @@ fn configure_child(
     Ok(MagnifierReadback {
         host: host.0 as isize,
         source,
-        gain: actual_effect.transform[0],
+        gain: profile.gain,
+        profile,
         child: child.0 as isize,
         excluded: excluded_raw,
         refresh_interval_ms: SOURCE_REFRESH_INTERVAL_MS,
@@ -275,11 +311,39 @@ fn identity_transform() -> MAGTRANSFORM {
     }
 }
 
-fn color_effect(gain: f32) -> MAGCOLOREFFECT {
+fn color_effect(profile: MagnifierProfile) -> MAGCOLOREFFECT {
+    let luma = profile.cross_channel_luma;
+    let red = 0.2126 * luma;
+    let green = 0.7152 * luma;
+    let blue = 0.0722 * luma;
+    let translation = profile.black_translation;
     MAGCOLOREFFECT {
         transform: [
-            gain, 0.0, 0.0, 0.0, 0.0, 0.0, gain, 0.0, 0.0, 0.0, 0.0, 0.0, gain, 0.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            profile.gain + red,
+            red,
+            red,
+            0.0,
+            0.0,
+            green,
+            profile.gain + green,
+            green,
+            0.0,
+            0.0,
+            blue,
+            blue,
+            profile.gain + blue,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            translation,
+            translation,
+            translation,
+            0.0,
+            1.0,
         ],
     }
 }
@@ -319,6 +383,8 @@ fn bool_result(operation: &'static str, succeeded: bool) -> Result<(), Magnifier
 
 #[cfg(test)]
 mod tests {
+    use crate::night_vision::visibility::VisibilityPreset;
+
     #[test]
     fn identity_spatial_transform_never_scales_the_game() {
         assert_eq!(
@@ -329,11 +395,90 @@ mod tests {
 
     #[test]
     fn color_effect_multiplies_rgb_without_adding_gray() {
+        let profile = super::MagnifierProfile {
+            gain: 3.8,
+            black_translation: 0.0,
+            cross_channel_luma: 0.0,
+        };
         assert_eq!(
-            super::color_effect(3.8).transform,
+            super::color_effect(profile).transform,
             [
                 3.8, 0.0, 0.0, 0.0, 0.0, 0.0, 3.8, 0.0, 0.0, 0.0, 0.0, 0.0, 3.8, 0.0, 0.0, 0.0,
                 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ]
+        );
+    }
+
+    #[test]
+    fn fallback_profiles_are_bounded_monotonic_and_ordered() {
+        let mut previous = [1.0_f32; 3];
+        for strength in 0..=100 {
+            let profiles = [
+                super::fallback_profile(VisibilityPreset::Balanced, strength),
+                super::fallback_profile(VisibilityPreset::Clear, strength),
+                super::fallback_profile(VisibilityPreset::Ultra, strength),
+            ];
+            for (index, profile) in profiles.into_iter().enumerate() {
+                assert!(profile.gain.is_finite() && (1.0..=6.0).contains(&profile.gain));
+                assert!(
+                    profile.black_translation.is_finite()
+                        && (0.0..=0.08).contains(&profile.black_translation)
+                );
+                assert!(
+                    profile.cross_channel_luma.is_finite()
+                        && (0.0..=0.08).contains(&profile.cross_channel_luma)
+                );
+                assert!(profile.gain >= previous[index]);
+                previous[index] = profile.gain;
+            }
+            assert!(profiles[0].gain <= profiles[1].gain);
+            assert!(profiles[1].gain <= profiles[2].gain);
+            assert!(profiles[0].black_translation <= profiles[1].black_translation);
+            assert!(profiles[1].black_translation <= profiles[2].black_translation);
+        }
+        assert_eq!(
+            super::fallback_profile(VisibilityPreset::Ultra, u8::MAX),
+            super::fallback_profile(VisibilityPreset::Ultra, 100)
+        );
+    }
+
+    #[test]
+    fn fallback_color_matrix_places_luma_mix_and_translation_exactly() {
+        let profile = super::MagnifierProfile {
+            gain: 4.5,
+            black_translation: 0.04,
+            cross_channel_luma: 0.05,
+        };
+        let effect = super::color_effect(profile);
+        let c = profile.cross_channel_luma;
+        assert_eq!(
+            effect.transform,
+            [
+                profile.gain + 0.2126 * c,
+                0.2126 * c,
+                0.2126 * c,
+                0.0,
+                0.0,
+                0.7152 * c,
+                profile.gain + 0.7152 * c,
+                0.7152 * c,
+                0.0,
+                0.0,
+                0.0722 * c,
+                0.0722 * c,
+                profile.gain + 0.0722 * c,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                profile.black_translation,
+                profile.black_translation,
+                profile.black_translation,
+                0.0,
+                1.0,
             ]
         );
     }

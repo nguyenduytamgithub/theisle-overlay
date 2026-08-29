@@ -212,33 +212,33 @@ pub(crate) fn fallback_profile(
 ) -> MagnifierProfile;
 ```
 
-- [ ] **Step 1: Add failing fallback tests**
+- [x] **Step 1: Add failing fallback tests**
 
 Require profile monotonicity, finite bounds, nonzero but capped black translation
 for Clear/Ultra, correct 5x5 matrix placement, readback tolerance, and the
 `magnifier_fallback` state label. Retain all existing lifecycle tests.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml magnifier
 ```
 
-- [ ] **Step 3: Implement bounded gain, translation, and label**
+- [x] **Step 3: Implement bounded gain, translation, and label**
 
 Construct the audited `MAGCOLOREFFECT` from the profile. Verify the entire
 matrix, exact source rectangle, child HWND, exclusion list, and renderer label
 before reporting applied. GPU and Magnifier children are mutually exclusive.
 
-- [ ] **Step 4: Run focused and safety tests**
+- [x] **Step 4: Run focused and safety tests**
 
 ```powershell
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml magnifier
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml --test night_vision_safety
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add -- src-tauri/src/night_vision/magnifier.rs src-tauri/src/night_vision.rs src-tauri/tests/night_vision_safety.rs

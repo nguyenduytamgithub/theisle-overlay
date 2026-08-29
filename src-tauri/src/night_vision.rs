@@ -492,15 +492,16 @@ fn configure_magnifier(
 ) -> Result<magnifier::MagnifierReadback, String> {
     let host = crate::win::vis::hwnd(FILTER_LABEL)
         .ok_or_else(|| "night vision host HWND is not registered".to_string())?;
-    let gain = visual_boost_gain(strength);
+    let preset = app.state::<NightVision>().controller.state().preset;
+    let profile = magnifier::fallback_profile(preset, strength);
     let generation = app.state::<NightVision>().controller.native_generation();
     let ui_generation = generation.clone();
     let result = on_ui_thread(app, "native magnifier configure", move || {
         if ui_generation.load(Ordering::SeqCst) != request_id {
             return Err("native magnifier request was superseded before apply".to_string());
         }
-        let result =
-            magnifier::configure(host, source, gain, &excluded).map_err(|error| error.to_string());
+        let result = magnifier::configure(host, source, profile, &excluded)
+            .map_err(|error| error.to_string());
         if ui_generation.load(Ordering::SeqCst) != request_id {
             let _ = magnifier::destroy(host);
             return Err("native magnifier request was superseded after apply".to_string());
@@ -846,10 +847,13 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                             );
                             if state.visual_boost_applied {
                                 log::info!(
-                                    "night vision: native magnifier verified request={} strength={} gain={:.2} child={} source={:?} refresh={}ms fingerprint={}",
+                                    "night vision: native magnifier fallback verified request={} strength={} preset={:?} gain={:.2} black_translation={:.3} luma_mix={:.3} child={} source={:?} refresh={}ms fingerprint={}",
                                     request_id,
                                     request_strength,
+                                    state.preset,
                                     readback.gain,
+                                    readback.profile.black_translation,
+                                    readback.profile.cross_channel_luma,
                                     readback.child,
                                     readback.source,
                                     readback.refresh_interval_ms,
