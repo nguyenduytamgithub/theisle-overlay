@@ -8,9 +8,11 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > (`f628a18`). Tác giả và dự án gốc: **Trần Quốc Toản**.
 
-Phiên bản của fork: **v1.7.0 Navigation HUD + Nhìn Đêm**. Mục tiêu là làm vị
-trí, hướng đi, đường đã đi, waypoint và khả năng quan sát cảnh tối hữu dụng hơn
-trong lúc chơi — không đọc bộ nhớ game và không can thiệp Easy Anti-Cheat.
+Nguồn hiện tại là ứng viên **v1.7.1 Visual Night Boost**; bản tải công khai vẫn
+là v1.7.0 cho tới khi ứng viên vượt qua nghiệm thu cảnh đêm thật. Mục tiêu là
+làm vị trí, hướng đi, đường đã đi, waypoint và khả năng quan sát cảnh tối hữu
+dụng hơn trong lúc chơi — không đọc bộ nhớ game và không can thiệp Easy
+Anti-Cheat.
 
 Upstream 2.x hiện là bản phát hành đóng mã nguồn với các tính năng Pro riêng.
 Fork này **không có** Voice, vị trí bạn bè, Skin editor hay realtime Pro của
@@ -24,7 +26,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 
 ## Fork này cải thiện gì?
 
-| Khi đang chơi | Upstream mã mở v1.5.2 | Navigation HUD + Nhìn Đêm v1.7.0 |
+| Khi đang chơi | Upstream mã mở v1.5.2 | Ứng viên Visual Night Boost v1.7.1 |
 |---|---|---|
 | Nhịp lấy vị trí IslePilot | Mặc định 10 giây | Mặc định **5 giây**; giữ nguyên nếu bạn đã tự đặt giá trị khác |
 | Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Ước tính hiển thị tối đa **4 giây**, sau đó đứng chờ xác nhận; hiệu chỉnh mềm **350 ms** |
@@ -34,7 +36,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 | Dẫn đường trên màn hình game | Không có HUD riêng | HUD click-through ở giữa phía trên: BẮC/ĐÔNG/NAM/TÂY, số độ, mũi tên rẽ, tên đích và khoảng cách |
 | Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **SERVER / ƯỚC TÍNH / MẤT TÍN HIỆU** |
 | Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
-| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, cường độ 0–100; readback xác nhận và tự phục hồi gamma khi Alt-Tab/thoát |
+| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Lớp tăng sáng click-through đã xác nhận vẽ + gamma bổ trợ; nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, cường độ 0–100, tự ẩn/phục hồi theo game |
 
 Điểm quan trọng: chuyển động mượt là **ước tính có giới hạn**, không bịa thành
 realtime. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
@@ -57,10 +59,11 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
 - **Navigation HUD trên game**: la bàn BẮC–ĐÔNG–NAM–TÂY, hướng nhìn theo độ,
   mũi tên cần rẽ, tên đích, khoảng cách và trạng thái dữ liệu; tự ẩn khi
   Alt-Tab và bật/tắt bằng `Ctrl+Alt+H`.
-- **Nhìn đêm trực tiếp trên màn hình**: nút nhỏ góc trên bên phải và
-  `Ctrl+Alt+N`; chỉnh cường độ 0–100 trong Cài đặt. Chỉ dùng Windows display
-  gamma trên đúng màn hình chứa game, xác minh bằng readback và tự phục hồi
-  màu gốc khi Alt-Tab, đổi màn hình, tắt hoặc thoát app.
+- **Nhìn đêm trực tiếp trên màn hình**: nút **NHÌN ĐÊM** góc trên bên phải và
+  `Ctrl+Alt+N`; chỉnh cường độ 0–100 trong Cài đặt. v1.7.1 dùng một lớp tăng
+  sáng tĩnh, bấm xuyên qua, đã xác nhận vẽ xong; gamma màn hình chỉ là phần bổ
+  trợ. Lớp này tự ẩn khi Alt-Tab, tự vẽ lại khi quay vào game và được dọn khi
+  tắt/thoát. Mức 70 là mặc định; tăng nếu còn tối, giảm nếu hình quá bạc.
 - **Bản đồ lớn**: phóng to/thu nhỏ mượt, 12 lớp bật/tắt được (nước ngọt, nguồn
   nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
   ăn, động vật với biểu tượng riêng từng loài 🐗🦌🐢, tên vùng, địa điểm, và
@@ -181,14 +184,14 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Artifact v1.7.0 sẽ được ghi đúng kích thước và SHA-256 trong
-[release note](docs/releases/v1.7.0-night-vision.md) sau khi build. Số dưới đây
-là mốc của v1.6.0 trước đó, không phải số đo mới:
+Ứng viên v1.7.1 và bằng chứng cài/runtime được ghi trong
+[biên bản nghiệm thu](docs/verification/night-boost-v1.7.1.md). Chưa dùng hash
+ứng viên để quảng bá là bản phát hành trước khi nghiệm thu cảnh đêm thật đạt.
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt NSIS | **5.731.151 byte (~5,7 MB)** |
-| File chạy sau khi cài | **21.093.888 byte (~21,1 MB)** |
+| File cài đặt NSIS v1.7.1 candidate | **5.806.573 byte (~5,8 MB)** |
+| File chạy sau khi cài v1.7.1 candidate | **21.370.880 byte (~21,4 MB)** |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 
 HUD giới hạn ghi DOM khoảng 30 FPS và chỉ dự đoán khi đang có mẫu chuyển động;
@@ -207,10 +210,11 @@ số tab đang mở và model 3D đã tải, nên fork không công bố một c
 3. **Hướng nhìn ưu tiên yaw server**. Khi server không gửi yaw, app cần ít nhất
    hai mẫu di chuyển hợp lệ để suy ra hướng; dữ liệu quá cũ sẽ chuyển sang
    **MẤT TÍN HIỆU** thay vì tiếp tục chỉ bừa.
-4. **Nhìn đêm phụ thuộc display gamma**: hiệu quả tốt nhất ở SDR. Một số màn
-   hình, driver hoặc chế độ HDR có thể từ chối; app sẽ hiện **KHÔNG HỖ TRỢ**,
-   không giả báo đã bật. Tính năng chỉ gọi API màn hình Windows; không mở tiến
-   trình game, không đọc bộ nhớ, không hook/capture và không giả lập input.
+4. **Nhìn đêm v1.7.1 cần Windowed/Borderless** để Windows ghép lớp tăng sáng
+   lên game; Exclusive Fullscreen không hiện được overlay. Nếu hình quá bạc,
+   giảm cường độ; nếu trạng thái kẹt, bấm `Ctrl+Alt+N` một lần để tắt sạch rồi
+   bật lại. Tính năng không mở tiến trình game, không đọc bộ nhớ, không
+   hook/capture và không giả lập input.
 5. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
 6. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm
@@ -244,8 +248,9 @@ vào tiến trình game**:
   dữ liệu server/game chủ động cung cấp ngoài tiến trình game.
 - Phím tắt dùng `RegisterHotKey` (API hợp tác của Windows), **không phải**
   keyboard hook.
-- Nhìn đêm chỉ dùng `GetDeviceGammaRamp`/`SetDeviceGammaRamp` trên màn hình
-  chứa game, có readback và recovery record; không lấy pixel hay nội dung game.
+- Nhìn đêm dùng một WebView tĩnh, trong suốt theo cường độ, bấm xuyên qua và
+  không capture; gamma Windows có readback/recovery record chỉ là bổ trợ. Cả
+  hai đều không lấy pixel hay nội dung game.
 - Chỉ số khủng long / Garage / model 3D lấy qua **HTTPS tới hệ thống IslePilot**
   (API islepilot.eu hoặc website của server) — cũng không liên quan gì tới tiến
   trình game.

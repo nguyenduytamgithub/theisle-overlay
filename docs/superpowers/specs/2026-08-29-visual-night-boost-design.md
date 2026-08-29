@@ -148,10 +148,13 @@ acknowledgements.
 
 Safety tests must reject newly introduced capture APIs, game-process handles,
 memory access, injection, hooks, input synthesis, and unreviewed native FFI.
-Installed acceptance includes a 10-second sample while the filter is enabled:
-the overlay process group must average below 1% of total machine CPU and remain
-below 180 MiB combined working set on this machine. The game must remain
-running throughout the sample.
+Installed acceptance includes paired 10-second samples with the filter enabled
+and disabled. The enabled sample must average below 1% of total-machine CPU;
+the Night Vision ON-minus-OFF delta must remain below 96 MiB combined working
+set and below 32 MiB private memory on this machine. The absolute process-group
+working set is recorded but is not a feature gate because the existing map,
+HUD, settings, and button WebViews remain allocated in both samples. The game
+must remain running throughout both samples.
 
 ## Verification and acceptance gates
 
@@ -180,8 +183,9 @@ running throughout the sample.
   acknowledgement while The Isle remains running.
 - Alt+Tab and require the filter to become hidden and gamma recovery to match
   the original ramp; return to the game and require clean reapplication.
-- Measure the 10-second CPU and memory acceptance thresholds with Night Vision
-  enabled.
+- Measure paired 10-second CPU and memory samples with Night Vision enabled and
+  disabled, then evaluate both the enabled CPU ceiling and the ON-minus-OFF
+  memory deltas.
 
 ### Mandatory human dark-scene gate
 

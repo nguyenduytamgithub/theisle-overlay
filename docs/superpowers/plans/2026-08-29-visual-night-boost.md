@@ -292,32 +292,32 @@ git commit -m "feat: expose honest night boost controls"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `RELEASE_NOTES.md`
+- Modify: `README.en.md`
 - Create: `docs/verification/night-boost-v1.7.1.md`
 
 **Interfaces:**
 - Produces a local NSIS installer and SHA256 evidence
 - Does not publish until Task 6 passes
 
-- [ ] **Step 1: Run the complete automated gate**
+- [x] **Step 1: Run the complete automated gate**
 
 Run formatting check, Svelte check, Vite production build, all Rust tests, safety tests, release config tests, Clippy with warnings denied, and `tauri build`.
 
-- [ ] **Step 2: Record and verify candidate identity**
+- [x] **Step 2: Record and verify candidate identity**
 
 Record the git commit, executable path/hash, installer path/hash, version 1.7.1, and build fingerprint. Confirm the installer contains `night-vision-filter.html` and the installed executable matches the candidate hash.
 
-- [ ] **Step 3: Install locally without closing the game**
+- [x] **Step 3: Install locally without closing the game**
 
 Stop only TheIsle Overlay, run the v1.7.1 installer silently, restart the installed overlay, and verify The Isle remains running. Do not terminate, restart, or modify the game.
 
-- [ ] **Step 4: Exercise runtime state and recovery**
+- [x] **Step 4: Exercise runtime state and recovery**
 
-With the game foreground, toggle on and require `visualBoostApplied = true`, `night-vision-filter` visible, matching request/strength logs, and the expected v1.7.1 fingerprint. Alt+Tab and require the filter hidden plus exact gamma restoration; return and require reapplication. Sample the overlay process group for ten seconds and require average total-machine CPU below 1% and combined working set below 180 MiB.
+With the game foreground, toggle on and require `visualBoostApplied = true`, `night-vision-filter` visible, matching request/strength logs, and the expected v1.7.1 fingerprint. Alt+Tab and require the filter hidden plus exact gamma restoration; return and require reapplication. Take paired ten-second ON and OFF samples: enabled CPU must remain below 1% of total machine CPU, while the ON-minus-OFF deltas must remain below 96 MiB working set and 32 MiB private memory. Record absolute working set without treating the pre-existing WebView baseline as Night Vision cost.
 
-- [ ] **Step 5: Document evidence and commit**
+- [x] **Step 5: Document evidence and commit**
 
-Write FACT/EVIDENCE/UNKNOWN results, keeping visual effectiveness UNKNOWN until the user's gate. Update README and release notes with usage, safety boundary, contrast tradeoff, and `Ctrl+Alt+N` recovery instructions. Commit as `docs: qualify night boost candidate`.
+Write FACT/EVIDENCE/UNKNOWN results, keeping visual effectiveness UNKNOWN until the user's gate. Update both READMEs with usage, safety boundary, contrast tradeoff, and `Ctrl+Alt+N` recovery instructions. Commit as `docs: qualify night boost candidate`.
 
 ### Task 6: Mandatory user visual acceptance and public release
 
