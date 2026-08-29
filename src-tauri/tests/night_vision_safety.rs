@@ -200,6 +200,49 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
 }
 
 #[test]
+fn visual_filter_is_static_click_through_frontend_with_explicit_capability() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let frontend = manifest.join("../src/night-vision-filter");
+    let files = [frontend.join("main.ts"), frontend.join("style.css")];
+    let forbidden = [
+        "getDisplayMedia",
+        "getUserMedia",
+        "captureStream",
+        "canvas",
+        "WebSocket",
+        "fetch(",
+        "XMLHttpRequest",
+        "requestPointerLock",
+        "dispatchEvent(new KeyboardEvent",
+        "dispatchEvent(new MouseEvent",
+    ];
+
+    for path in files {
+        let source = fs::read_to_string(&path).expect("read visual filter frontend asset");
+        for name in forbidden {
+            assert!(
+                !source.contains(name),
+                "visual filter must stay static and offline; found {name} in {}",
+                path.display()
+            );
+        }
+    }
+
+    let capability: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(manifest.join("capabilities/default.json"))
+            .expect("read default capability"),
+    )
+    .expect("default capability must be JSON");
+    let windows = capability["windows"]
+        .as_array()
+        .expect("default capability windows array");
+    assert!(
+        windows.iter().any(|label| label == "night-vision-filter"),
+        "night-vision-filter must have the same explicit local capability boundary"
+    );
+}
+
+#[test]
 fn alternate_win32_and_manual_ffi_bypass_forms_are_rejected() {
     for bypass in [
         "fn bypass() { windows::Win32::System::Threading::OpenProcess(); }",
