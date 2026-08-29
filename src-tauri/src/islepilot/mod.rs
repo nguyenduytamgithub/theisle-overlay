@@ -100,6 +100,18 @@ pub(crate) fn http_client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Polling must not block the only token-update loop for the generic 30-second
+/// request timeout. A healthy overlay response is small; eight seconds still
+/// tolerates a slow connection while letting an upstream hang recover quickly.
+fn token_poll_http_client() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .user_agent("theisle-overlay/2.0 (your-dino panel reader; personal use)")
+        .connect_timeout(Duration::from_secs(4))
+        .timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
 fn get_page(client: &reqwest::blocking::Client, domain: &str, path: &str, cookie: &str) -> Result<String, String> {
     let url = format!("{}{}", domain.trim_end_matches('/'), path);
     let resp = client
@@ -606,7 +618,7 @@ fn run_token_poll(app: AppHandle, generation: u64, tok: token::OverlayToken) {
             if GENERATION.load(Ordering::SeqCst) != generation {
                 return;
             }
-            match http_client() {
+            match token_poll_http_client() {
                 Ok(c) => break c,
                 Err(e) => {
                     log::warn!("islepilot http client: {e}");
@@ -707,22 +719,16 @@ fn run_token_poll(app: AppHandle, generation: u64, tok: token::OverlayToken) {
                 }
                 Err(api::ApiError::Http(e)) => {
                     failures = failures.saturating_add(1);
+                    let previous = LAST_UPDATE.lock_safe().clone();
                     publish(
                         &app,
-                        DinoUpdate {
-                            domain: api::API_ORIGIN.to_string(),
-                            fetched_at_ms: now_ms(),
-                            player: None,
-                            map: None,
-                            layout_changed: false,
-                            live_map_available: live_map,
-                            error: Some(e),
-                        },
+                        token_transport_failure_update(previous.as_ref(), live_map, e),
                     );
                 }
             }
 
-            let mut remaining = backoff_s(config.interval_s.max(MIN_INTERVAL_S), failures);
+            let mut remaining =
+                token_retry_delay_s(config.interval_s.max(MIN_INTERVAL_S), failures);
             while remaining > 0.0 {
                 if GENERATION.load(Ordering::SeqCst) != generation {
                     return;
@@ -738,6 +744,36 @@ fn run_token_poll(app: AppHandle, generation: u64, tok: token::OverlayToken) {
 /// a long outage costs one request per 5 min and recovery stays automatic.
 pub(crate) fn backoff_s(base: f64, failures: u32) -> f64 {
     (base * 2f64.powi(failures.min(6) as i32)).min(300.0)
+}
+
+/// The central token API is the only source for live player data. During an
+/// upstream outage, keep recovery probes frequent enough that the overlay
+/// resumes promptly instead of inheriting the legacy scraper's 5-minute cap.
+fn token_retry_delay_s(base: f64, failures: u32) -> f64 {
+    let base = base.max(MIN_INTERVAL_S);
+    if failures == 0 {
+        return base;
+    }
+    (base * failures.min(3) as f64).min(15.0)
+}
+
+/// Preserve the last confirmed stats while surfacing the transport error.
+/// The old timestamp is intentional: the UI must not label stale data as a
+/// fresh server update.
+fn token_transport_failure_update(
+    previous: Option<&DinoUpdate>,
+    live_map: Option<bool>,
+    error: String,
+) -> DinoUpdate {
+    DinoUpdate {
+        domain: api::API_ORIGIN.to_string(),
+        fetched_at_ms: previous.map(|u| u.fetched_at_ms).unwrap_or_else(now_ms),
+        player: previous.and_then(|u| u.player.clone()),
+        map: previous.and_then(|u| u.map.clone()),
+        layout_changed: previous.is_some_and(|u| u.layout_changed),
+        live_map_available: live_map.or_else(|| previous.and_then(|u| u.live_map_available)),
+        error: Some(error),
+    }
 }
 
 pub fn stop_poller() {
@@ -1353,6 +1389,71 @@ mod tests {
         assert_eq!(backoff_s(10.0, 2), 40.0);
         assert_eq!(backoff_s(10.0, 5), 300.0, "capped at 5 minutes");
         assert_eq!(backoff_s(10.0, 60), 300.0, "cap sticks, no overflow");
+    }
+
+    #[test]
+    fn token_transport_outage_never_delays_recovery_more_than_fifteen_seconds() {
+        for failures in 1..=100 {
+            assert!(
+                token_retry_delay_s(5.0, failures) <= 15.0,
+                "token API retry delay exceeded the fast-recovery bound at failure {failures}"
+            );
+        }
+        assert_eq!(token_retry_delay_s(5.0, 0), 5.0);
+        assert_eq!(token_retry_delay_s(5.0, 1), 5.0);
+    }
+
+    #[test]
+    fn token_transport_failure_keeps_last_confirmed_player_snapshot() {
+        let previous = DinoUpdate {
+            domain: api::API_ORIGIN.to_string(),
+            fetched_at_ms: 123_456,
+            player: Some(api::to_player_stats(&api::OverlayMe::default())),
+            map: None,
+            layout_changed: false,
+            live_map_available: Some(true),
+            error: None,
+        };
+
+        let outage = token_transport_failure_update(
+            Some(&previous),
+            Some(true),
+            "temporary upstream outage".to_string(),
+        );
+
+        assert_eq!(outage.player, previous.player);
+        assert_eq!(outage.fetched_at_ms, previous.fetched_at_ms);
+        assert_eq!(outage.live_map_available, Some(true));
+        assert_eq!(outage.error.as_deref(), Some("temporary upstream outage"));
+    }
+
+    #[test]
+    fn token_poll_client_abandons_a_hung_response_before_twelve_seconds() {
+        use std::io::Read;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local test server");
+        let address = listener.local_addr().expect("local test address");
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut request = [0_u8; 1024];
+                let _ = stream.read(&mut request);
+                std::thread::sleep(Duration::from_secs(12));
+            }
+        });
+
+        let started = Instant::now();
+        let error = token_poll_http_client()
+            .expect("build token poll client")
+            .get(format!("http://{address}/hung"))
+            .send()
+            .expect_err("hung response must time out");
+
+        assert!(error.is_timeout(), "expected timeout, got {error}");
+        assert!(
+            started.elapsed() < Duration::from_secs(12),
+            "token poll waited too long for an unresponsive API"
+        );
     }
 
     #[test]
