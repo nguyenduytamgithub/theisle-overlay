@@ -60,6 +60,10 @@ pub(crate) fn visual_boost_alpha(strength: u8) -> f64 {
     }
 }
 
+pub(crate) fn visual_boost_gain(strength: u8) -> f32 {
+    1.0 + 4.0 * f32::from(strength.min(100)) / 100.0
+}
+
 pub(crate) trait GammaSession: Send {
     fn display_name(&self) -> &str;
     fn apply(&mut self, ramp: &GammaRamp) -> Result<(), NightVisionError>;
@@ -1313,12 +1317,24 @@ mod tests {
     }
 
     #[test]
-    fn visual_boost_alpha_has_the_approved_bounds_and_default() {
-        assert_eq!(super::visual_boost_alpha(0), 0.0);
-        assert!((super::visual_boost_alpha(1) - 0.0525).abs() < f64::EPSILON);
-        assert!((super::visual_boost_alpha(70) - 0.225).abs() < f64::EPSILON);
-        assert!((super::visual_boost_alpha(100) - 0.30).abs() < f64::EPSILON);
-        assert!((super::visual_boost_alpha(u8::MAX) - 0.30).abs() < f64::EPSILON);
+    fn visual_boost_gain_has_contrast_preserving_bounds_and_default() {
+        assert!((super::visual_boost_gain(0) - 1.0).abs() < f32::EPSILON);
+        assert!((super::visual_boost_gain(1) - 1.04).abs() < f32::EPSILON);
+        assert!((super::visual_boost_gain(50) - 3.0).abs() < f32::EPSILON);
+        assert!((super::visual_boost_gain(70) - 3.8).abs() < f32::EPSILON);
+        assert!((super::visual_boost_gain(100) - 5.0).abs() < f32::EPSILON);
+        assert!((super::visual_boost_gain(u8::MAX) - 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn visual_boost_gain_is_monotonic_for_every_strength_step() {
+        for strength in 0..100 {
+            assert!(
+                super::visual_boost_gain(strength + 1) > super::visual_boost_gain(strength),
+                "gain must increase between {strength} and {}",
+                strength + 1
+            );
+        }
     }
 
     #[test]
