@@ -103,6 +103,7 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
     );
 
     let windows_path = manifest.join("src/night_vision/windows.rs");
+    let gpu_path = manifest.join("src/night_vision/gpu.rs");
     let magnifier_path = manifest.join("src/night_vision/magnifier.rs");
     let recovery_path = manifest.join("src/night_vision/recovery.rs");
     let windows_source = fs::read_to_string(&windows_path).expect("read Windows gamma adapter");
@@ -228,7 +229,10 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
     );
 
     for path in files.iter().filter(|path| {
-        *path != &windows_path && *path != &magnifier_path && *path != &recovery_path
+        *path != &windows_path
+            && *path != &gpu_path
+            && *path != &magnifier_path
+            && *path != &recovery_path
     }) {
         let source = fs::read_to_string(path).expect("read night vision source");
         assert!(
@@ -251,6 +255,57 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
     }
 
     println!("night vision forbidden API matches: 0; Win32 imports match allowlists");
+}
+
+#[test]
+fn gpu_visibility_uses_exact_window_capture_and_no_game_hook_boundary() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let gpu_path = manifest.join("src/night_vision/gpu.rs");
+    let shader_path = manifest.join("src/night_vision/visibility.hlsl");
+    let gpu_source = fs::read_to_string(&gpu_path).expect("read GPU adapter");
+    let shader_source = fs::read_to_string(&shader_path).expect("read visibility shader");
+
+    for required in [
+        "IGraphicsCaptureItemInterop",
+        "CreateForWindow",
+        "D3D11CreateDevice",
+        "CreateDirect3D11DeviceFromDXGIDevice",
+        "Direct3D11CaptureFramePool",
+        "CreateFreeThreaded",
+        "IDirect3DDxgiInterfaceAccess",
+        "CreateSwapChainForHwnd",
+        "D3DCompile",
+    ] {
+        assert!(
+            gpu_source.contains(required),
+            "GPU adapter is missing reviewed API {required}"
+        );
+    }
+    for forbidden in [
+        "CreateForMonitor",
+        "EnumWindows",
+        "GetDesktopWindow",
+        "DuplicateOutput",
+        "AcquireNextFrame",
+        "SetWindowsHookEx",
+        "OpenProcess",
+        "ReadProcessMemory",
+        "WriteProcessMemory",
+        "SendInput",
+        "CreateFileW",
+        "std::fs::write",
+        "reqwest",
+    ] {
+        assert!(
+            !gpu_source.contains(forbidden),
+            "GPU adapter crossed the exact-window safety boundary with {forbidden}"
+        );
+    }
+    assert!(
+        !has_unapproved_windows_boundary(&gpu_source),
+        "GPU adapter contains a Win32 or manual FFI path outside audited imports"
+    );
+    assert!(shader_source.contains("PSMain"));
 }
 
 #[test]

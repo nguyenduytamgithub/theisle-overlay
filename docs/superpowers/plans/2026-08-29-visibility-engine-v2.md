@@ -265,17 +265,8 @@ git commit -m "feat: strengthen truthful magnifier fallback"
 pub(crate) struct GpuVisibilitySession;
 
 impl GpuVisibilitySession {
-    pub(crate) fn start(
-        host_hwnd: isize,
-        game_hwnd: isize,
-        source: (i32, i32, i32, i32),
-        preset: VisibilityPreset,
-        strength: u8,
-        force_bright: bool,
-    ) -> Result<Self, GpuVisibilityError>;
-    pub(crate) fn reconfigure(&self, source: ..., preset: ..., strength: u8, force_bright: bool)
-        -> Result<(), GpuVisibilityError>;
-    pub(crate) fn readback(&self) -> Result<RendererReadback, GpuVisibilityError>;
+    pub(crate) fn start(config: GpuSessionConfig) -> Result<Self, GpuVisibilityError>;
+    pub(crate) fn readback(&self) -> Result<Option<RendererReadback>, GpuVisibilityError>;
     pub(crate) fn stop(self) -> Result<(), GpuVisibilityError>;
 }
 ```
@@ -288,7 +279,7 @@ adapter: `Foundation`, `Graphics_Capture`, `Graphics_DirectX`,
 `Win32_System_WinRT`, `Win32_System_WinRT_Direct3D11`, and
 `Win32_System_WinRT_Graphics_Capture`.
 
-- [ ] **Step 1: Add failing shader/safety/lifecycle tests**
+- [x] **Step 1: Add failing shader/safety/lifecycle tests**
 
 Require:
 
@@ -304,7 +295,7 @@ Require:
 - a repeated stop is idempotent and releases capture before destroying the
   presentation child.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
@@ -312,7 +303,7 @@ $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml --test night_vision_safety
 ```
 
-- [ ] **Step 3: Implement D3D device, exact-HWND capture, and host child**
+- [x] **Step 3: Implement D3D device, exact-HWND capture, and host child**
 
 On a dedicated MTA thread, create one hardware D3D11 device on the game's
 adapter with BGRA support, wrap it as a WinRT `IDirect3DDevice`, create the
@@ -321,23 +312,24 @@ two-frame pool, and create the session. Create one click-through native child in
 the existing filter host and one two-buffer flip-model swap chain for that
 child. Do not use a picker, monitor capture, or whole-desktop fallback.
 
-- [ ] **Step 4: Implement and bind the HLSL pipeline**
+- [x] **Step 4: Implement and bind the HLSL pipeline**
 
 Compile embedded HLSL with `D3DCompile`, create a fullscreen-triangle vertex
 shader and visibility pixel shader, create SRV/RTV/sampler/constant buffer, and
-render each received texture to the swap-chain back buffer. Add a mipmapped
-single-channel luminance target; at most every 250 ms copy the last mip to a
-1x1 staging texture, update the smoother, and update shader constants. Present
-with sync interval 0; coalesce callbacks so work never queues unboundedly.
+render each received texture to the swap-chain back buffer. Render a fixed
+4x4 GPU luminance grid into a single-channel 1x1 target; at most every 250 ms
+copy only that aggregate float to a staging texture, update the smoother, and
+update shader constants. Present with sync interval 0; coalesce callbacks so
+work never queues unboundedly.
 
-- [ ] **Step 5: Implement readback, resize, and recovery**
+- [x] **Step 5: Implement readback, resize, and recovery**
 
 Track current target HWND/source/preset, frame count, last-present timestamp,
 rolling intervals, luma, device reason, and generation. Recreate frame pool and
 swap-chain buffers on source size changes. On device removal or capture access
 loss, tear down completely and permit one clean controller restart.
 
-- [ ] **Step 6: Run tests and a hardware smoke probe**
+- [x] **Step 6: Run tests and a hardware smoke probe**
 
 ```powershell
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml gpu
@@ -349,6 +341,10 @@ Require D3D hardware device, exact The Isle HWND, at least 120 captured frames,
 at least 120 presented frames, finite luma, no device removal, median interval
 at or below 33 ms, and clean session teardown. The probe must not toggle the
 game or save a frame.
+
+Observed on the exact live The Isle HWND: 179 presented frames in three
+seconds, median 16.7043 ms (59.8648 FPS), scene luma 0.10605, readback age
+86 ms, exit code 0, and the game process remained running.
 
 - [ ] **Step 7: Commit**
 

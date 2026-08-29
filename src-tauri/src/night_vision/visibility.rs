@@ -1,18 +1,13 @@
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VisibilityPreset {
     Balanced,
     Clear,
+    #[default]
     Ultra,
-}
-
-impl Default for VisibilityPreset {
-    fn default() -> Self {
-        Self::Ultra
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -161,6 +156,7 @@ impl VisibilityPreset {
     }
 }
 
+#[cfg(test)]
 fn finite_unit(value: f32) -> f32 {
     if value.is_finite() {
         value.clamp(0.0, 1.0)
@@ -193,11 +189,13 @@ pub(crate) fn preset_parameters(
     }
 }
 
+#[cfg(test)]
 fn smoothstep(low: f32, high: f32, value: f32) -> f32 {
     let unit = ((value - low) / (high - low)).clamp(0.0, 1.0);
     unit * unit * (3.0 - 2.0 * unit)
 }
 
+#[cfg(test)]
 fn compress_highlight(value: f32, knee: f32) -> f32 {
     if value <= knee {
         return value;
@@ -206,10 +204,12 @@ fn compress_highlight(value: f32, knee: f32) -> f32 {
     knee + room * (1.0 - (-(value - knee) / room).exp())
 }
 
+#[cfg(test)]
 fn rgb_luma(rgb: [f32; 3]) -> f32 {
     rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
 }
 
+#[cfg(test)]
 pub(crate) fn transform_rgb(
     rgb: [f32; 3],
     local_average: [f32; 3],
