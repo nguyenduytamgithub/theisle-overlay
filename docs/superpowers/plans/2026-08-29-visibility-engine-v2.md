@@ -387,7 +387,7 @@ Settings schema:
 }
 ```
 
-- [ ] **Step 1: Add failing migration/controller/recovery tests**
+- [x] **Step 1: Add failing migration/controller/recovery tests**
 
 Require old `{strength, show_button}` settings to merge with the new defaults,
 unknown preset to normalize to `ultra`, UI commands to persist before
@@ -395,7 +395,7 @@ reconcile, GPU start before fallback, fallback only after exact GPU error,
 one device-loss retry, no renderer overlap, OFF/Alt-Tab/exit cleanup, and fresh
 GPU restart after the game HWND changes.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
@@ -403,21 +403,21 @@ $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
 npm run check
 ```
 
-- [ ] **Step 3: Wire controller and commands**
+- [x] **Step 3: Wire controller and commands**
 
 Make the controller request GPU first. Accept applied only after a fresh GPU
 readback; otherwise destroy partial GPU state and start verified Magnifier
 fallback. Destroy the active renderer before switching preset/strength/target,
 hiding the host, or exiting. Emit exact renderer/error/fps/luma state.
 
-- [ ] **Step 4: Wire settings and on-screen controls**
+- [x] **Step 4: Wire settings and on-screen controls**
 
 Add Vietnamese/English preset pills, Auto/Force toggle, active renderer label,
 and live FPS/luma diagnostic line. Keep one-click ON/OFF and `Ctrl+Alt+N`. Use
 `ultra`, strength 85, force mode true as v1.8 defaults while preserving an
 existing user's explicit strength.
 
-- [ ] **Step 5: Run controller, frontend, and production build gates**
+- [x] **Step 5: Run controller, frontend, and production build gates**
 
 ```powershell
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml night_vision

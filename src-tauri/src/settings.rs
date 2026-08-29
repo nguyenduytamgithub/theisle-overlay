@@ -161,8 +161,11 @@ pub fn default_settings() -> Value {
             "hud_opacity": 0.92,
         },
         "night_vision": {
-            "strength": 70,
+            "strength": 85,
             "show_button": true,
+            "preset": "ultra",
+            "force_bright": true,
+            "prefer_gpu": true,
         },
         // Anonymous usage counts + crash reports. No IP is stored (the
         // edge supplies a country code and the address is dropped), no game
@@ -255,6 +258,17 @@ fn merge_loaded_settings(over: &Value) -> Value {
             merged["navigation"]["arrival_radius_m"] = json!(25.0);
         }
         merged["navigation"]["schema_version"] = json!(2);
+    }
+    let preset = get_path(&merged, &["night_vision", "preset"])
+        .and_then(Value::as_str);
+    if !matches!(preset, Some("balanced" | "clear" | "ultra")) {
+        merged["night_vision"]["preset"] = json!("ultra");
+    }
+    if !merged["night_vision"]["force_bright"].is_boolean() {
+        merged["night_vision"]["force_bright"] = json!(true);
+    }
+    if !merged["night_vision"]["prefer_gpu"].is_boolean() {
+        merged["night_vision"]["prefer_gpu"] = json!(true);
     }
     merged
 }
@@ -378,14 +392,34 @@ mod tests {
         assert_eq!(merged["navigation"]["hud_visible"], true);
         assert_eq!(merged["navigation"]["hud_opacity"], 0.92);
         assert_eq!(merged["hotkeys"]["toggle_hud"], "Ctrl+Alt+H");
-        assert_eq!(merged["night_vision"]["strength"], 70);
+        assert_eq!(merged["night_vision"]["strength"], 85);
         assert_eq!(merged["night_vision"]["show_button"], true);
+        assert_eq!(merged["night_vision"]["preset"], "ultra");
+        assert_eq!(merged["night_vision"]["force_bright"], true);
+        assert_eq!(merged["night_vision"]["prefer_gpu"], true);
         assert_eq!(merged["hotkeys"]["toggle_night_vision"], "Ctrl+Alt+N");
         assert_eq!(
             active_source(&merged),
             overlay_core::MapSource::Vulnona,
             "legacy settings resolve to the default imagery"
         );
+    }
+
+    #[test]
+    fn night_vision_v2_migration_preserves_explicit_strength_and_normalizes_preset() {
+        let legacy = json!({
+            "night_vision": {
+                "strength": 42,
+                "show_button": false,
+                "preset": "unknown-mode"
+            }
+        });
+        let merged = merge_loaded_settings(&legacy);
+        assert_eq!(merged["night_vision"]["strength"], 42);
+        assert_eq!(merged["night_vision"]["show_button"], false);
+        assert_eq!(merged["night_vision"]["preset"], "ultra");
+        assert_eq!(merged["night_vision"]["force_bright"], true);
+        assert_eq!(merged["night_vision"]["prefer_gpu"], true);
     }
 
     #[test]

@@ -123,6 +123,8 @@ pub fn run(replay_file: Option<PathBuf>) {
             night_vision::get_night_vision_state,
             night_vision::toggle_night_vision,
             night_vision::set_night_vision_strength,
+            night_vision::set_night_vision_preset,
+            night_vision::set_night_vision_force_bright,
             night_vision::prepare_night_vision_exit,
             telemetry::track_feature,
             telemetry::submit_feedback,

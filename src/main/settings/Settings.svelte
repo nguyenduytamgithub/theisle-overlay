@@ -12,6 +12,8 @@
     onNightVisionChanged,
     onSettingsChanged,
     patchSettings,
+    setNightVisionForceBright,
+    setNightVisionPreset,
     setNightVisionStrength,
     setBasemapSource,
     startFetchData,
@@ -21,6 +23,7 @@
     type FeedbackCategory,
     type NightVisionState,
     type Settings,
+    type VisibilityPreset,
   } from "$lib/api";
   import { t } from "$lib/i18n";
   import HotkeyEditor from "./HotkeyEditor.svelte";
@@ -72,6 +75,28 @@
       nightVisionBusy = false;
     }
   }
+
+  async function changeNightVisionPreset(preset: VisibilityPreset) {
+    if (nightVisionBusy || nightVision?.preset === preset) return;
+    nightVisionBusy = true;
+    try {
+      nightVision = await setNightVisionPreset(preset);
+    } finally {
+      nightVisionBusy = false;
+    }
+  }
+
+  async function changeNightVisionForceBright(forceBright: boolean) {
+    if (nightVisionBusy) return;
+    nightVisionBusy = true;
+    try {
+      nightVision = await setNightVisionForceBright(forceBright);
+    } finally {
+      nightVisionBusy = false;
+    }
+  }
+
+  const NIGHT_VISION_PRESETS: VisibilityPreset[] = ["balanced", "clear", "ultra"];
 
   function nightVisionStatusKey(): string {
     if (!nightVision) return "night_vision.status_waiting";
@@ -191,7 +216,7 @@
       </div>
     </section>
 
-    <!-- Native Magnification Night Vision (display pixels only, no game memory) -->
+    <!-- Adaptive client-only visibility (exact game HWND; no game memory) -->
     <section>
       <h2 class="mb-2 font-semibold" style="color: var(--color-accent)">
         {$t("settings.night_vision")}
@@ -238,6 +263,33 @@
               void changeNightVisionStrength(Number(e.currentTarget.value))}
           />
         </label>
+        <div class="text-sm">
+          <div class="mb-1">{$t("settings.night_vision_preset")}</div>
+          <div class="flex flex-wrap gap-2">
+            {#each NIGHT_VISION_PRESETS as preset (preset)}
+              <button
+                class="cursor-pointer rounded border px-3 py-1 text-xs font-semibold disabled:opacity-50"
+                style={nightVision?.preset === preset
+                  ? "background: #607d26; color: #f2ffc4; border-color: #d8ff57"
+                  : "border-color: var(--color-border)"}
+                disabled={nightVisionBusy}
+                onclick={() => void changeNightVisionPreset(preset)}
+              >
+                {$t(`night_vision.preset_${preset}` as never)}
+              </button>
+            {/each}
+          </div>
+        </div>
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={nightVision?.forceBright ?? settings.night_vision.force_bright}
+            disabled={nightVisionBusy}
+            onchange={(e) =>
+              void changeNightVisionForceBright(e.currentTarget.checked)}
+          />
+          {$t("settings.night_vision_force_bright")}
+        </label>
         <label class="flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -257,6 +309,14 @@
               ? $t("night_vision.visual_on")
               : $t("night_vision.visual_off")}
           </strong>
+          <span style="color: var(--color-muted)">{$t("settings.night_vision_renderer")}</span>
+          <strong>{nightVision ? $t(`night_vision.renderer_${nightVision.renderer}` as never) : "—"}</strong>
+          <span style="color: var(--color-muted)">{$t("settings.night_vision_metrics")}</span>
+          <code>
+            {nightVision?.presentedFps != null
+              ? `${nightVision.presentedFps.toFixed(1)} FPS · L ${nightVision.sceneLuma?.toFixed(3) ?? "—"}`
+              : "—"}
+          </code>
           <span style="color: var(--color-muted)">{$t("settings.night_vision_gamma")}</span>
           <span>
             {nightVision?.gammaApplied
