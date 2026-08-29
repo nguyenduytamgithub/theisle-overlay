@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Version is `1.7.2`; build fingerprint is `1.7.2-magnifier-boost-a`.
+- Version is `1.7.2`; build fingerprint is `1.7.2-magnifier-boost-b`.
 - Strength 0 disables; 1–100 maps to `1.0 + 4.0 * strength / 100`, capped at 5.0.
 - Do not open the game process, read memory, inject, hook DirectX, synthesize input, save/transmit frames, or add network access.
 - Magnification screen-pixel use must be documented honestly and isolated to one audited adapter.
@@ -217,7 +217,7 @@ git commit -m "fix: reveal real night scene detail"
 
 - [ ] **Step 1: Write/update release configuration assertions**
 
-Require version `1.7.2`, fingerprint suffix `magnifier-boost-a`, Magnification
+Require version `1.7.2`, fingerprint suffix `magnifier-boost-b`, Magnification
 capability text, and the absence of flat-tint copy.
 
 - [ ] **Step 2: Run release/safety tests and verify RED**

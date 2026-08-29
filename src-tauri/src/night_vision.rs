@@ -26,7 +26,7 @@ pub(crate) struct GameTarget {
 }
 
 pub const CHANGED_EVENT: &str = "night-vision://changed";
-pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-magnifier-boost-a");
+pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-magnifier-boost-b");
 const FILTER_LABEL: &str = "night-vision-filter";
 const FILTER_READY_EVENT: &str = "night-vision-filter://ready";
 const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";
@@ -776,12 +776,13 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                             );
                             if state.visual_boost_applied {
                                 log::info!(
-                                    "night vision: native magnifier verified request={} strength={} gain={:.2} child={} source={:?} fingerprint={}",
+                                    "night vision: native magnifier verified request={} strength={} gain={:.2} child={} source={:?} refresh={}ms fingerprint={}",
                                     request_id,
                                     request_strength,
                                     readback.gain,
                                     readback.child,
                                     readback.source,
+                                    readback.refresh_interval_ms,
                                     state.build_fingerprint
                                 );
                                 last_strength = Some(request_strength);

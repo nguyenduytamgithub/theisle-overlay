@@ -42,7 +42,7 @@ fn magnifier_boost_candidate_versions_are_consistently_1_7_2() {
     assert_eq!(tauri_config()["version"], Value::String("1.7.2".to_owned()));
 
     let runtime = include_str!("../src/night_vision.rs");
-    assert!(runtime.contains("magnifier-boost-a"));
+    assert!(runtime.contains("magnifier-boost-b"));
     assert!(!runtime.contains("visual-boost-a"));
 }
 

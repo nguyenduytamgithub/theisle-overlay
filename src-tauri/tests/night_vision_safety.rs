@@ -177,6 +177,8 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
             "FindWindowExW",
             "IsWindow",
             "IsWindowVisible",
+            "KillTimer",
+            "SetTimer",
             "SetWindowPos",
             "SET_WINDOW_POS_FLAGS",
             "WS_CHILD",
@@ -190,8 +192,16 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
         allowed_magnifier_symbols,
         "Magnification adapter may import only the audited screen-transform API allowlist"
     );
+    const AUDITED_TIMER_CALLBACK: &str = "unsafe extern \"system\" fn refresh_source_timer(";
+    assert_eq!(
+        magnifier_source.matches(AUDITED_TIMER_CALLBACK).count(),
+        1,
+        "Magnification adapter must have exactly one audited timer callback ABI"
+    );
+    let magnifier_without_audited_timer_callback_abi =
+        magnifier_source.replacen(AUDITED_TIMER_CALLBACK, "unsafe fn refresh_source_timer(", 1);
     assert!(
-        !has_unapproved_windows_boundary(&magnifier_source),
+        !has_unapproved_windows_boundary(&magnifier_without_audited_timer_callback_abi),
         "Magnification adapter contains a Win32 or manual FFI path outside audited imports"
     );
 
