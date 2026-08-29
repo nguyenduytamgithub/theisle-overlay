@@ -1,4 +1,6 @@
 mod curve;
+#[allow(dead_code)]
+mod magnifier;
 mod recovery;
 mod windows;
 
@@ -60,6 +62,7 @@ pub(crate) fn visual_boost_alpha(strength: u8) -> f64 {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn visual_boost_gain(strength: u8) -> f32 {
     1.0 + 4.0 * f32::from(strength.min(100)) / 100.0
 }
