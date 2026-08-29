@@ -85,6 +85,10 @@ export interface NightVisionState {
   supported: boolean;
   strength: number;
   errorKey: string | null;
+  visualBoostReady: boolean;
+  visualBoostApplied: boolean;
+  gammaApplied: boolean;
+  buildFingerprint: string;
 }
 
 export const onNightVisionChanged = (

@@ -19,16 +19,16 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   height: 100%;
   padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 2px solid rgba(255, 255, 255, 0.5);
   border-radius: 10px;
   color: #f7f8ed;
   background: linear-gradient(180deg, rgba(12, 16, 11, 0.93), rgba(6, 9, 6, 0.88));
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.58);
-  font: 800 11px/1 "Segoe UI", system-ui, sans-serif;
+  font: 800 12px/1 "Segoe UI", system-ui, sans-serif;
   letter-spacing: 0.035em;
   text-shadow: 0 1px 2px #000;
   cursor: pointer;
@@ -60,7 +60,7 @@ button:disabled {
 }
 
 button.on {
-  border-color: rgba(214, 255, 84, 0.9);
+  border-color: #e2ff5a;
   color: #efffc1;
   background: linear-gradient(180deg, rgba(65, 88, 22, 0.96), rgba(22, 37, 10, 0.94));
   box-shadow: 0 0 12px rgba(198, 255, 74, 0.46), 0 3px 12px rgba(0, 0, 0, 0.58);
@@ -72,12 +72,12 @@ button.on .icon {
 }
 
 button.waiting {
-  border-color: rgba(255, 193, 86, 0.72);
+  border-color: #ffc156;
   color: #ffe0a6;
 }
 
 button.unavailable {
-  border-color: rgba(255, 104, 104, 0.72);
+  border-color: #ff6868;
   color: #ffc0b8;
   background: linear-gradient(180deg, rgba(65, 24, 22, 0.96), rgba(27, 10, 9, 0.94));
 }
