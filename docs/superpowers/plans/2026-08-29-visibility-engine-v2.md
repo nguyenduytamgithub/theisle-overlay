@@ -75,7 +75,7 @@ pub(crate) fn transform_rgb(
 ) -> [f32; 3];
 ```
 
-- [ ] **Step 1: Add failing unit and fixture tests**
+- [x] **Step 1: Add failing unit and fixture tests**
 
 Require:
 
@@ -88,7 +88,7 @@ Require:
 - the bright fixture changes less than the dark fixture; and
 - repeated calls are bit-for-bit deterministic.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
@@ -98,18 +98,18 @@ $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
 Expected: compilation failure because `visibility` and its interfaces do not
 exist.
 
-- [ ] **Step 3: Implement the minimal reference model**
+- [x] **Step 3: Implement the minimal reference model**
 
 Use a bounded exposure derived from preset, strength, and scene luma; apply a
 nonlinear shadow lift; compress values beyond `highlight_knee`; restore color
 with bounded saturation; add `(rgb - local_average) * detail_gain` under a
 shadow mask; sanitize non-finite inputs; and clamp only at the final output.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run the same command and require every visibility test PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add -- src-tauri/src/night_vision.rs src-tauri/src/night_vision/visibility.rs src-tauri/tests/fixtures
