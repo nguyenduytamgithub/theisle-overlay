@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities for the main, minimap, navigation HUD, and night vision windows",
-  "windows": ["main", "minimap", "hud", "night-vision"],
+  "windows": ["main", "minimap", "hud", "night-vision", "night-vision-filter"],
   "permissions": [
     "core:default",
     "core:window:allow-show",

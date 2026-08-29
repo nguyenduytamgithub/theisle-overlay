@@ -118,7 +118,13 @@ pub fn spawn_watchdog(app: tauri::AppHandle) {
     use tauri::Manager;
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(500));
-        for label in ["main", "minimap", "hud", "night-vision"] {
+        for label in [
+            "main",
+            "minimap",
+            "hud",
+            "night-vision-filter",
+            "night-vision",
+        ] {
             if crate::win::vis::is_visible(label) != Some(true) {
                 continue;
             }
