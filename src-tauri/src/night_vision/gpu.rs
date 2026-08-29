@@ -16,45 +16,37 @@ use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Graphics::DirectX::DirectXPixelFormat;
 use windows::Graphics::SizeInt32;
 use windows::Win32::Foundation::{HMODULE, HWND};
-use windows::Win32::Graphics::Direct3D::{
-    D3D_DRIVER_TYPE_HARDWARE, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST, ID3DBlob,
-};
 use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
+use windows::Win32::Graphics::Direct3D::{
+    ID3DBlob, D3D_DRIVER_TYPE_HARDWARE, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+};
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11CreateDevice, D3D11_BIND_CONSTANT_BUFFER, D3D11_BIND_RENDER_TARGET,
+    D3D11CreateDevice, ID3D11Buffer, ID3D11DepthStencilView, ID3D11Device, ID3D11DeviceContext,
+    ID3D11PixelShader, ID3D11RenderTargetView, ID3D11SamplerState, ID3D11ShaderResourceView,
+    ID3D11Texture2D, ID3D11VertexShader, D3D11_BIND_CONSTANT_BUFFER, D3D11_BIND_RENDER_TARGET,
     D3D11_BUFFER_DESC, D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-    D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE,
-    D3D11_SAMPLER_DESC, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
-    D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
-    D3D11_VIEWPORT, ID3D11Buffer, ID3D11DepthStencilView, ID3D11Device, ID3D11DeviceContext,
-    ID3D11PixelShader, ID3D11RenderTargetView, ID3D11SamplerState,
-    ID3D11ShaderResourceView, ID3D11Texture2D, ID3D11VertexShader,
+    D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_SAMPLER_DESC,
+    D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_USAGE_DEFAULT,
+    D3D11_USAGE_STAGING, D3D11_VIEWPORT,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R32_FLOAT,
-    DXGI_SAMPLE_DESC,
+    DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R32_FLOAT, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
     IDXGIAdapter, IDXGIDevice, IDXGIFactory2, IDXGISwapChain1, DXGI_PRESENT, DXGI_SCALING_STRETCH,
-    DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
-    DXGI_USAGE_RENDER_TARGET_OUTPUT,
+    DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, DXGI_USAGE_RENDER_TARGET_OUTPUT,
 };
-use windows::Win32::System::Com::{
-    CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED,
-};
+use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 use windows::Win32::System::WinRT::Direct3D11::{
     CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess,
 };
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GetParent, SetWindowPos, HWND_TOP, SWP_NOACTIVATE,
-    SWP_SHOWWINDOW, WINDOW_EX_STYLE, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
-    WS_VISIBLE,
+    SWP_SHOWWINDOW, WINDOW_EX_STYLE, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, WS_VISIBLE,
 };
 #[cfg(feature = "devtools")]
-use windows::Win32::UI::WindowsAndMessaging::{
-    HWND_TOPMOST, WS_EX_TOPMOST, WS_POPUP,
-};
+use windows::Win32::UI::WindowsAndMessaging::{HWND_TOPMOST, WS_EX_TOPMOST, WS_POPUP};
 
 const VISIBILITY_SHADER: &str = include_str!("visibility.hlsl");
 const START_TIMEOUT: Duration = Duration::from_secs(5);
@@ -374,9 +366,7 @@ struct D3dPipeline {
 
 impl D3dPipeline {
     fn create(config: GpuSessionConfig) -> Result<Self, GpuVisibilityError> {
-        unsafe {
-            create_pipeline_for_output(config, HWND(config.output_hwnd as *mut c_void))
-        }
+        unsafe { create_pipeline_for_output(config, HWND(config.output_hwnd as *mut c_void)) }
     }
 
     fn render_next_frame(&mut self) -> Result<Option<RendererReadback>, GpuVisibilityError> {
@@ -398,9 +388,8 @@ impl D3dPipeline {
                 .CreateShaderResourceView(&texture, None, Some(&mut source_view))
         }
         .map_err(|error| GpuVisibilityError::new("create frame shader view", error))?;
-        let source_view = source_view.ok_or_else(|| {
-            GpuVisibilityError("D3D11 returned no frame shader view".to_string())
-        })?;
+        let source_view = source_view
+            .ok_or_else(|| GpuVisibilityError("D3D11 returned no frame shader view".to_string()))?;
 
         let now = Instant::now();
         let measured = if luma_sample_due(self.last_luma_sample, now) {
@@ -459,8 +448,10 @@ impl D3dPipeline {
             ..Default::default()
         };
         unsafe {
-            self.context
-                .OMSetRenderTargets(Some(&[Some(self.luma_view.clone())]), None::<&ID3D11DepthStencilView>);
+            self.context.OMSetRenderTargets(
+                Some(&[Some(self.luma_view.clone())]),
+                None::<&ID3D11DepthStencilView>,
+            );
             self.context.RSSetViewports(Some(&[viewport]));
             self.context.VSSetShader(&self.vertex_shader, None);
             self.context.PSSetShader(&self.luma_shader, None);
@@ -488,7 +479,9 @@ impl D3dPipeline {
             Some(unsafe { *(mapped.pData.cast::<f32>()) })
         };
         unsafe { self.context.Unmap(&self.luma_staging, 0) };
-        Ok(measured.filter(|value| value.is_finite()).map(|value| value.clamp(0.005, 1.0)))
+        Ok(measured
+            .filter(|value| value.is_finite())
+            .map(|value| value.clamp(0.005, 1.0)))
     }
 
     fn render_visibility(
@@ -523,8 +516,10 @@ impl D3dPipeline {
                 0,
                 0,
             );
-            self.context
-                .OMSetRenderTargets(Some(&[Some(self.output.clone())]), None::<&ID3D11DepthStencilView>);
+            self.context.OMSetRenderTargets(
+                Some(&[Some(self.output.clone())]),
+                None::<&ID3D11DepthStencilView>,
+            );
             self.context.RSSetViewports(Some(&[viewport]));
             self.context.VSSetShader(&self.vertex_shader, None);
             self.context.PSSetShader(&self.visibility_shader, None);
@@ -670,8 +665,9 @@ pub(crate) fn run_machine_probe(
         Ok(config) => config,
         Err(error) => {
             let _ = destroy_output_window(output);
-            unsafe { DestroyWindow(host) }
-                .map_err(|cleanup| GpuVisibilityError::new("destroy invalid probe host", cleanup))?;
+            unsafe { DestroyWindow(host) }.map_err(|cleanup| {
+                GpuVisibilityError::new("destroy invalid probe host", cleanup)
+            })?;
             return Err(GpuVisibilityError(error));
         }
     };
@@ -701,15 +697,11 @@ pub(crate) fn run_machine_probe(
 }
 
 #[cfg(feature = "devtools")]
-unsafe fn create_probe_host(
-    source: (i32, i32, i32, i32),
-) -> Result<HWND, GpuVisibilityError> {
+unsafe fn create_probe_host(source: (i32, i32, i32, i32)) -> Result<HWND, GpuVisibilityError> {
     let (left, top, width, height) = source;
     let host = unsafe {
         CreateWindowExW(
-            WINDOW_EX_STYLE(
-                WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0 | WS_EX_TOPMOST.0,
-            ),
+            WINDOW_EX_STYLE(WS_EX_TRANSPARENT.0 | WS_EX_NOACTIVATE.0 | WS_EX_TOPMOST.0),
             windows::core::w!("STATIC"),
             windows::core::w!("TheIsle Visibility GPU Probe"),
             WS_POPUP | WS_VISIBLE,
@@ -793,8 +785,7 @@ unsafe fn create_pipeline_for_output(
     if actual_parent != HWND(config.host_hwnd as *mut c_void) {
         return Err(GpuVisibilityError(format!(
             "GPU output parent mismatch: expected={} actual={}",
-            config.host_hwnd,
-            actual_parent.0 as isize
+            config.host_hwnd, actual_parent.0 as isize
         )));
     }
     let (_, _, width, height) = config.source;
@@ -814,8 +805,10 @@ unsafe fn create_pipeline_for_output(
         )
     }
     .map_err(|error| GpuVisibilityError::new("create D3D11 hardware device", error))?;
-    let device = device.ok_or_else(|| GpuVisibilityError("D3D11 returned no device".to_string()))?;
-    let context = context.ok_or_else(|| GpuVisibilityError("D3D11 returned no context".to_string()))?;
+    let device =
+        device.ok_or_else(|| GpuVisibilityError("D3D11 returned no device".to_string()))?;
+    let context =
+        context.ok_or_else(|| GpuVisibilityError("D3D11 returned no context".to_string()))?;
 
     let dxgi_device: IDXGIDevice = device
         .cast()
@@ -828,7 +821,10 @@ unsafe fn create_pipeline_for_output(
         Width: width as u32,
         Height: height as u32,
         Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
         BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
         BufferCount: 2,
         Scaling: DXGI_SCALING_STRETCH,
@@ -836,16 +832,16 @@ unsafe fn create_pipeline_for_output(
         AlphaMode: DXGI_ALPHA_MODE_IGNORE,
         ..Default::default()
     };
-    let swap_chain = unsafe {
-        dxgi_factory.CreateSwapChainForHwnd(&device, child, &swap_desc, None, None)
-    }
-    .map_err(|error| GpuVisibilityError::new("create HWND swap chain", error))?;
+    let swap_chain =
+        unsafe { dxgi_factory.CreateSwapChainForHwnd(&device, child, &swap_desc, None, None) }
+            .map_err(|error| GpuVisibilityError::new("create HWND swap chain", error))?;
     let back_buffer: ID3D11Texture2D = unsafe { swap_chain.GetBuffer(0) }
         .map_err(|error| GpuVisibilityError::new("open swap-chain back buffer", error))?;
     let mut output = None;
     unsafe { device.CreateRenderTargetView(&back_buffer, None, Some(&mut output)) }
         .map_err(|error| GpuVisibilityError::new("create output render target", error))?;
-    let output = output.ok_or_else(|| GpuVisibilityError("D3D11 returned no output target".to_string()))?;
+    let output =
+        output.ok_or_else(|| GpuVisibilityError("D3D11 returned no output target".to_string()))?;
 
     let vs_code = compile_shader("VSMain", "vs_5_0")?;
     let ps_code = compile_shader("PSMain", "ps_5_0")?;
@@ -859,9 +855,12 @@ unsafe fn create_pipeline_for_output(
         .map_err(|error| GpuVisibilityError::new("create visibility shader", error))?;
     unsafe { device.CreatePixelShader(&luma_code, None, Some(&mut luma_shader)) }
         .map_err(|error| GpuVisibilityError::new("create luminance shader", error))?;
-    let vertex_shader = vertex_shader.ok_or_else(|| GpuVisibilityError("D3D11 returned no vertex shader".to_string()))?;
-    let visibility_shader = visibility_shader.ok_or_else(|| GpuVisibilityError("D3D11 returned no visibility shader".to_string()))?;
-    let luma_shader = luma_shader.ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance shader".to_string()))?;
+    let vertex_shader = vertex_shader
+        .ok_or_else(|| GpuVisibilityError("D3D11 returned no vertex shader".to_string()))?;
+    let visibility_shader = visibility_shader
+        .ok_or_else(|| GpuVisibilityError("D3D11 returned no visibility shader".to_string()))?;
+    let luma_shader = luma_shader
+        .ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance shader".to_string()))?;
 
     let sampler_desc = D3D11_SAMPLER_DESC {
         Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
@@ -874,7 +873,8 @@ unsafe fn create_pipeline_for_output(
     let mut sampler = None;
     unsafe { device.CreateSamplerState(&sampler_desc, Some(&mut sampler)) }
         .map_err(|error| GpuVisibilityError::new("create visibility sampler", error))?;
-    let sampler = sampler.ok_or_else(|| GpuVisibilityError("D3D11 returned no sampler".to_string()))?;
+    let sampler =
+        sampler.ok_or_else(|| GpuVisibilityError("D3D11 returned no sampler".to_string()))?;
 
     let buffer_desc = D3D11_BUFFER_DESC {
         ByteWidth: std::mem::size_of::<GpuShaderConstants>() as u32,
@@ -885,7 +885,8 @@ unsafe fn create_pipeline_for_output(
     let mut constants = None;
     unsafe { device.CreateBuffer(&buffer_desc, None, Some(&mut constants)) }
         .map_err(|error| GpuVisibilityError::new("create visibility constant buffer", error))?;
-    let constants = constants.ok_or_else(|| GpuVisibilityError("D3D11 returned no constant buffer".to_string()))?;
+    let constants = constants
+        .ok_or_else(|| GpuVisibilityError("D3D11 returned no constant buffer".to_string()))?;
 
     let luma_default_desc = D3D11_TEXTURE2D_DESC {
         Width: 1,
@@ -893,7 +894,10 @@ unsafe fn create_pipeline_for_output(
         MipLevels: 1,
         ArraySize: 1,
         Format: DXGI_FORMAT_R32_FLOAT,
-        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
         Usage: D3D11_USAGE_DEFAULT,
         BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
         ..Default::default()
@@ -901,11 +905,13 @@ unsafe fn create_pipeline_for_output(
     let mut luma_target = None;
     unsafe { device.CreateTexture2D(&luma_default_desc, None, Some(&mut luma_target)) }
         .map_err(|error| GpuVisibilityError::new("create GPU luminance target", error))?;
-    let luma_target = luma_target.ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance target".to_string()))?;
+    let luma_target = luma_target
+        .ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance target".to_string()))?;
     let mut luma_view = None;
     unsafe { device.CreateRenderTargetView(&luma_target, None, Some(&mut luma_view)) }
         .map_err(|error| GpuVisibilityError::new("create luminance render view", error))?;
-    let luma_view = luma_view.ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance view".to_string()))?;
+    let luma_view = luma_view
+        .ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance view".to_string()))?;
     let luma_staging_desc = D3D11_TEXTURE2D_DESC {
         Usage: D3D11_USAGE_STAGING,
         BindFlags: 0,
@@ -915,7 +921,9 @@ unsafe fn create_pipeline_for_output(
     let mut luma_staging = None;
     unsafe { device.CreateTexture2D(&luma_staging_desc, None, Some(&mut luma_staging)) }
         .map_err(|error| GpuVisibilityError::new("create luminance readback texture", error))?;
-    let luma_staging = luma_staging.ok_or_else(|| GpuVisibilityError("D3D11 returned no luminance readback texture".to_string()))?;
+    let luma_staging = luma_staging.ok_or_else(|| {
+        GpuVisibilityError("D3D11 returned no luminance readback texture".to_string())
+    })?;
 
     let inspectable = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi_device) }
         .map_err(|error| GpuVisibilityError::new("create WinRT D3D device", error))?;
@@ -924,15 +932,18 @@ unsafe fn create_pipeline_for_output(
         .map_err(|error| GpuVisibilityError::new("open WinRT capture device", error))?;
     let interop = factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()
         .map_err(|error| GpuVisibilityError::new("open capture-item factory", error))?;
-    let item: GraphicsCaptureItem = unsafe {
-        interop.CreateForWindow(HWND(config.game_hwnd as *mut c_void))
-    }
-    .map_err(|error| GpuVisibilityError::new("create capture item for exact game HWND", error))?;
+    let item: GraphicsCaptureItem =
+        unsafe { interop.CreateForWindow(HWND(config.game_hwnd as *mut c_void)) }.map_err(
+            |error| GpuVisibilityError::new("create capture item for exact game HWND", error),
+        )?;
     let frame_pool = Direct3D11CaptureFramePool::CreateFreeThreaded(
         &capture_device,
         DirectXPixelFormat::B8G8R8A8UIntNormalized,
         2,
-        SizeInt32 { Width: width, Height: height },
+        SizeInt32 {
+            Width: width,
+            Height: height,
+        },
     )
     .map_err(|error| GpuVisibilityError::new("create free-threaded capture pool", error))?;
     let (frame_tx, frame_rx) = mpsc::sync_channel(1);
@@ -1015,7 +1026,8 @@ fn compile_shader(entry: &str, target: &str) -> Result<Vec<u8>, GpuVisibilityErr
             .unwrap_or_else(|| error.to_string());
         return Err(GpuVisibilityError::new("compile visibility shader", detail));
     }
-    let code = code.ok_or_else(|| GpuVisibilityError("shader compiler returned no bytecode".to_string()))?;
+    let code =
+        code.ok_or_else(|| GpuVisibilityError("shader compiler returned no bytecode".to_string()))?;
     let bytes = unsafe {
         std::slice::from_raw_parts(code.GetBufferPointer().cast::<u8>(), code.GetBufferSize())
     };
@@ -1024,9 +1036,7 @@ fn compile_shader(entry: &str, target: &str) -> Result<Vec<u8>, GpuVisibilityErr
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        GpuLifecycle, GpuSessionConfig, GpuShaderConstants, GpuStage, VISIBILITY_SHADER,
-    };
+    use super::{GpuLifecycle, GpuSessionConfig, GpuShaderConstants, GpuStage, VISIBILITY_SHADER};
     use crate::night_vision::visibility::{
         preset_parameters, VisibilityPreset, VisibilityRenderer,
     };
@@ -1066,7 +1076,8 @@ mod tests {
         assert_eq!(std::mem::size_of::<GpuShaderConstants>(), 48);
         assert_eq!(std::mem::align_of::<GpuShaderConstants>(), 16);
         let parameters = preset_parameters(VisibilityPreset::Ultra, 85, 0.03);
-        let constants = GpuShaderConstants::new(parameters, [1.0 / 1920.0, 1.0 / 1080.0], 0.03, true);
+        let constants =
+            GpuShaderConstants::new(parameters, [1.0 / 1920.0, 1.0 / 1080.0], 0.03, true);
         assert_eq!(constants.exposure, parameters.exposure);
         assert_eq!(constants.shadow_lift, parameters.shadow_lift);
         assert_eq!(constants.gamma, parameters.gamma);
@@ -1134,7 +1145,10 @@ mod tests {
         assert!(!lifecycle.readback_allowed());
         lifecycle.record_present();
         assert_eq!(lifecycle.stage(), GpuStage::Running);
-        assert!(!lifecycle.record_device_loss(), "only one automatic restart is allowed");
+        assert!(
+            !lifecycle.record_device_loss(),
+            "only one automatic restart is allowed"
+        );
         assert_eq!(lifecycle.stage(), GpuStage::Failed);
 
         assert!(lifecycle.stop());

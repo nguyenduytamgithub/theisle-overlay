@@ -8,8 +8,8 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > (`f628a18`). Tác giả và dự án gốc: **Trần Quốc Toản**.
 
-Nguồn hiện tại là ứng viên tích hợp **v1.7.4 Navigation + Magnifier Night
-Boost**. Mục tiêu là làm vị trí, hướng đi, đường đã đi, waypoint và khả năng
+Nguồn hiện tại là ứng viên tích hợp **v1.8.0 Navigation + Adaptive GPU
+Visibility**. Mục tiêu là làm vị trí, hướng đi, đường đã đi, waypoint và khả năng
 quan sát cảnh tối hữu dụng hơn trong lúc chơi — không đọc bộ nhớ game và không
 can thiệp Easy Anti-Cheat. Bản công khai chỉ được phát hành sau khi vượt qua
 nghiệm thu cảnh đêm thật và kiểm tra điều hướng trong game.
@@ -26,7 +26,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 
 ## Fork này cải thiện gì?
 
-| Khi đang chơi | Upstream mã mở v1.5.2 | Ứng viên tích hợp v1.7.4 |
+| Khi đang chơi | Upstream mã mở v1.5.2 | Ứng viên tích hợp v1.8.0 |
 |---|---|---|
 | Nhịp lấy vị trí IslePilot | Mặc định 10 giây | Mặc định **5 giây**; giữ nguyên nếu bạn đã tự đặt giá trị khác |
 | Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Chạy thẳng 4 giây, giảm dần tới 12 giây rồi giữ; hiệu chỉnh **300/650 ms** theo độ lệch |
@@ -36,7 +36,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 | Dẫn đường trên màn hình game | Không có HUD riêng | Mũi tên đích Bắc-lên ổn định + câu lệnh **ĐI THẲNG / CHẾCH / RẼ / QUAY LẠI** và chữ hướng Đông Tây Nam Bắc |
 | Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **ĐANG BÁM / ĐANG ƯỚC LƯỢNG / CHỜ SERVER** |
 | Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
-| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Windows Magnification tăng tương phản từ cảnh đang hiển thị; nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, cường độ 0–100, tự ẩn/dọn theo game |
+| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Windows Graphics Capture lấy đúng cửa sổ game và shader GPU nâng vùng tối/bảo vệ vùng sáng; nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, Ultra/Auto/Ép sáng, Magnifier dự phòng |
 
 Điểm quan trọng: phần hiển thị 30 FPS là **ước tính cục bộ có giới hạn**, không
 bịa thành tọa độ thật. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
@@ -61,11 +61,15 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
   khoảng cách và trạng thái dữ liệu; tự ẩn khi Alt-Tab và bật/tắt bằng
   `Ctrl+Alt+H`.
 - **Nhìn đêm trực tiếp trên màn hình**: nút **NHÌN ĐÊM** góc trên bên phải và
-  `Ctrl+Alt+N`; chỉnh cường độ 0–100 trong Cài đặt. v1.7.4 dùng Windows
-  Magnification để đọc pixel màn hình đang hiển thị và vẽ lại cục bộ với độ
-  tương phản cao hơn; gamma không còn được áp dụng. Cửa sổ native bấm xuyên qua,
-  tự dọn khi Alt-Tab/tắt/thoát và chỉ báo BẬT sau khi đọc ngược đúng cấu hình.
-  Mức 70 là mặc định; tăng nếu còn tối, giảm nếu vùng sáng bị cháy.
+  `Ctrl+Alt+N`; chỉnh cường độ 0–100, Balanced/Clear/Ultra và Auto/Ép sáng
+  trong Cài đặt. v1.8.0 dùng Windows Graphics Capture trên đúng HWND The Isle,
+  shader GPU nâng bóng tối, nén vùng sáng và tăng chi tiết cục bộ; trạng thái
+  `gpu_adaptive` chỉ hiện sau frame/readback thật, còn `magnifier_fallback` được
+  ghi rõ khi GPU không dùng được. Gamma không áp dụng. Chế độ này độc lập với
+  **phím X** nhìn đêm của game và không thay đổi ngày/đêm của server; nó chỉ xử
+  lý khung hình ở máy này. Cách dùng mạnh nhất là bật `X`, rồi bật Overlay ở
+  **Ultra + Ép sáng**; một lần bấm nút hoặc `Ctrl+Alt+N` sẽ tắt lớp Overlay ngay.
+  Mặc định cài mới Ultra 85% + Ép sáng.
 - **Bản đồ lớn**: phóng to/thu nhỏ mượt, 12 lớp bật/tắt được (nước ngọt, nguồn
   nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
   ăn, động vật với biểu tượng riêng từng loài 🐗🦌🐢, tên vùng, địa điểm, và
@@ -188,21 +192,23 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Ứng viên tích hợp v1.7.4 và bằng chứng cài/runtime được ghi trong
-[biên bản kiểm chứng](docs/verification/navigation-night-vision-v1.7.4.md).
+Ứng viên tích hợp v1.8.0 và bằng chứng cài/runtime được ghi trong
+[biên bản kiểm chứng](docs/verification/visibility-engine-v1.8.0.md).
 Không quảng bá ứng viên là bản phát hành trước khi nghiệm thu cảnh đêm thật và
 điều hướng trong game đạt.
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt NSIS v1.7.4 candidate | **5.814.158 byte (~5,8 MB)** · SHA-256 trong biên bản |
-| File chạy sau khi cài v1.7.4 candidate | **21.459.968 byte (~21,5 MB)** · SHA-256 trong biên bản |
+| File cài đặt NSIS v1.8.0 candidate | Kích thước và SHA-256 được chốt trong biên bản sau build |
+| File chạy sau khi cài v1.8.0 candidate | Kích thước và SHA-256 được chốt trong biên bản sau cài |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 
 HUD và bản đồ giới hạn cập nhật cục bộ khoảng 30 FPS, chạy thẳng 4 giây rồi
 giảm dần tới mốc giữ 12 giây; không có mẫu mới thì hiện **CHỜ SERVER**;
 không chạy bộ đọc game hoặc quét bộ nhớ nền. Mức RAM thực tế phụ thuộc WebView2,
 số tab đang mở và model 3D đã tải, nên fork không công bố một con số RAM cố định.
+Khi `gpu_adaptive` bật, app có thêm một lần capture và render GPU theo nhịp cửa
+sổ game; FPS/readback thực tế được hiện trong Cài đặt để người dùng tự đối chiếu.
 
 ## Lưu ý cần biết
 
@@ -217,13 +223,13 @@ số tab đang mở và model 3D đã tải, nên fork không công bố một c
 3. **Mũi tên đích không dùng yaw server** nên không còn xoay lung tung khi nhân
    vật đổi góc nhìn. Dòng HƯỚNG ĐI ưu tiên hướng chuyển động đã xác nhận, chỉ
    dùng yaw ổn định làm dự phòng; dữ liệu quá cũ chuyển sang **CHỜ SERVER**.
-4. **Nhìn đêm v1.7.4 cần Windowed/Borderless** để Windows Magnification ghép
-   ảnh đã tăng tương phản lên game; Exclusive Fullscreen không hiện được overlay.
-   Nếu hình quá sáng, giảm cường độ; nếu trạng thái kẹt, bấm `Ctrl+Alt+N` một lần
-   để tắt sạch rồi bật lại. Tính năng xử lý pixel màn hình đang hiển thị ở máy
-   này nhưng không mở tiến trình game, không đọc bộ nhớ game, không inject/hook,
-   không giả lập input, không truy cập mạng và không lưu/gửi ảnh. Việc có được
-   phép dùng hay không vẫn phụ thuộc luật của server.
+4. **Nhìn đêm v1.8.0 cần Windowed/Borderless** để Windows Graphics Capture và
+   cửa sổ GPU ghép ảnh lên game; Exclusive Fullscreen không hiện được overlay.
+   Nếu hình quá sáng, giảm cường độ hoặc chọn Clear/Balanced. Tính năng chỉ lấy
+   đúng cửa sổ The Isle, không mở tiến trình game, không đọc bộ nhớ game, không
+   inject/hook, không giả lập input, không truy cập mạng và không lưu/gửi ảnh.
+   Nó không thay đổi thời tiết hay ngày/đêm của server; luật server vẫn quyết
+   định việc dùng công cụ bên thứ ba.
 5. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
 6. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm

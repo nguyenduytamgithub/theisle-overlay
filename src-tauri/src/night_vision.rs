@@ -29,7 +29,7 @@ pub(crate) struct GameTarget {
 }
 
 pub const CHANGED_EVENT: &str = "night-vision://changed";
-pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-magnifier-boost-b");
+pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-gpu-visibility-c");
 const FILTER_LABEL: &str = "night-vision-filter";
 const FILTER_READY_EVENT: &str = "night-vision-filter://ready";
 const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";
@@ -524,20 +524,14 @@ pub fn initialize(app: &AppHandle) {
         let strength = crate::settings::get_f64(&settings, &["night_vision", "strength"], 85.0)
             .round()
             .clamp(0.0, 100.0) as u8;
-        let preset = match crate::settings::get_str(
-            &settings,
-            &["night_vision", "preset"],
-            "ultra",
-        ) {
+        let preset = match crate::settings::get_str(&settings, &["night_vision", "preset"], "ultra")
+        {
             "balanced" => VisibilityPreset::Balanced,
             "clear" => VisibilityPreset::Clear,
             _ => VisibilityPreset::Ultra,
         };
-        let force_bright = crate::settings::get_bool(
-            &settings,
-            &["night_vision", "force_bright"],
-            true,
-        );
+        let force_bright =
+            crate::settings::get_bool(&settings, &["night_vision", "force_bright"], true);
         let prefer_gpu =
             crate::settings::get_bool(&settings, &["night_vision", "prefer_gpu"], true);
         (strength, preset, force_bright, prefer_gpu)
@@ -714,12 +708,10 @@ fn configure_and_accept_magnifier(
     let visible = crate::win::vis::hwnd(FILTER_LABEL) == Some(readback.host)
         && crate::win::vis::is_visible(FILTER_LABEL) == Some(true)
         && current_excluded_windows() == readback.excluded;
-    let state = app.state::<NightVision>().controller.accept_native_visual(
-        request_id,
-        strength,
-        true,
-        visible,
-    );
+    let state = app
+        .state::<NightVision>()
+        .controller
+        .accept_native_visual(request_id, strength, true, visible);
     if state.visual_boost_applied {
         Ok((state, readback))
     } else {
@@ -738,10 +730,7 @@ fn gpu_readback(app: &AppHandle) -> Result<Option<RendererReadback>, String> {
 }
 
 fn has_gpu_session(app: &AppHandle) -> bool {
-    app.state::<NightVision>()
-        .gpu_session
-        .lock_safe()
-        .is_some()
+    app.state::<NightVision>().gpu_session.lock_safe().is_some()
 }
 
 fn destroy_gpu_output(app: &AppHandle, output_hwnd: isize) -> bool {
@@ -1068,9 +1057,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             }
 
             let mut current = app.state::<NightVision>().controller.state();
-            if current.visual_boost_applied
-                && current.renderer == VisibilityRenderer::GpuAdaptive
-            {
+            if current.visual_boost_applied && current.renderer == VisibilityRenderer::GpuAdaptive {
                 let visible = crate::win::vis::is_visible(FILTER_LABEL) == Some(true);
                 let refreshed = gpu_readback(&app).ok().flatten().and_then(|readback| {
                     app.state::<NightVision>()
@@ -1112,8 +1099,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             let excluded = current_excluded_windows();
             if (!current.visual_boost_applied
                 || last_strength != Some(current.strength)
-                || last_mode
-                    != Some((current.preset, current.force_bright, current.prefer_gpu))
+                || last_mode != Some((current.preset, current.force_bright, current.prefer_gpu))
                 || last_excluded.as_ref() != Some(&excluded))
                 && since_apply >= APPLY_RETRY_MS
             {
@@ -1151,14 +1137,14 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                                 .state::<NightVision>()
                                 .controller
                                 .accept_renderer_readback(
-                                request_id,
-                                request_strength,
-                                game,
-                                rect,
-                                readback,
-                                Instant::now(),
-                                visible,
-                            );
+                                    request_id,
+                                    request_strength,
+                                    game,
+                                    rect,
+                                    readback,
+                                    Instant::now(),
+                                    visible,
+                                );
                             if state.visual_boost_applied {
                                 log::info!(
                                     "night vision: adaptive GPU renderer verified request={} strength={} preset={:?} frames={} luma={:.4} fps={:.1} source={:?} fingerprint={}",
@@ -1172,11 +1158,8 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                                     state.build_fingerprint
                                 );
                                 last_strength = Some(request_strength);
-                                last_mode = Some((
-                                    state.preset,
-                                    state.force_bright,
-                                    state.prefer_gpu,
-                                ));
+                                last_mode =
+                                    Some((state.preset, state.force_bright, state.prefer_gpu));
                                 last_excluded = Some(excluded.clone());
                                 emit_state(&app, &state);
                             } else if destroy_gpu(&app) {
@@ -1219,11 +1202,8 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                                         state.build_fingerprint
                                     );
                                     last_strength = Some(request_strength);
-                                    last_mode = Some((
-                                        state.preset,
-                                        state.force_bright,
-                                        state.prefer_gpu,
-                                    ));
+                                    last_mode =
+                                        Some((state.preset, state.force_bright, state.prefer_gpu));
                                     last_excluded = Some(readback.excluded.clone());
                                     emit_state(&app, &state);
                                 }
@@ -1232,11 +1212,9 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                                         "night vision: native magnifier fallback failed: {fallback_error}"
                                     );
                                     let failed = if destroy_magnifier(&app) {
-                                        app.state::<NightVision>()
-                                            .controller
-                                            .confirm_visual_hidden(Some(
-                                                "night_vision.filter_unavailable",
-                                            ))
+                                        app.state::<NightVision>().controller.confirm_visual_hidden(
+                                            Some("night_vision.filter_unavailable"),
+                                        )
                                     } else {
                                         app.state::<NightVision>()
                                             .controller
@@ -1774,31 +1752,35 @@ mod tests {
 
         let mut stale = readback;
         stale.last_presented_at = now - Duration::from_millis(501);
-        assert!(!controller
-            .accept_renderer_readback(
-                request_id,
-                strength,
-                101,
-                expected_source,
-                stale,
-                now,
-                true,
-            )
-            .applied);
+        assert!(
+            !controller
+                .accept_renderer_readback(
+                    request_id,
+                    strength,
+                    101,
+                    expected_source,
+                    stale,
+                    now,
+                    true,
+                )
+                .applied
+        );
 
         let mut wrong_target = readback;
         wrong_target.game_hwnd = 999;
-        assert!(!controller
-            .accept_renderer_readback(
-                request_id,
-                strength,
-                101,
-                expected_source,
-                wrong_target,
-                now,
-                true,
-            )
-            .applied);
+        assert!(
+            !controller
+                .accept_renderer_readback(
+                    request_id,
+                    strength,
+                    101,
+                    expected_source,
+                    wrong_target,
+                    now,
+                    true,
+                )
+                .applied
+        );
 
         let applied = controller.accept_renderer_readback(
             request_id,
@@ -1834,9 +1816,11 @@ mod tests {
             median_interval_ms: 20.0,
             scene_luma: 0.04,
         };
-        assert!(controller
-            .accept_renderer_readback(request_id, strength, 101, source, first, start, true)
-            .applied);
+        assert!(
+            controller
+                .accept_renderer_readback(request_id, strength, 101, source, first, start, true)
+                .applied
+        );
 
         let now = start + Duration::from_millis(100);
         let current = RendererReadback {
@@ -2023,7 +2007,10 @@ mod tests {
         controller.toggle_requested();
         controller.mark_filter_ready();
         let (request_id, _) = controller.begin_visual_request().unwrap();
-        assert_eq!(controller.native_generation.load(Ordering::SeqCst), request_id);
+        assert_eq!(
+            controller.native_generation.load(Ordering::SeqCst),
+            request_id
+        );
 
         let preset = controller.set_preset(VisibilityPreset::Clear);
         assert_eq!(preset.preset, VisibilityPreset::Clear);

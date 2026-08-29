@@ -8,8 +8,8 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
 
-The current source is the integrated **v1.7.4 Navigation + Magnifier Night
-Boost candidate**. Its goal is reliable position, heading, trails, waypoint
+The current source is the integrated **v1.8.0 Navigation + Adaptive GPU
+Visibility candidate**. Its goal is reliable position, heading, trails, waypoint
 guidance, and useful dark-scene visibility without touching game memory or Easy
 Anti-Cheat. A public release is gated on real in-game dark-scene and navigation
 acceptance.
@@ -27,7 +27,7 @@ installer with manual fork updates.
 
 ## What does this fork improve?
 
-| While playing | Open-source upstream v1.5.2 | Integrated v1.7.4 candidate |
+| While playing | Open-source upstream v1.5.2 | Integrated v1.8.0 candidate |
 |---|---|---|
 | IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
 | Motion between server samples | Position jumps on every response | Linear for 4 seconds, decays through 12 seconds, then holds; **300/650 ms** correction based on distance |
@@ -37,7 +37,7 @@ installer with manual fork updates.
 | In-game guidance | No dedicated navigation HUD | Stable north-up target arrow plus **GO STRAIGHT / BEAR / TURN / TURN AROUND** and cardinal course text |
 | Delayed data | Freshness is unclear | Explicit **TRACKING / ESTIMATING / WAITING FOR SERVER** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
-| Scenes too dark to read | No dedicated visibility control | Windows Magnification contrast boost from the displayed scene; **NIGHT VISION** button + `Ctrl+Alt+N`, strength 0–100, focus-aware cleanup/reapply |
+| Scenes too dark to read | No dedicated visibility control | Windows Graphics Capture targets only the game window and a GPU shader lifts shadows/protects highlights; **NIGHT VISION** + `Ctrl+Alt+N`, Ultra/Auto/Force, truthful Magnifier fallback |
 
 The 30 FPS presentation is a **bounded local estimate**, not fake confirmed realtime. The server still
 confirms real coordinates every five seconds. Without IslePilot live-map
@@ -62,12 +62,15 @@ support, use `Tab` → **Asset Location** as before.
   distance, and data freshness; auto-hides on Alt-Tab and toggles with
   `Ctrl+Alt+H`.
 - **Display Night Vision**: a top-right **NIGHT VISION** button plus
-  `Ctrl+Alt+N`, with strength 0–100 in Settings. v1.7.4 uses Windows
-  Magnification to locally redraw displayed screen pixels with higher contrast;
-  display gamma is no longer applied. The native surface is click-through,
-  cleans up on Alt-Tab/switch-off/exit, and reports ON only after native readback
-  verifies the requested source and transform. Strength 70 is the default;
-  raise it if still dark or lower it if highlights clip.
+  `Ctrl+Alt+N`, with strength 0–100, Balanced/Clear/Ultra, and Auto/Force in
+  Settings. v1.8.0 uses Windows Graphics Capture on the exact The Isle HWND;
+  the GPU shader lifts shadows, compresses highlights, and adds bounded local
+  detail. `gpu_adaptive` is reported only after real frame/readback evidence;
+  `magnifier_fallback` is labelled explicitly when GPU capture is unavailable.
+  It is independent of the **game X key** night vision and does not change the server's day/night
+  or weather. For the strongest view, turn `X` on and then use Overlay **Ultra
+  + Force**; one button click or `Ctrl+Alt+N` removes the Overlay layer
+  immediately. New installs default to Ultra 85% + Force.
 - **Full map**: smooth zoom/pan, 12 toggleable layers (fresh water, water, salt licks,
   mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
   with per-species icons 🐗🦌🐢, region names, landmarks, and a live **server
@@ -194,15 +197,15 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-The integrated v1.7.4 candidate identity, installation, and runtime evidence are
-recorded in the [verification record](docs/verification/navigation-night-vision-v1.7.4.md).
+The integrated v1.8.0 candidate identity, installation, and runtime evidence are
+recorded in the [verification record](docs/verification/visibility-engine-v1.8.0.md).
 It must not be presented as a public release until real dark-scene and
 navigation acceptance.
 
 | Item | Size |
 |---|---|
-| v1.7.4 candidate NSIS installer | **5,814,158 bytes (~5.8 MB)** · SHA-256 in the verification record |
-| v1.7.4 candidate installed executable | **21,459,968 bytes (~21.5 MB)** · SHA-256 in the verification record |
+| v1.8.0 candidate NSIS installer | Size and SHA-256 are finalized in the record after build |
+| v1.8.0 candidate installed executable | Size and SHA-256 are finalized in the record after install |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 
 The HUD and maps cap local presentation at roughly 30 FPS, run linearly for four
@@ -210,6 +213,9 @@ seconds, decay through twelve seconds, then hold and show **WAITING FOR SERVER**
 there is no background game-memory reader or scanner. Runtime RAM
 depends on WebView2, open tabs, and cached 3D models, so this fork does not publish
 one fixed RAM claim.
+While `gpu_adaptive` is active, the app performs one extra capture and GPU render
+at the game-window cadence; Settings exposes live FPS/readback values for direct
+comparison on each machine.
 
 ## Things to know
 
@@ -223,12 +229,13 @@ one fixed RAM claim.
 3. **The destination arrow never consumes server yaw**, so looking around cannot
    spin it. COURSE prefers confirmed motion and uses stable server facing only as
    fallback; old data becomes **WAITING FOR SERVER**.
-4. **Night Vision v1.7.4 requires Windowed/Borderless** so Windows Magnification
-   can compose the contrast-boosted image over the game; out-of-process overlays
-   cannot appear in Exclusive Fullscreen. It processes displayed screen pixels
-   on this PC, but does not open the game process, read game memory, inject or
-   hook code, synthesize input, access the network, or save/send images. Server
-   rules still decide whether third-party tools are permitted.
+4. **Night Vision v1.8.0 requires Windowed/Borderless** so Windows Graphics
+   Capture and the GPU output window can compose over the game; out-of-process
+   overlays cannot appear in Exclusive Fullscreen. It targets only The Isle's
+   window and does not open the game process, read game memory, inject or hook
+   code, synthesize input, access the network, or save/send images. It does not
+   change the server's day/night or weather. Server rules still decide whether
+   third-party tools are permitted.
 5. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
 6. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —

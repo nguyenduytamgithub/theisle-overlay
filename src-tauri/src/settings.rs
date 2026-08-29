@@ -259,8 +259,7 @@ fn merge_loaded_settings(over: &Value) -> Value {
         }
         merged["navigation"]["schema_version"] = json!(2);
     }
-    let preset = get_path(&merged, &["night_vision", "preset"])
-        .and_then(Value::as_str);
+    let preset = get_path(&merged, &["night_vision", "preset"]).and_then(Value::as_str);
     if !matches!(preset, Some("balanced" | "clear" | "ultra")) {
         merged["night_vision"]["preset"] = json!("ultra");
     }

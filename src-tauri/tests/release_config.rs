@@ -33,37 +33,44 @@ fn manual_release_does_not_require_an_updater_private_key() {
 }
 
 #[test]
-fn integrated_candidate_versions_are_consistently_1_7_4() {
+fn integrated_candidate_versions_are_consistently_1_8_0() {
     let package: Value = serde_json::from_str(include_str!("../../package.json"))
         .expect("package.json must be JSON");
 
-    assert_eq!(env!("CARGO_PKG_VERSION"), "1.7.4");
-    assert_eq!(package["version"], Value::String("1.7.4".to_owned()));
-    assert_eq!(tauri_config()["version"], Value::String("1.7.4".to_owned()));
+    assert_eq!(env!("CARGO_PKG_VERSION"), "1.8.0");
+    assert_eq!(package["version"], Value::String("1.8.0".to_owned()));
+    assert_eq!(tauri_config()["version"], Value::String("1.8.0".to_owned()));
 
     let runtime = include_str!("../src/night_vision.rs");
-    assert!(runtime.contains("magnifier-boost-b"));
-    assert!(!runtime.contains("visual-boost-a"));
+    assert!(runtime.contains("gpu-visibility-c"));
+    assert!(!runtime.contains("magnifier-boost-b"));
 }
 
 #[test]
-fn magnification_copy_discloses_capture_boundary_without_flat_tint_claims() {
+fn gpu_visibility_copy_discloses_capture_boundary_and_fallback_truthfully() {
     let readme_vi = include_str!("../../README.md");
     let readme_en = include_str!("../../README.en.md");
     let copy_vi = include_str!("../../src/lib/i18n/vi.ts");
     let copy_en = include_str!("../../src/lib/i18n/en.ts");
     let combined = format!("{readme_vi}\n{readme_en}\n{copy_vi}\n{copy_en}");
 
-    assert!(combined.contains("Windows Magnification"));
+    assert!(combined.contains("Windows Graphics Capture"));
+    assert!(combined.contains("gpu_adaptive"));
+    assert!(combined.contains("magnifier_fallback"));
     assert!(combined.contains("Windowed/Borderless"));
-    assert!(combined.contains("displayed screen pixels"));
-    assert!(combined.contains("pixel màn hình đang hiển thị"));
+    assert!(combined.contains("phím X"));
+    assert!(combined.contains("game X key"));
+    assert!(combined.contains("không thay đổi ngày/đêm của server"));
+    assert!(combined.contains("does not change the server's day/night"));
+    assert!(combined.contains("https://github.com/toantranct/theisle-overlay"));
+    assert!(combined.contains("https://github.com/nguyenduytamgithub/theisle-overlay"));
     for rejected in [
         "Lớp sáng tĩnh",
         "static light layer",
         "Painted click-through brightness layer",
         "painted acknowledgement",
         "never captures pixels",
+        "v1.7.4 Navigation + Magnifier Night Vision",
     ] {
         assert!(
             !combined.contains(rejected),
