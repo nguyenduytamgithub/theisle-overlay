@@ -1,7 +1,7 @@
 mod curve;
 mod magnifier;
 mod recovery;
-mod visibility;
+pub mod visibility;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -18,6 +18,7 @@ use crate::state::AppState;
 use crate::state::LockExt;
 
 pub(crate) use curve::GammaRamp;
+use visibility::{RendererReadback, VisibilityPreset, VisibilityRenderer};
 pub(crate) use windows::NightVisionError;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -35,7 +36,7 @@ const BUTTON_WIDTH: f64 = 190.0;
 const BUTTON_HEIGHT: f64 = 48.0;
 const BUTTON_MARGIN: f64 = 16.0;
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NightVisionState {
     pub requested: bool,
@@ -46,6 +47,11 @@ pub struct NightVisionState {
     pub visual_boost_ready: bool,
     pub visual_boost_applied: bool,
     pub gamma_applied: bool,
+    pub renderer: VisibilityRenderer,
+    pub preset: VisibilityPreset,
+    pub force_bright: bool,
+    pub scene_luma: Option<f32>,
+    pub presented_fps: Option<f32>,
     pub build_fingerprint: &'static str,
 }
 
@@ -79,6 +85,11 @@ impl NightVisionController {
                     visual_boost_ready: false,
                     visual_boost_applied: false,
                     gamma_applied: false,
+                    renderer: VisibilityRenderer::None,
+                    preset: VisibilityPreset::Ultra,
+                    force_bright: true,
+                    scene_luma: None,
+                    presented_fps: None,
                     build_fingerprint: BUILD_FINGERPRINT,
                 },
                 recovery_blocked: false,
@@ -127,6 +138,9 @@ impl NightVisionController {
         inner.state.applied = false;
         inner.state.visual_boost_applied = false;
         inner.state.gamma_applied = false;
+        inner.state.renderer = VisibilityRenderer::None;
+        inner.state.scene_luma = None;
+        inner.state.presented_fps = None;
         inner.state.supported = false;
         inner.state.error_key = Some("night_vision.recovery_error".to_string());
         inner.state.clone()
@@ -193,7 +207,53 @@ impl NightVisionController {
             inner.pending_visual_request = None;
             inner.state.visual_boost_applied = true;
             inner.state.applied = true;
+            inner.state.renderer = VisibilityRenderer::MagnifierFallback;
+            inner.state.scene_luma = None;
+            inner.state.presented_fps = None;
             inner.state.supported = true;
+            if matches!(
+                inner.state.error_key.as_deref(),
+                Some("night_vision.waiting_for_game" | "night_vision.filter_unavailable")
+            ) {
+                inner.state.error_key = None;
+            }
+        }
+        inner.state.clone()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn accept_renderer_readback(
+        &self,
+        request_id: u64,
+        strength: u8,
+        expected_game_hwnd: isize,
+        expected_source: (i32, i32, i32, i32),
+        readback: RendererReadback,
+        now: Instant,
+        window_visible: bool,
+    ) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        let expected = inner.pending_visual_request;
+        let verified = readback.is_current_for(
+            VisibilityRenderer::GpuAdaptive,
+            expected_game_hwnd,
+            expected_source,
+            inner.state.preset,
+            now,
+        );
+        if expected == Some((request_id, strength.min(100)))
+            && inner.state.requested
+            && inner.state.visual_boost_ready
+            && verified
+            && window_visible
+        {
+            inner.pending_visual_request = None;
+            inner.state.visual_boost_applied = true;
+            inner.state.applied = true;
+            inner.state.supported = true;
+            inner.state.renderer = VisibilityRenderer::GpuAdaptive;
+            inner.state.scene_luma = Some(readback.scene_luma);
+            inner.state.presented_fps = Some(1000.0 / readback.median_interval_ms);
             if matches!(
                 inner.state.error_key.as_deref(),
                 Some("night_vision.waiting_for_game" | "night_vision.filter_unavailable")
@@ -210,6 +270,9 @@ impl NightVisionController {
         self.invalidate_native_generation();
         inner.state.visual_boost_applied = false;
         inner.state.applied = false;
+        inner.state.renderer = VisibilityRenderer::None;
+        inner.state.scene_luma = None;
+        inner.state.presented_fps = None;
         inner.state.error_key = if inner.state.requested {
             error_key.map(str::to_string)
         } else {
@@ -223,6 +286,9 @@ impl NightVisionController {
         inner.pending_visual_request = None;
         self.invalidate_native_generation();
         inner.state.visual_boost_ready = false;
+        inner.state.renderer = VisibilityRenderer::None;
+        inner.state.scene_luma = None;
+        inner.state.presented_fps = None;
         inner.state.supported = false;
         inner.state.error_key = Some("night_vision.filter_unavailable".to_string());
         inner.state.clone()
@@ -281,6 +347,9 @@ impl NightVisionController {
         if cleanup_verified {
             inner.state.visual_boost_applied = false;
             inner.state.applied = false;
+            inner.state.renderer = VisibilityRenderer::None;
+            inner.state.scene_luma = None;
+            inner.state.presented_fps = None;
             inner.state.error_key = None;
         } else {
             inner.state.visual_boost_applied = true;
@@ -1201,7 +1270,11 @@ fn samples(ramp: &GammaRamp) -> [u16; 4] {
 
 #[cfg(test)]
 mod tests {
-    use super::{GameTarget, NightVisionController};
+    use super::{
+        visibility::{RendererReadback, VisibilityPreset, VisibilityRenderer},
+        GameTarget, NightVisionController,
+    };
+    use std::time::{Duration, Instant};
 
     fn target(display_name: &str, hwnd: isize) -> GameTarget {
         GameTarget {
@@ -1262,6 +1335,69 @@ mod tests {
                 .accept_native_visual(request_id, 70, true, true)
                 .applied
         );
+    }
+
+    #[test]
+    fn stale_or_mismatched_gpu_readback_never_turns_boost_on() {
+        let controller = controller();
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        let (request_id, strength) = controller.begin_visual_request().unwrap();
+        let now = Instant::now();
+        let expected_source = (100, 200, 1920, 1080);
+        let readback = RendererReadback {
+            renderer: VisibilityRenderer::GpuAdaptive,
+            game_hwnd: 101,
+            source: expected_source,
+            preset: VisibilityPreset::Ultra,
+            presented_frames: 120,
+            last_presented_at: now - Duration::from_millis(100),
+            median_interval_ms: 16.7,
+            scene_luma: 0.03,
+        };
+
+        let mut stale = readback;
+        stale.last_presented_at = now - Duration::from_millis(501);
+        assert!(!controller
+            .accept_renderer_readback(
+                request_id,
+                strength,
+                101,
+                expected_source,
+                stale,
+                now,
+                true,
+            )
+            .applied);
+
+        let mut wrong_target = readback;
+        wrong_target.game_hwnd = 999;
+        assert!(!controller
+            .accept_renderer_readback(
+                request_id,
+                strength,
+                101,
+                expected_source,
+                wrong_target,
+                now,
+                true,
+            )
+            .applied);
+
+        let applied = controller.accept_renderer_readback(
+            request_id,
+            strength,
+            101,
+            expected_source,
+            readback,
+            now,
+            true,
+        );
+        assert!(applied.applied && applied.visual_boost_applied);
+        assert_eq!(applied.renderer, VisibilityRenderer::GpuAdaptive);
+        assert_eq!(applied.preset, VisibilityPreset::Ultra);
+        assert_eq!(applied.scene_luma, Some(0.03));
+        assert_eq!(applied.presented_fps, Some(1000.0 / 16.7));
     }
 
     #[test]
