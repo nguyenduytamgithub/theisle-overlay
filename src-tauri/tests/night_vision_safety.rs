@@ -103,6 +103,7 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
     );
 
     let windows_path = manifest.join("src/night_vision/windows.rs");
+    let magnifier_path = manifest.join("src/night_vision/magnifier.rs");
     let recovery_path = manifest.join("src/night_vision/recovery.rs");
     let windows_source = fs::read_to_string(&windows_path).expect("read Windows gamma adapter");
     for required in [
@@ -150,6 +151,50 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
         "Windows gamma adapter contains a Win32 or manual FFI path outside audited imports"
     );
 
+    let magnifier_source =
+        fs::read_to_string(&magnifier_path).expect("read Windows Magnification adapter");
+    let allowed_magnifier_symbols = BTreeSet::from_iter(
+        [
+            "Foundation",
+            "HWND",
+            "RECT",
+            "UI",
+            "Magnification",
+            "MagGetColorEffect",
+            "MagGetWindowSource",
+            "MagInitialize",
+            "MagSetColorEffect",
+            "MagSetWindowFilterList",
+            "MagSetWindowSource",
+            "MagSetWindowTransform",
+            "MAGCOLOREFFECT",
+            "MAGTRANSFORM",
+            "MW_FILTERMODE_EXCLUDE",
+            "WC_MAGNIFIER",
+            "WindowsAndMessaging",
+            "CreateWindowExW",
+            "DestroyWindow",
+            "FindWindowExW",
+            "IsWindow",
+            "SetWindowPos",
+            "SET_WINDOW_POS_FLAGS",
+            "WS_CHILD",
+            "WS_EX_TRANSPARENT",
+            "WS_VISIBLE",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    );
+    assert_eq!(
+        win32_symbols(&magnifier_source),
+        allowed_magnifier_symbols,
+        "Magnification adapter may import only the audited screen-transform API allowlist"
+    );
+    assert!(
+        !has_unapproved_windows_boundary(&magnifier_source),
+        "Magnification adapter contains a Win32 or manual FFI path outside audited imports"
+    );
+
     let recovery_source = fs::read_to_string(&recovery_path).expect("read recovery file adapter");
     let allowed_recovery_symbols = BTreeSet::from_iter(
         [
@@ -172,10 +217,9 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
         "recovery adapter contains a Win32 or manual FFI path outside audited imports"
     );
 
-    for path in files
-        .iter()
-        .filter(|path| *path != &windows_path && *path != &recovery_path)
-    {
+    for path in files.iter().filter(|path| {
+        *path != &windows_path && *path != &magnifier_path && *path != &recovery_path
+    }) {
         let source = fs::read_to_string(path).expect("read night vision source");
         assert!(
             win32_symbols(&source).is_empty(),

@@ -1,0 +1,277 @@
+use std::ffi::c_void;
+use std::fmt;
+use std::sync::OnceLock;
+
+use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::UI::Magnification::{
+    MagGetColorEffect, MagGetWindowSource, MagInitialize, MagSetColorEffect,
+    MagSetWindowFilterList, MagSetWindowSource, MagSetWindowTransform, MAGCOLOREFFECT,
+    MAGTRANSFORM, MW_FILTERMODE_EXCLUDE, WC_MAGNIFIER,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExW, DestroyWindow, FindWindowExW, IsWindow, SetWindowPos, SET_WINDOW_POS_FLAGS,
+    WS_CHILD, WS_EX_TRANSPARENT, WS_VISIBLE,
+};
+
+const CHILD_TITLE: windows::core::PCWSTR = windows::core::w!("Night Boost Magnifier");
+const POSITION_FLAGS: SET_WINDOW_POS_FLAGS = SET_WINDOW_POS_FLAGS(0x0010 | 0x0004 | 0x0040);
+static INITIALIZED: OnceLock<Result<(), String>> = OnceLock::new();
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MagnifierReadback {
+    pub(crate) source: (i32, i32, i32, i32),
+    pub(crate) gain: f32,
+    pub(crate) child: isize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MagnifierError {
+    operation: &'static str,
+    detail: String,
+}
+
+impl fmt::Display for MagnifierError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{} failed: {}", self.operation, self.detail)
+    }
+}
+
+impl std::error::Error for MagnifierError {}
+
+pub(crate) fn configure(
+    host: isize,
+    source: (i32, i32, i32, i32),
+    gain: f32,
+    excluded: &[isize],
+) -> Result<MagnifierReadback, MagnifierError> {
+    ensure_initialized()?;
+    let (_, _, width, height) = source;
+    if host == 0 || width <= 0 || height <= 0 || !gain.is_finite() || !(1.0..=5.0).contains(&gain) {
+        return Err(MagnifierError {
+            operation: "validate magnifier configuration",
+            detail: format!("host={host} source={source:?} gain={gain}"),
+        });
+    }
+
+    let host = hwnd(host);
+    let child = match find_child(host) {
+        Some(child) => child,
+        None => unsafe {
+            CreateWindowExW(
+                WS_EX_TRANSPARENT,
+                WC_MAGNIFIER,
+                CHILD_TITLE,
+                WS_CHILD | WS_VISIBLE,
+                0,
+                0,
+                width,
+                height,
+                Some(host),
+                None,
+                None,
+                None,
+            )
+        }
+        .map_err(|error| MagnifierError {
+            operation: "CreateWindowExW(Magnifier)",
+            detail: error.to_string(),
+        })?,
+    };
+
+    unsafe { SetWindowPos(child, None, 0, 0, width, height, POSITION_FLAGS) }.map_err(|error| {
+        MagnifierError {
+            operation: "SetWindowPos(Magnifier)",
+            detail: error.to_string(),
+        }
+    })?;
+
+    let mut transform = identity_transform();
+    bool_result(
+        "MagSetWindowTransform",
+        unsafe { MagSetWindowTransform(child, &mut transform) }.as_bool(),
+    )?;
+
+    let mut effect = color_effect(gain);
+    bool_result(
+        "MagSetColorEffect",
+        unsafe { MagSetColorEffect(child, &mut effect) }.as_bool(),
+    )?;
+
+    let mut excluded_raw = Vec::with_capacity(excluded.len() + 1);
+    excluded_raw.push(host.0 as isize);
+    excluded_raw.extend(excluded.iter().copied().filter(|raw| *raw != 0));
+    excluded_raw.sort_unstable();
+    excluded_raw.dedup();
+    let mut excluded_windows: Vec<HWND> = excluded_raw.into_iter().map(hwnd).collect();
+    bool_result(
+        "MagSetWindowFilterList",
+        unsafe {
+            MagSetWindowFilterList(
+                child,
+                MW_FILTERMODE_EXCLUDE,
+                excluded_windows.len() as i32,
+                excluded_windows.as_mut_ptr(),
+            )
+        }
+        .as_bool(),
+    )?;
+
+    let requested_source = source_rect(source);
+    bool_result(
+        "MagSetWindowSource",
+        unsafe { MagSetWindowSource(child, requested_source) }.as_bool(),
+    )?;
+
+    let mut actual_source = RECT::default();
+    bool_result(
+        "MagGetWindowSource",
+        unsafe { MagGetWindowSource(child, &mut actual_source) }.as_bool(),
+    )?;
+    if rect_tuple(actual_source) != rect_tuple(requested_source) {
+        return Err(MagnifierError {
+            operation: "MagGetWindowSource readback",
+            detail: format!(
+                "requested={:?} actual={:?}",
+                rect_tuple(requested_source),
+                rect_tuple(actual_source)
+            ),
+        });
+    }
+
+    let mut actual_effect = MAGCOLOREFFECT::default();
+    bool_result(
+        "MagGetColorEffect",
+        unsafe { MagGetColorEffect(child, &mut actual_effect) }.as_bool(),
+    )?;
+    if !effects_match(&effect, &actual_effect) {
+        return Err(MagnifierError {
+            operation: "MagGetColorEffect readback",
+            detail: "driver returned a different color matrix".to_string(),
+        });
+    }
+
+    Ok(MagnifierReadback {
+        source,
+        gain: actual_effect.transform[0],
+        child: child.0 as isize,
+    })
+}
+
+pub(crate) fn destroy(host: isize) -> Result<(), MagnifierError> {
+    if host == 0 {
+        return Ok(());
+    }
+    if let Some(child) = find_child(hwnd(host)) {
+        unsafe { DestroyWindow(child) }.map_err(|error| MagnifierError {
+            operation: "DestroyWindow(Magnifier)",
+            detail: error.to_string(),
+        })?;
+    }
+    Ok(())
+}
+
+pub(crate) fn is_configured(host: isize) -> bool {
+    host != 0 && find_child(hwnd(host)).is_some()
+}
+
+fn ensure_initialized() -> Result<(), MagnifierError> {
+    let result = INITIALIZED.get_or_init(|| {
+        if unsafe { MagInitialize() }.as_bool() {
+            Ok(())
+        } else {
+            Err(windows::core::Error::from_thread().to_string())
+        }
+    });
+    result.clone().map_err(|detail| MagnifierError {
+        operation: "MagInitialize",
+        detail,
+    })
+}
+
+fn find_child(host: HWND) -> Option<HWND> {
+    let child = unsafe { FindWindowExW(Some(host), None, WC_MAGNIFIER, CHILD_TITLE) }.ok()?;
+    unsafe { IsWindow(Some(child)) }.as_bool().then_some(child)
+}
+
+fn hwnd(raw: isize) -> HWND {
+    HWND(raw as *mut c_void)
+}
+
+fn identity_transform() -> MAGTRANSFORM {
+    MAGTRANSFORM {
+        v: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+    }
+}
+
+fn color_effect(gain: f32) -> MAGCOLOREFFECT {
+    MAGCOLOREFFECT {
+        transform: [
+            gain, 0.0, 0.0, 0.0, 0.0, 0.0, gain, 0.0, 0.0, 0.0, 0.0, 0.0, gain, 0.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ],
+    }
+}
+
+fn source_rect(source: (i32, i32, i32, i32)) -> RECT {
+    let (left, top, width, height) = source;
+    RECT {
+        left,
+        top,
+        right: left.saturating_add(width),
+        bottom: top.saturating_add(height),
+    }
+}
+
+fn rect_tuple(rect: RECT) -> (i32, i32, i32, i32) {
+    (rect.left, rect.top, rect.right, rect.bottom)
+}
+
+fn effects_match(expected: &MAGCOLOREFFECT, actual: &MAGCOLOREFFECT) -> bool {
+    expected
+        .transform
+        .iter()
+        .zip(actual.transform.iter())
+        .all(|(left, right)| (*left - *right).abs() <= 0.0001)
+}
+
+fn bool_result(operation: &'static str, succeeded: bool) -> Result<(), MagnifierError> {
+    if succeeded {
+        Ok(())
+    } else {
+        Err(MagnifierError {
+            operation,
+            detail: windows::core::Error::from_thread().to_string(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn identity_spatial_transform_never_scales_the_game() {
+        assert_eq!(
+            super::identity_transform().v,
+            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn color_effect_multiplies_rgb_without_adding_gray() {
+        assert_eq!(
+            super::color_effect(3.8).transform,
+            [
+                3.8, 0.0, 0.0, 0.0, 0.0, 0.0, 3.8, 0.0, 0.0, 0.0, 0.0, 0.0, 3.8, 0.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            ]
+        );
+    }
+
+    #[test]
+    fn source_rectangle_uses_desktop_coordinates_and_size() {
+        let rect = super::source_rect((10, 20, 300, 400));
+        assert_eq!(
+            (rect.left, rect.top, rect.right, rect.bottom),
+            (10, 20, 310, 420)
+        );
+    }
+}
