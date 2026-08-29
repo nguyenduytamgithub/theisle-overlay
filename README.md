@@ -188,14 +188,15 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Ứng viên tích hợp v1.7.4 và bằng chứng cài/runtime được ghi sau khi build và
-kiểm tra. Không dùng hash ứng viên để quảng bá là bản phát hành trước khi nghiệm
-thu cảnh đêm thật và điều hướng trong game đạt.
+Ứng viên tích hợp v1.7.4 và bằng chứng cài/runtime được ghi trong
+[biên bản kiểm chứng](docs/verification/navigation-night-vision-v1.7.4.md).
+Không quảng bá ứng viên là bản phát hành trước khi nghiệm thu cảnh đêm thật và
+điều hướng trong game đạt.
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt NSIS v1.7.4 candidate | Ghi sau khi build và băm SHA-256 |
-| File chạy sau khi cài v1.7.4 candidate | Ghi sau khi build và băm SHA-256 |
+| File cài đặt NSIS v1.7.4 candidate | **5.814.158 byte (~5,8 MB)** · SHA-256 trong biên bản |
+| File chạy sau khi cài v1.7.4 candidate | **21.459.968 byte (~21,5 MB)** · SHA-256 trong biên bản |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 
 HUD và bản đồ giới hạn cập nhật cục bộ khoảng 30 FPS, chạy thẳng 4 giây rồi

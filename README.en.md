@@ -195,13 +195,14 @@ map disabled the option locks itself off.
 ## How light is it?
 
 The integrated v1.7.4 candidate identity, installation, and runtime evidence are
-recorded after build and verification. Its hash must not be presented as a
-public release until real dark-scene and navigation acceptance.
+recorded in the [verification record](docs/verification/navigation-night-vision-v1.7.4.md).
+It must not be presented as a public release until real dark-scene and
+navigation acceptance.
 
 | Item | Size |
 |---|---|
-| v1.7.4 candidate NSIS installer | Recorded after build with SHA-256 |
-| v1.7.4 candidate installed executable | Recorded after build with SHA-256 |
+| v1.7.4 candidate NSIS installer | **5,814,158 bytes (~5.8 MB)** · SHA-256 in the verification record |
+| v1.7.4 candidate installed executable | **21,459,968 bytes (~21.5 MB)** · SHA-256 in the verification record |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 
 The HUD and maps cap local presentation at roughly 30 FPS, run linearly for four
