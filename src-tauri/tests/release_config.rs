@@ -31,4 +31,3 @@ fn manual_release_does_not_require_an_updater_private_key() {
         "the fork publishes a manual NSIS release and has no updater signing key"
     );
 }
-
