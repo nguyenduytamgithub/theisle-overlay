@@ -1,7 +1,6 @@
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VisibilityPreset {
     Balanced,
@@ -10,8 +9,7 @@ pub enum VisibilityPreset {
     Ultra,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VisibilityRenderer {
     #[default]

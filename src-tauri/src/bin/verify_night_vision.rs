@@ -7,7 +7,8 @@ fn main() {
         .windows(2)
         .find(|pair| pair[0] == "--hwnd")
         .and_then(|pair| pair[1].parse::<isize>().ok());
-    let hwnd = explicit_hwnd.or_else(|| win::game_window::find_game_window(settings::GAME_PROCESS_NAME));
+    let hwnd =
+        explicit_hwnd.or_else(|| win::game_window::find_game_window(settings::GAME_PROCESS_NAME));
     let Some(hwnd) = hwnd else {
         eprintln!("The Isle game window is not running and --hwnd was not supplied");
         std::process::exit(2);
