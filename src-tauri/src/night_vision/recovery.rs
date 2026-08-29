@@ -1,11 +1,16 @@
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{self, BufReader};
+#[cfg(any(test, feature = "devtools"))]
+use std::io::{BufWriter, Write};
+#[cfg(any(test, feature = "devtools"))]
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+#[cfg(any(test, feature = "devtools"))]
 use windows::core::PCWSTR;
+#[cfg(any(test, feature = "devtools"))]
 use windows::Win32::Storage::FileSystem::{
     MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
 };
@@ -23,6 +28,7 @@ pub(crate) struct RecoveryRecord {
 }
 
 impl RecoveryRecord {
+    #[cfg(any(test, feature = "devtools"))]
     pub(crate) fn from_ramp(display_name: impl Into<String>, ramp: &GammaRamp) -> Self {
         Self {
             version: RECOVERY_VERSION,
@@ -102,6 +108,7 @@ pub(crate) fn read_validated(path: &Path) -> Result<RecoveryRecord, RecoveryErro
     Ok(record)
 }
 
+#[cfg(any(test, feature = "devtools"))]
 pub(crate) fn write_atomic(path: &Path, record: &RecoveryRecord) -> Result<(), RecoveryError> {
     let parent = path.parent().ok_or_else(|| {
         RecoveryError::Invalid("recovery path has no parent directory".to_string())
@@ -128,6 +135,7 @@ pub(crate) fn write_atomic(path: &Path, record: &RecoveryRecord) -> Result<(), R
     Ok(())
 }
 
+#[cfg(any(test, feature = "devtools"))]
 fn wide_path(path: &Path) -> Vec<u16> {
     path.as_os_str()
         .encode_wide()

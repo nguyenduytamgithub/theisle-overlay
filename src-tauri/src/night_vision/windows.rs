@@ -1,6 +1,8 @@
 use std::ffi::c_void;
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(any(test, feature = "devtools"))]
+use std::path::PathBuf;
 
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::HWND;
@@ -11,7 +13,9 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::UI::ColorSystem::{GetDeviceGammaRamp, SetDeviceGammaRamp};
 
 use super::curve::{ramps_match, READBACK_TOLERANCE};
-use super::recovery::{read_validated, write_atomic, RecoveryError, RecoveryRecord};
+use super::recovery::{read_validated, RecoveryError};
+#[cfg(any(test, feature = "devtools"))]
+use super::recovery::{write_atomic, RecoveryRecord};
 use super::GammaRamp;
 
 #[derive(Debug)]
@@ -19,6 +23,7 @@ pub(crate) enum NightVisionError {
     Driver(String),
     Recovery(RecoveryError),
     RecoveryCleanup(String),
+    #[cfg(any(test, feature = "devtools"))]
     ReadbackRejected,
     RestoreRejected,
 }
@@ -29,6 +34,7 @@ impl fmt::Display for NightVisionError {
             Self::Driver(error) => formatter.write_str(error),
             Self::Recovery(error) => write!(formatter, "{error}"),
             Self::RecoveryCleanup(error) => formatter.write_str(error),
+            #[cfg(any(test, feature = "devtools"))]
             Self::ReadbackRejected => {
                 formatter.write_str("driver rejected the requested gamma ramp")
             }
@@ -52,6 +58,7 @@ pub(crate) trait GammaApi: Send {
     fn write(&mut self, display_name: &str, ramp: &GammaRamp) -> Result<(), NightVisionError>;
 }
 
+#[cfg(any(test, feature = "devtools"))]
 pub(crate) struct DisplayGamma<A: GammaApi = Win32GammaApi> {
     api: A,
     display_name: String,
@@ -59,6 +66,7 @@ pub(crate) struct DisplayGamma<A: GammaApi = Win32GammaApi> {
     recovery_path: PathBuf,
 }
 
+#[cfg(any(test, feature = "devtools"))]
 impl<A: GammaApi> DisplayGamma<A> {
     pub(crate) fn from_snapshot(
         api: A,
@@ -74,6 +82,7 @@ impl<A: GammaApi> DisplayGamma<A> {
         }
     }
 
+    #[cfg(feature = "devtools")]
     pub(crate) fn display_name(&self) -> &str {
         &self.display_name
     }
@@ -125,6 +134,7 @@ impl<A: GammaApi> DisplayGamma<A> {
     }
 }
 
+#[cfg(any(test, feature = "devtools"))]
 impl<A: GammaApi> Drop for DisplayGamma<A> {
     fn drop(&mut self) {
         if self.recovery_path.exists() {
@@ -135,6 +145,7 @@ impl<A: GammaApi> Drop for DisplayGamma<A> {
     }
 }
 
+#[cfg(feature = "devtools")]
 impl DisplayGamma<Win32GammaApi> {
     pub(crate) fn for_game_window(
         hwnd: isize,

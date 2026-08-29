@@ -2,6 +2,7 @@ pub(crate) type GammaRamp = [[u16; 256]; 3];
 
 pub(crate) const READBACK_TOLERANCE: u16 = 257;
 
+#[cfg(any(test, feature = "devtools"))]
 pub(crate) fn lifted_ramp(strength: u8) -> GammaRamp {
     let strength = strength.min(100) as f64 / 100.0;
     let gamma = 1.0 - 0.65 * strength;

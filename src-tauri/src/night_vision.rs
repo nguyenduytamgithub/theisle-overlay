@@ -1,12 +1,10 @@
 mod curve;
-#[allow(dead_code)]
 mod magnifier;
 mod recovery;
 mod windows;
 
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use tauri::{
@@ -32,9 +30,6 @@ pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-visual-
 const FILTER_LABEL: &str = "night-vision-filter";
 const FILTER_READY_EVENT: &str = "night-vision-filter://ready";
 const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";
-const FILTER_PAINT_EVENT: &str = "night-vision-filter://paint";
-const FILTER_PAINTED_EVENT: &str = "night-vision-filter://painted";
-const FILTER_COLOR: &str = "rgb(235, 240, 230)";
 const BUTTON_WIDTH: f64 = 190.0;
 const BUTTON_HEIGHT: f64 = 48.0;
 const BUTTON_MARGIN: f64 = 16.0;
@@ -53,87 +48,26 @@ pub struct NightVisionState {
     pub build_fingerprint: &'static str,
 }
 
-pub(crate) fn visual_boost_alpha(strength: u8) -> f64 {
-    let strength = strength.min(100);
-    if strength == 0 {
-        0.0
-    } else {
-        0.05 + 0.0025 * f64::from(strength)
-    }
-}
-
-#[allow(dead_code)]
 pub(crate) fn visual_boost_gain(strength: u8) -> f32 {
     1.0 + 4.0 * f32::from(strength.min(100)) / 100.0
 }
 
-pub(crate) trait GammaSession: Send {
-    fn display_name(&self) -> &str;
-    fn apply(&mut self, ramp: &GammaRamp) -> Result<(), NightVisionError>;
-    fn restore(&mut self) -> Result<(), NightVisionError>;
-}
-
-impl GammaSession for windows::DisplayGamma {
-    fn display_name(&self) -> &str {
-        self.display_name()
-    }
-
-    fn apply(&mut self, ramp: &GammaRamp) -> Result<(), NightVisionError> {
-        self.apply_verified(ramp)
-    }
-
-    fn restore(&mut self) -> Result<(), NightVisionError> {
-        windows::DisplayGamma::restore(self)
-    }
-}
-
-pub(crate) trait DisplayFactory: Send + Sync {
-    type Session: GammaSession;
-
-    fn open(
-        &self,
-        target: &GameTarget,
-        recovery_path: &Path,
-    ) -> Result<Self::Session, NightVisionError>;
-}
-
-#[derive(Clone, Copy, Default)]
-pub(crate) struct Win32DisplayFactory;
-
-impl DisplayFactory for Win32DisplayFactory {
-    type Session = windows::DisplayGamma;
-
-    fn open(
-        &self,
-        target: &GameTarget,
-        recovery_path: &Path,
-    ) -> Result<Self::Session, NightVisionError> {
-        windows::DisplayGamma::for_game_window(target.hwnd, recovery_path.to_path_buf())
-    }
-}
-
-struct ControllerInner<S: GammaSession> {
+struct ControllerInner {
     state: NightVisionState,
-    session: Option<S>,
-    applied_strength: Option<u8>,
-    gamma_supported: bool,
     recovery_blocked: bool,
-    restore_pending: bool,
     next_visual_request: u64,
     pending_visual_request: Option<(u64, u8)>,
 }
 
-pub(crate) struct NightVisionController<F: DisplayFactory> {
-    factory: F,
-    recovery_path: PathBuf,
-    inner: Mutex<ControllerInner<F::Session>>,
+pub(crate) struct NightVisionController {
+    inner: Mutex<ControllerInner>,
+    native_generation: Arc<AtomicU64>,
 }
 
-impl<F: DisplayFactory> NightVisionController<F> {
-    pub(crate) fn new(factory: F, recovery_path: PathBuf, strength: u8) -> Self {
+impl NightVisionController {
+    pub(crate) fn new(strength: u8) -> Self {
         Self {
-            factory,
-            recovery_path,
+            native_generation: Arc::new(AtomicU64::new(0)),
             inner: Mutex::new(ControllerInner {
                 state: NightVisionState {
                     requested: false,
@@ -146,11 +80,7 @@ impl<F: DisplayFactory> NightVisionController<F> {
                     gamma_applied: false,
                     build_fingerprint: BUILD_FINGERPRINT,
                 },
-                session: None,
-                applied_strength: None,
-                gamma_supported: true,
                 recovery_blocked: false,
-                restore_pending: false,
                 next_visual_request: 0,
                 pending_visual_request: None,
             }),
@@ -161,20 +91,27 @@ impl<F: DisplayFactory> NightVisionController<F> {
         self.inner.lock_safe().state.clone()
     }
 
+    fn invalidate_native_generation(&self) {
+        self.native_generation.store(0, Ordering::SeqCst);
+    }
+
+    fn native_generation(&self) -> Arc<AtomicU64> {
+        self.native_generation.clone()
+    }
+
     pub(crate) fn toggle_requested(&self) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         if inner.recovery_blocked {
             return inner.state.clone();
         }
         inner.state.requested = !inner.state.requested;
-        inner.state.visual_boost_applied = false;
-        inner.state.applied = false;
         inner.pending_visual_request = None;
-        if !inner.restore_pending {
+        self.invalidate_native_generation();
+        if !inner.state.visual_boost_applied {
+            inner.state.applied = false;
             inner.state.error_key = None;
             if inner.state.requested {
                 inner.state.supported = true;
-                inner.gamma_supported = true;
             }
         }
         inner.state.clone()
@@ -183,7 +120,8 @@ impl<F: DisplayFactory> NightVisionController<F> {
     pub(crate) fn block_for_recovery_error(&self) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         inner.recovery_blocked = true;
-        inner.restore_pending = false;
+        inner.pending_visual_request = None;
+        self.invalidate_native_generation();
         inner.state.requested = false;
         inner.state.applied = false;
         inner.state.visual_boost_applied = false;
@@ -198,10 +136,8 @@ impl<F: DisplayFactory> NightVisionController<F> {
         let strength = strength.min(100);
         if inner.state.strength != strength {
             inner.state.strength = strength;
-            inner.applied_strength = None;
-            inner.state.visual_boost_applied = false;
-            inner.state.applied = false;
             inner.pending_visual_request = None;
+            self.invalidate_native_generation();
         }
         inner.state.clone()
     }
@@ -218,29 +154,31 @@ impl<F: DisplayFactory> NightVisionController<F> {
         inner.state.clone()
     }
 
-    pub(crate) fn begin_visual_request(&self) -> Option<u64> {
+    pub(crate) fn begin_visual_request(&self) -> Option<(u64, u8)> {
         let mut inner = self.inner.lock_safe();
         if inner.recovery_blocked || !inner.state.requested || !inner.state.visual_boost_ready {
             return None;
         }
         if let Some((request_id, strength)) = inner.pending_visual_request {
             if strength == inner.state.strength {
-                return Some(request_id);
+                return Some((request_id, strength));
             }
         }
         inner.next_visual_request = inner.next_visual_request.wrapping_add(1).max(1);
         let request_id = inner.next_visual_request;
         let strength = inner.state.strength;
         inner.pending_visual_request = Some((request_id, strength));
+        self.native_generation.store(request_id, Ordering::SeqCst);
         inner.state.visual_boost_applied = false;
         inner.state.applied = false;
-        Some(request_id)
+        Some((request_id, strength))
     }
 
-    pub(crate) fn accept_visual_paint(
+    pub(crate) fn accept_native_visual(
         &self,
         request_id: u64,
         strength: u8,
+        native_verified: bool,
         window_visible: bool,
     ) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
@@ -248,6 +186,7 @@ impl<F: DisplayFactory> NightVisionController<F> {
         if expected == Some((request_id, strength.min(100)))
             && inner.state.requested
             && inner.state.visual_boost_ready
+            && native_verified
             && window_visible
         {
             inner.pending_visual_request = None;
@@ -264,23 +203,25 @@ impl<F: DisplayFactory> NightVisionController<F> {
         inner.state.clone()
     }
 
-    pub(crate) fn clear_visual_applied(&self, error_key: &str) -> NightVisionState {
+    pub(crate) fn confirm_visual_hidden(&self, error_key: Option<&str>) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         inner.pending_visual_request = None;
+        self.invalidate_native_generation();
         inner.state.visual_boost_applied = false;
         inner.state.applied = false;
-        if inner.state.requested {
-            inner.state.error_key = Some(error_key.to_string());
-        }
+        inner.state.error_key = if inner.state.requested {
+            error_key.map(str::to_string)
+        } else {
+            None
+        };
         inner.state.clone()
     }
 
     pub(crate) fn mark_filter_failed(&self) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         inner.pending_visual_request = None;
+        self.invalidate_native_generation();
         inner.state.visual_boost_ready = false;
-        inner.state.visual_boost_applied = false;
-        inner.state.applied = false;
         inner.state.supported = false;
         inner.state.error_key = Some("night_vision.filter_unavailable".to_string());
         inner.state.clone()
@@ -288,7 +229,8 @@ impl<F: DisplayFactory> NightVisionController<F> {
 
     pub(crate) fn mark_filter_cleanup_failed(&self) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
-        inner.state.requested = false;
+        inner.pending_visual_request = None;
+        self.invalidate_native_generation();
         inner.state.visual_boost_applied = true;
         inner.state.applied = true;
         inner.state.supported = false;
@@ -304,94 +246,53 @@ impl<F: DisplayFactory> NightVisionController<F> {
         }
 
         if !inner.state.requested {
-            if restore_session(&mut inner) {
-                inner.state.gamma_applied = false;
-                inner.state.error_key = None;
-            }
+            inner.state.gamma_applied = false;
             return inner.state.clone();
         }
 
-        let Some(target) = game else {
-            if restore_session(&mut inner) {
-                inner.state.gamma_applied = false;
+        if game.is_none() {
+            if !inner.state.visual_boost_applied {
                 inner.state.error_key = Some("night_vision.waiting_for_game".to_string());
             }
             return inner.state.clone();
-        };
-
-        let changed_display = inner
-            .session
-            .as_ref()
-            .is_some_and(|session| session.display_name() != target.display_name);
-        if (changed_display || inner.restore_pending) && !restore_session(&mut inner) {
-            return inner.state.clone();
         }
 
-        if !inner.gamma_supported {
-            return inner.state.clone();
-        }
-
-        if inner.session.is_none() {
-            match self.factory.open(&target, &self.recovery_path) {
-                Ok(session) => inner.session = Some(session),
-                Err(error) => {
-                    mark_failed(&mut inner, &error);
-                    return inner.state.clone();
-                }
+        inner.state.gamma_applied = false;
+        if inner.state.visual_boost_ready {
+            inner.state.supported = true;
+            if !inner.state.visual_boost_applied {
+                inner.state.error_key = None;
             }
-        }
-
-        let strength = inner.state.strength;
-        if !inner.state.gamma_applied || inner.applied_strength != Some(strength) {
-            let ramp = curve::lifted_ramp(strength);
-            let result = inner
-                .session
-                .as_mut()
-                .expect("session exists after factory open")
-                .apply(&ramp);
-            match result {
-                Ok(()) => {
-                    inner.state.gamma_applied = true;
-                    inner.gamma_supported = true;
-                    if inner.state.visual_boost_ready {
-                        inner.state.supported = true;
-                    }
-                    if !inner.state.visual_boost_applied {
-                        inner.state.error_key = None;
-                    }
-                    inner.applied_strength = Some(strength);
-                }
-                Err(error) => {
-                    if restore_session(&mut inner) {
-                        mark_failed(&mut inner, &error);
-                    }
-                }
-            }
+        } else if !inner.state.visual_boost_applied {
+            inner.state.supported = false;
+            inner.state.error_key = Some("night_vision.filter_unavailable".to_string());
         }
 
         inner.state.clone()
     }
 
-    pub(crate) fn restore_for_exit(&self) -> NightVisionState {
+    pub(crate) fn finish_exit(&self, cleanup_verified: bool) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         inner.state.requested = false;
         inner.pending_visual_request = None;
-        inner.state.visual_boost_applied = false;
-        inner.state.applied = false;
-        if restore_session(&mut inner) {
-            inner.state.gamma_applied = false;
+        self.invalidate_native_generation();
+        inner.state.gamma_applied = false;
+        if cleanup_verified {
+            inner.state.visual_boost_applied = false;
+            inner.state.applied = false;
             inner.state.error_key = None;
         } else {
-            // `applied` is also the normal-exit safety gate. A gamma ramp that
-            // could not be restored must keep shutdown/relaunch blocked.
+            inner.state.visual_boost_applied = true;
             inner.state.applied = true;
+            inner.state.supported = false;
+            inner.state.error_key = Some("night_vision.filter_cleanup_error".to_string());
         }
         inner.state.clone()
     }
 }
 
 pub struct NightVision {
-    controller: NightVisionController<Win32DisplayFactory>,
+    controller: NightVisionController,
 }
 
 impl Default for NightVision {
@@ -403,11 +304,7 @@ impl Default for NightVision {
 impl NightVision {
     pub fn new() -> Self {
         Self {
-            controller: NightVisionController::new(
-                Win32DisplayFactory,
-                crate::settings::night_vision_recovery_path(),
-                70,
-            ),
+            controller: NightVisionController::new(70),
         }
     }
 }
@@ -482,12 +379,9 @@ pub fn initialize(app: &AppHandle) {
 pub fn restore_before_exit(app: &AppHandle) -> NightVisionState {
     let night_vision = app.state::<NightVision>();
     let filter_hidden = hide_filter_window(app);
-    let mut state = night_vision.controller.restore_for_exit();
+    let state = night_vision.controller.finish_exit(filter_hidden);
     if !filter_hidden {
-        state = night_vision.controller.mark_filter_cleanup_failed();
         log::error!("night vision: visual filter hide on exit was not verified");
-    } else if state.gamma_applied {
-        log::error!("night vision: gamma restore on exit was not verified");
     }
     emit_state(app, &state);
     state
@@ -498,23 +392,92 @@ pub fn prepare_night_vision_exit(app: AppHandle) -> NightVisionState {
     restore_before_exit(&app)
 }
 
-#[derive(Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FilterPaintRequest {
-    request_id: u64,
-    strength: u8,
-    alpha: f64,
-    color: &'static str,
+static UI_THREAD: OnceLock<std::thread::ThreadId> = OnceLock::new();
+
+fn on_ui_thread<T, F>(app: &AppHandle, operation: &'static str, call: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    if UI_THREAD.get() == Some(&std::thread::current().id()) {
+        return call();
+    }
+
+    let (sender, receiver) = mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let _ = sender.send(call());
+    })
+    .map_err(|error| format!("schedule {operation}: {error}"))?;
+    receiver
+        .recv_timeout(Duration::from_millis(1_000))
+        .map_err(|error| format!("wait for {operation}: {error}"))?
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FilterPainted {
+fn configure_magnifier(
+    app: &AppHandle,
     request_id: u64,
+    source: (i32, i32, i32, i32),
     strength: u8,
+    excluded: Vec<isize>,
+) -> Result<magnifier::MagnifierReadback, String> {
+    let host = crate::win::vis::hwnd(FILTER_LABEL)
+        .ok_or_else(|| "night vision host HWND is not registered".to_string())?;
+    let gain = visual_boost_gain(strength);
+    let generation = app.state::<NightVision>().controller.native_generation();
+    let ui_generation = generation.clone();
+    let result = on_ui_thread(app, "native magnifier configure", move || {
+        if ui_generation.load(Ordering::SeqCst) != request_id {
+            return Err("native magnifier request was superseded before apply".to_string());
+        }
+        let result =
+            magnifier::configure(host, source, gain, &excluded).map_err(|error| error.to_string());
+        if ui_generation.load(Ordering::SeqCst) != request_id {
+            let _ = magnifier::destroy(host);
+            return Err("native magnifier request was superseded after apply".to_string());
+        }
+        result
+    });
+    if result.is_err() {
+        let _ = generation.compare_exchange(request_id, 0, Ordering::SeqCst, Ordering::SeqCst);
+        let _ = destroy_magnifier(app);
+    }
+    result
+}
+
+fn current_excluded_windows() -> Vec<isize> {
+    let mut excluded: Vec<isize> = [FILTER_LABEL, "main", "minimap", "hud", "night-vision"]
+        .into_iter()
+        .filter_map(crate::win::vis::hwnd)
+        .filter(|raw| *raw != 0)
+        .collect();
+    excluded.sort_unstable();
+    excluded.dedup();
+    excluded
+}
+
+fn destroy_magnifier(app: &AppHandle) -> bool {
+    app.state::<NightVision>()
+        .controller
+        .invalidate_native_generation();
+    let Some(host) = crate::win::vis::hwnd(FILTER_LABEL) else {
+        return true;
+    };
+    if !magnifier::is_configured(host) {
+        return true;
+    }
+    match on_ui_thread(app, "native magnifier destroy", move || {
+        magnifier::destroy(host).map_err(|error| error.to_string())
+    }) {
+        Ok(()) => !magnifier::is_configured(host),
+        Err(error) => {
+            log::warn!("night vision: native magnifier cleanup failed: {error}");
+            false
+        }
+    }
 }
 
 pub fn create_filter(app: &AppHandle) -> tauri::Result<()> {
+    let _ = UI_THREAD.set(std::thread::current().id());
     let health = Arc::new(WindowHealth::new());
 
     let ready_health = health.clone();
@@ -531,31 +494,6 @@ pub fn create_filter(app: &AppHandle) -> tauri::Result<()> {
     let heartbeat_health = health.clone();
     app.listen_any(FILTER_HEARTBEAT_EVENT, move |_| {
         heartbeat_health.mark_heartbeat();
-    });
-
-    let painted_app = app.clone();
-    app.listen_any(FILTER_PAINTED_EVENT, move |event| {
-        let payload = match serde_json::from_str::<FilterPainted>(event.payload()) {
-            Ok(payload) => payload,
-            Err(error) => {
-                log::warn!("night vision filter sent an invalid painted ack: {error}");
-                return;
-            }
-        };
-        let visible = crate::win::vis::is_visible(FILTER_LABEL) == Some(true);
-        let state = painted_app
-            .state::<NightVision>()
-            .controller
-            .accept_visual_paint(payload.request_id, payload.strength, visible);
-        if state.visual_boost_applied {
-            log::info!(
-                "night vision: visual boost painted request={} strength={} fingerprint={}",
-                payload.request_id,
-                payload.strength,
-                state.build_fingerprint
-            );
-        }
-        emit_state(&painted_app, &state);
     });
 
     build_filter_window(app, &health)?;
@@ -619,10 +557,13 @@ fn wait_filter_hidden(timeout_ms: u64) -> bool {
 
 fn hide_filter_window(app: &AppHandle) -> bool {
     let Some(window) = app.get_webview_window(FILTER_LABEL) else {
-        return crate::win::vis::is_visible(FILTER_LABEL) != Some(true);
+        return destroy_magnifier(app) && crate::win::vis::is_visible(FILTER_LABEL) != Some(true);
     };
+    let magnifier_destroyed = destroy_magnifier(app);
     crate::webview_mem::on_hidden(&window);
-    window.hide().is_ok() && wait_filter_hidden(250)
+    let hide_requested = window.hide().is_ok();
+    let host_hidden = wait_filter_hidden(250);
+    magnifier_destroyed && hide_requested && host_hidden
 }
 
 fn force_overlay_stack() {
@@ -638,28 +579,38 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
         const TICK_MS: u64 = 250;
         const GAME_SEARCH_MS: u64 = 1000;
         const RECREATE_MS: u64 = 5000;
-        const PAINT_RETRY_MS: u64 = 1000;
+        const APPLY_RETRY_MS: u64 = 1000;
         const TOPMOST_MS: u64 = 2000;
 
         let mut game_hwnd = None;
         let mut since_search = GAME_SEARCH_MS;
         let mut since_recreate = RECREATE_MS;
-        let mut since_paint = PAINT_RETRY_MS;
+        let mut since_apply = APPLY_RETRY_MS;
         let mut since_topmost = TOPMOST_MS;
         let mut unfocused_ticks: u8 = 2;
         let mut effective_previous = false;
         let mut last_rect = None;
         let mut last_strength = None;
+        let mut last_excluded: Option<Vec<isize>> = None;
 
         loop {
             std::thread::sleep(Duration::from_millis(TICK_MS));
             since_search = since_search.saturating_add(TICK_MS);
             since_recreate = since_recreate.saturating_add(TICK_MS);
-            since_paint = since_paint.saturating_add(TICK_MS);
+            since_apply = since_apply.saturating_add(TICK_MS);
             since_topmost = since_topmost.saturating_add(TICK_MS);
 
             let Some(window) = app.get_webview_window(FILTER_LABEL) else {
-                let state = app.state::<NightVision>().controller.mark_filter_failed();
+                let state = if destroy_magnifier(&app) {
+                    app.state::<NightVision>()
+                        .controller
+                        .confirm_visual_hidden(Some("night_vision.filter_unavailable"));
+                    app.state::<NightVision>().controller.mark_filter_failed()
+                } else {
+                    app.state::<NightVision>()
+                        .controller
+                        .mark_filter_cleanup_failed()
+                };
                 emit_state(&app, &state);
                 if since_recreate >= RECREATE_MS {
                     since_recreate = 0;
@@ -668,6 +619,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                             effective_previous = false;
                             last_rect = None;
                             last_strength = None;
+                            last_excluded = None;
                         }
                         Err(error) => {
                             log::warn!("night vision filter recreate failed: {error}");
@@ -701,25 +653,49 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
 
             if ready && heartbeat_age_ms >= 6_000 {
                 log::warn!("night vision filter heartbeat stale; recreating owned window");
-                let _ = window.close();
-                let failed = app.state::<NightVision>().controller.mark_filter_failed();
-                emit_state(&app, &failed);
+                if hide_filter_window(&app) {
+                    let _ = window.close();
+                    app.state::<NightVision>()
+                        .controller
+                        .confirm_visual_hidden(Some("night_vision.filter_unavailable"));
+                    let failed = app.state::<NightVision>().controller.mark_filter_failed();
+                    emit_state(&app, &failed);
+                } else {
+                    let failed = app
+                        .state::<NightVision>()
+                        .controller
+                        .mark_filter_cleanup_failed();
+                    emit_state(&app, &failed);
+                }
                 continue;
             }
 
             if !effective {
-                if crate::win::vis::is_visible(FILTER_LABEL) == Some(true) {
-                    hide_filter_window(&app);
-                }
-                if effective_previous || state.visual_boost_applied {
+                let cleanup_needed = crate::win::vis::is_visible(FILTER_LABEL) == Some(true)
+                    || state.visual_boost_applied
+                    || crate::win::vis::hwnd(FILTER_LABEL).is_some_and(magnifier::is_configured);
+                if cleanup_needed {
+                    let hidden = if hide_filter_window(&app) {
+                        app.state::<NightVision>()
+                            .controller
+                            .confirm_visual_hidden(Some("night_vision.waiting_for_game"))
+                    } else {
+                        app.state::<NightVision>()
+                            .controller
+                            .mark_filter_cleanup_failed()
+                    };
+                    emit_state(&app, &hidden);
+                } else if effective_previous {
                     let hidden = app
                         .state::<NightVision>()
                         .controller
-                        .clear_visual_applied("night_vision.waiting_for_game");
+                        .confirm_visual_hidden(Some("night_vision.waiting_for_game"));
                     emit_state(&app, &hidden);
                 }
                 effective_previous = false;
                 last_rect = None;
+                last_strength = None;
+                last_excluded = None;
                 continue;
             }
 
@@ -742,7 +718,9 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                     continue;
                 }
                 last_rect = Some(rect);
-                since_paint = PAINT_RETRY_MS;
+                last_strength = None;
+                last_excluded = None;
+                since_apply = APPLY_RETRY_MS;
             }
 
             if crate::win::vis::is_visible(FILTER_LABEL) != Some(true) {
@@ -753,25 +731,92 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                     continue;
                 }
                 force_overlay_stack();
-                since_paint = PAINT_RETRY_MS;
+                since_apply = APPLY_RETRY_MS;
             }
 
             let current = app.state::<NightVision>().controller.state();
-            if (!current.visual_boost_applied || last_strength != Some(current.strength))
-                && since_paint >= PAINT_RETRY_MS
+            let excluded = current_excluded_windows();
+            if (!current.visual_boost_applied
+                || last_strength != Some(current.strength)
+                || last_excluded.as_ref() != Some(&excluded))
+                && since_apply >= APPLY_RETRY_MS
             {
-                since_paint = 0;
-                if let Some(request_id) =
+                since_apply = 0;
+                if !destroy_magnifier(&app) {
+                    let failed = app
+                        .state::<NightVision>()
+                        .controller
+                        .mark_filter_cleanup_failed();
+                    emit_state(&app, &failed);
+                    last_strength = None;
+                    last_excluded = None;
+                    continue;
+                }
+                last_strength = None;
+                last_excluded = None;
+                let pending = app
+                    .state::<NightVision>()
+                    .controller
+                    .confirm_visual_hidden(None);
+                emit_state(&app, &pending);
+                if let Some((request_id, request_strength)) =
                     app.state::<NightVision>().controller.begin_visual_request()
                 {
-                    let request = FilterPaintRequest {
-                        request_id,
-                        strength: current.strength,
-                        alpha: visual_boost_alpha(current.strength),
-                        color: FILTER_COLOR,
-                    };
-                    crate::events::emit_all(&app, FILTER_PAINT_EVENT, request);
-                    last_strength = Some(current.strength);
+                    match configure_magnifier(&app, request_id, rect, request_strength, excluded) {
+                        Ok(readback) => {
+                            let visible = crate::win::vis::hwnd(FILTER_LABEL)
+                                == Some(readback.host)
+                                && crate::win::vis::is_visible(FILTER_LABEL) == Some(true)
+                                && current_excluded_windows() == readback.excluded;
+                            let state = app.state::<NightVision>().controller.accept_native_visual(
+                                request_id,
+                                request_strength,
+                                true,
+                                visible,
+                            );
+                            if state.visual_boost_applied {
+                                log::info!(
+                                    "night vision: native magnifier verified request={} strength={} gain={:.2} child={} source={:?} fingerprint={}",
+                                    request_id,
+                                    request_strength,
+                                    readback.gain,
+                                    readback.child,
+                                    readback.source,
+                                    state.build_fingerprint
+                                );
+                                last_strength = Some(request_strength);
+                                last_excluded = Some(readback.excluded.clone());
+                                emit_state(&app, &state);
+                            } else if destroy_magnifier(&app) {
+                                let hidden = app
+                                    .state::<NightVision>()
+                                    .controller
+                                    .confirm_visual_hidden(None);
+                                emit_state(&app, &hidden);
+                            } else {
+                                let failed = app
+                                    .state::<NightVision>()
+                                    .controller
+                                    .mark_filter_cleanup_failed();
+                                emit_state(&app, &failed);
+                            }
+                        }
+                        Err(error) => {
+                            log::warn!("night vision: native magnifier apply failed: {error}");
+                            let failed = if destroy_magnifier(&app) {
+                                app.state::<NightVision>()
+                                    .controller
+                                    .confirm_visual_hidden(Some("night_vision.filter_unavailable"))
+                            } else {
+                                app.state::<NightVision>()
+                                    .controller
+                                    .mark_filter_cleanup_failed()
+                            };
+                            emit_state(&app, &failed);
+                            last_strength = None;
+                            last_excluded = None;
+                        }
+                    }
                 }
             }
 
@@ -1104,59 +1149,6 @@ fn emit_state(app: &AppHandle, state: &NightVisionState) {
     crate::events::emit_all(app, CHANGED_EVENT, state.clone());
 }
 
-fn restore_session<S: GammaSession>(inner: &mut ControllerInner<S>) -> bool {
-    if let Some(session) = inner.session.as_mut() {
-        match session.restore() {
-            Ok(()) => {}
-            Err(NightVisionError::RecoveryCleanup(error)) => {
-                // Gamma readback already proved the original ramp is active.
-                // A stale recovery file is safe and will be retried at startup;
-                // it must never be reported as a still-brightened display.
-                log::warn!("night vision recovery cleanup pending: {error}");
-            }
-            Err(error) => {
-                // The original ramp was not verified. Keep both the session and
-                // the truthful "display still modified/unknown" state so the
-                // next supervisor tick can retry instead of silently abandoning
-                // the only in-process restore handle.
-                inner.restore_pending = true;
-                inner.state.gamma_applied = true;
-                inner.gamma_supported = false;
-                inner.state.supported = false;
-                inner.state.error_key = Some(error_key(&error).to_string());
-                return false;
-            }
-        }
-        inner.gamma_supported = true;
-    }
-    inner.restore_pending = false;
-    inner.session = None;
-    inner.state.gamma_applied = false;
-    inner.applied_strength = None;
-    true
-}
-
-fn mark_failed<S: GammaSession>(inner: &mut ControllerInner<S>, error: &NightVisionError) {
-    inner.restore_pending = false;
-    inner.state.gamma_applied = false;
-    inner.gamma_supported = false;
-    inner.state.supported = inner.state.visual_boost_ready;
-    inner.state.error_key = Some(error_key(error).to_string());
-    inner.applied_strength = None;
-}
-
-fn error_key(error: &NightVisionError) -> &'static str {
-    match error {
-        NightVisionError::Recovery(_) | NightVisionError::RecoveryCleanup(_) => {
-            "night_vision.recovery_error"
-        }
-        NightVisionError::ReadbackRejected | NightVisionError::RestoreRejected => {
-            "night_vision.driver_rejected"
-        }
-        NightVisionError::Driver(_) => "night_vision.driver_error",
-    }
-}
-
 #[cfg(feature = "devtools")]
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1207,92 +1199,7 @@ fn samples(ramp: &GammaRamp) -> [u16; 4] {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DisplayFactory, GameTarget, GammaSession, NightVisionController, NightVisionError,
-    };
-    use crate::night_vision::GammaRamp;
-    use std::path::Path;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Default)]
-    struct Trace {
-        operations: Vec<String>,
-    }
-
-    #[derive(Clone)]
-    struct FakeFactory {
-        trace: Arc<Mutex<Trace>>,
-        fail_apply: bool,
-        fail_restore: bool,
-        fail_recovery_cleanup: bool,
-    }
-
-    struct FakeSession {
-        display_name: String,
-        trace: Arc<Mutex<Trace>>,
-        fail_apply: bool,
-        fail_restore: bool,
-        fail_recovery_cleanup: bool,
-    }
-
-    impl DisplayFactory for FakeFactory {
-        type Session = FakeSession;
-
-        fn open(
-            &self,
-            target: &GameTarget,
-            _recovery_path: &Path,
-        ) -> Result<Self::Session, NightVisionError> {
-            self.trace
-                .lock()
-                .unwrap()
-                .operations
-                .push(format!("open:{}", target.display_name));
-            Ok(FakeSession {
-                display_name: target.display_name.clone(),
-                trace: self.trace.clone(),
-                fail_apply: self.fail_apply,
-                fail_restore: self.fail_restore,
-                fail_recovery_cleanup: self.fail_recovery_cleanup,
-            })
-        }
-    }
-
-    impl GammaSession for FakeSession {
-        fn display_name(&self) -> &str {
-            &self.display_name
-        }
-
-        fn apply(&mut self, ramp: &GammaRamp) -> Result<(), NightVisionError> {
-            self.trace
-                .lock()
-                .unwrap()
-                .operations
-                .push(format!("apply:{}:{}", self.display_name, ramp[0][128]));
-            if self.fail_apply {
-                Err(NightVisionError::Driver("fake apply failed".to_string()))
-            } else {
-                Ok(())
-            }
-        }
-
-        fn restore(&mut self) -> Result<(), NightVisionError> {
-            self.trace
-                .lock()
-                .unwrap()
-                .operations
-                .push(format!("restore:{}", self.display_name));
-            if self.fail_restore {
-                Err(NightVisionError::RestoreRejected)
-            } else if self.fail_recovery_cleanup {
-                Err(NightVisionError::RecoveryCleanup(
-                    "fake cleanup failed".to_string(),
-                ))
-            } else {
-                Ok(())
-            }
-        }
-    }
+    use super::{GameTarget, NightVisionController};
 
     fn target(display_name: &str, hwnd: isize) -> GameTarget {
         GameTarget {
@@ -1301,22 +1208,8 @@ mod tests {
         }
     }
 
-    fn controller(fail_apply: bool) -> (NightVisionController<FakeFactory>, Arc<Mutex<Trace>>) {
-        let trace = Arc::new(Mutex::new(Trace::default()));
-        let factory = FakeFactory {
-            trace: trace.clone(),
-            fail_apply,
-            fail_restore: false,
-            fail_recovery_cleanup: false,
-        };
-        (
-            NightVisionController::new(
-                factory,
-                std::env::temp_dir().join("unused-night-vision-recovery.json"),
-                70,
-            ),
-            trace,
-        )
+    fn controller() -> NightVisionController {
+        NightVisionController::new(70)
     }
 
     #[test]
@@ -1341,29 +1234,58 @@ mod tests {
     }
 
     #[test]
-    fn stale_paint_ack_never_turns_visual_boost_on() {
-        let (controller, _) = controller(false);
+    fn native_visual_readback_and_visibility_are_required_to_turn_boost_on() {
+        let controller = controller();
         controller.toggle_requested();
         controller.mark_filter_ready();
-        let request_id = controller.begin_visual_request().unwrap();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
 
         assert!(
             !controller
-                .accept_visual_paint(request_id - 1, 70, true)
+                .accept_native_visual(request_id - 1, 70, true, true)
                 .applied
         );
-        assert!(controller.accept_visual_paint(request_id, 70, true).applied);
+        assert!(
+            !controller
+                .accept_native_visual(request_id, 70, false, true)
+                .applied
+        );
+        assert!(
+            !controller
+                .accept_native_visual(request_id, 70, true, false)
+                .applied
+        );
+        assert!(
+            controller
+                .accept_native_visual(request_id, 70, true, true)
+                .applied
+        );
     }
 
     #[test]
-    fn gamma_failure_does_not_disable_ready_visual_fallback() {
-        let (controller, _) = controller(true);
+    fn normal_operation_never_applies_display_gamma() {
+        let controller = controller();
+        controller.toggle_requested();
+
+        let state = controller.reconcile(Some(target("DISPLAY1", 101)));
+
+        assert!(!state.gamma_applied);
+        assert!(!state.applied);
+        assert_eq!(
+            state.error_key.as_deref(),
+            Some("night_vision.filter_unavailable")
+        );
+    }
+
+    #[test]
+    fn ready_native_visual_path_never_reports_gamma() {
+        let controller = controller();
         controller.toggle_requested();
         controller.mark_filter_ready();
         controller.reconcile(Some(target("DISPLAY1", 101)));
-        let request_id = controller.begin_visual_request().unwrap();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
 
-        let state = controller.accept_visual_paint(request_id, 70, true);
+        let state = controller.accept_native_visual(request_id, 70, true, true);
 
         assert!(state.applied && state.visual_boost_applied);
         assert!(!state.gamma_applied);
@@ -1380,14 +1302,14 @@ mod tests {
     }
 
     #[test]
-    fn hidden_filter_clears_visual_applied_but_preserves_request() {
-        let (controller, _) = controller(false);
+    fn hidden_filter_clears_visual_only_after_cleanup_is_confirmed() {
+        let controller = controller();
         controller.toggle_requested();
         controller.mark_filter_ready();
-        let request_id = controller.begin_visual_request().unwrap();
-        controller.accept_visual_paint(request_id, 70, true);
+        let (request_id, _) = controller.begin_visual_request().unwrap();
+        controller.accept_native_visual(request_id, 70, true, true);
 
-        let state = controller.clear_visual_applied("night_vision.waiting_for_game");
+        let state = controller.confirm_visual_hidden(Some("night_vision.waiting_for_game"));
 
         assert!(state.requested);
         assert!(!state.applied && !state.visual_boost_applied);
@@ -1398,8 +1320,8 @@ mod tests {
     }
 
     #[test]
-    fn startup_is_off_and_active_game_toggle_applies_strength_70() {
-        let (controller, trace) = controller(false);
+    fn startup_is_off_and_active_game_waits_for_verified_native_visual() {
+        let controller = controller();
         assert!(!controller.state().requested);
         assert!(!controller.state().applied);
         assert!(controller.state().supported);
@@ -1410,137 +1332,115 @@ mod tests {
         assert!(state.requested);
         assert!(!state.applied);
         assert!(!state.visual_boost_applied);
-        assert!(state.gamma_applied);
-        assert!(state.supported);
+        assert!(!state.gamma_applied);
+        assert!(!state.supported);
         assert_eq!(state.strength, 70);
-        assert_eq!(trace.lock().unwrap().operations.len(), 2);
     }
 
     #[test]
-    fn alt_tab_restores_but_keeps_request_and_refocus_reapplies() {
-        let (controller, trace) = controller(false);
+    fn alt_tab_preserves_request_and_waits_for_verified_cleanup() {
+        let controller = controller();
         controller.toggle_requested();
-        controller.reconcile(Some(target("DISPLAY1", 101)));
+        controller.mark_filter_ready();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
+        controller.accept_native_visual(request_id, 70, true, true);
 
         let away = controller.reconcile(None);
         assert!(away.requested);
-        assert!(!away.applied);
+        assert!(
+            away.applied,
+            "state stays on until native cleanup is verified"
+        );
+
+        let hidden = controller.confirm_visual_hidden(Some("night_vision.waiting_for_game"));
+        assert!(hidden.requested);
+        assert!(!hidden.applied);
         assert_eq!(
-            away.error_key.as_deref(),
+            hidden.error_key.as_deref(),
             Some("night_vision.waiting_for_game")
         );
 
         let back = controller.reconcile(Some(target("DISPLAY1", 101)));
-        assert!(back.requested && back.gamma_applied);
+        assert!(back.requested && !back.gamma_applied);
         assert!(!back.applied);
+        assert!(controller.begin_visual_request().is_some());
+    }
+
+    #[test]
+    fn switch_off_is_fail_closed_until_native_cleanup_succeeds() {
+        let controller = controller();
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
+        controller.accept_native_visual(request_id, 70, true, true);
+
+        let switching_off = controller.toggle_requested();
+        assert!(!switching_off.requested);
+        assert!(switching_off.applied && switching_off.visual_boost_applied);
+
+        let failed = controller.mark_filter_cleanup_failed();
+        assert!(!failed.requested);
+        assert!(failed.applied && failed.visual_boost_applied);
         assert_eq!(
-            trace.lock().unwrap().operations,
-            vec![
-                "open:DISPLAY1".to_string(),
-                format!("apply:DISPLAY1:{}", super::curve::lifted_ramp(70)[0][128]),
-                "restore:DISPLAY1".to_string(),
-                "open:DISPLAY1".to_string(),
-                format!("apply:DISPLAY1:{}", super::curve::lifted_ramp(70)[0][128]),
-            ]
+            failed.error_key.as_deref(),
+            Some("night_vision.filter_cleanup_error")
         );
+
+        let cleaned = controller.confirm_visual_hidden(None);
+        assert!(!cleaned.requested);
+        assert!(!cleaned.applied && !cleaned.visual_boost_applied);
+        assert_eq!(cleaned.error_key, None);
     }
 
     #[test]
-    fn monitor_switch_restores_old_display_before_opening_new_display() {
-        let (controller, trace) = controller(false);
+    fn strength_change_keeps_old_effect_truthful_until_destroy_then_reapplies() {
+        let controller = controller();
         controller.toggle_requested();
-        controller.reconcile(Some(target("DISPLAY1", 101)));
-        controller.reconcile(Some(target("DISPLAY2", 101)));
+        controller.mark_filter_ready();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
+        controller.accept_native_visual(request_id, 70, true, true);
 
-        let operations = &trace.lock().unwrap().operations;
-        let restore_index = operations
-            .iter()
-            .position(|entry| entry == "restore:DISPLAY1")
-            .unwrap();
-        let open_index = operations
-            .iter()
-            .position(|entry| entry == "open:DISPLAY2")
-            .unwrap();
-        assert!(restore_index < open_index);
-        assert!(controller.state().gamma_applied);
-        assert!(!controller.state().applied);
+        let changing = controller.set_strength(u8::MAX);
+        assert_eq!(changing.strength, 100);
+        assert!(changing.applied, "the old native effect still exists");
+
+        let hidden = controller.confirm_visual_hidden(None);
+        assert!(!hidden.applied);
+        let (new_request, _) = controller.begin_visual_request().unwrap();
+        let reapplied = controller.accept_native_visual(new_request, 100, true, true);
+        assert!(reapplied.applied);
+        assert_eq!(reapplied.strength, 100);
+        assert!(!reapplied.gamma_applied);
     }
 
     #[test]
-    fn monitor_switch_does_not_touch_new_display_when_old_restore_fails() {
-        let trace = Arc::new(Mutex::new(Trace::default()));
-        let controller = NightVisionController::new(
-            FakeFactory {
-                trace: trace.clone(),
-                fail_apply: false,
-                fail_restore: true,
-                fail_recovery_cleanup: false,
-            },
-            std::env::temp_dir().join("unused-night-vision-recovery.json"),
-            70,
-        );
+    fn off_and_strength_changes_cancel_delayed_native_work_immediately() {
+        use std::sync::atomic::Ordering;
+
+        let controller = controller();
         controller.toggle_requested();
-        controller.reconcile(Some(target("DISPLAY1", 101)));
-
-        let state = controller.reconcile(Some(target("DISPLAY2", 202)));
-
-        assert!(state.gamma_applied);
-        assert!(!state.applied);
-        assert!(!state.supported);
+        controller.mark_filter_ready();
+        let (first_request, _) = controller.begin_visual_request().unwrap();
         assert_eq!(
-            state.error_key.as_deref(),
-            Some("night_vision.driver_rejected")
+            controller.native_generation.load(Ordering::SeqCst),
+            first_request
         );
-        assert!(
-            !trace
-                .lock()
-                .unwrap()
-                .operations
-                .iter()
-                .any(|operation| operation == "open:DISPLAY2"),
-            "new display must stay untouched until old gamma restore is verified"
-        );
-    }
+        controller.set_strength(80);
+        assert_eq!(controller.native_generation.load(Ordering::SeqCst), 0);
 
-    #[test]
-    fn rejected_driver_state_is_truthfully_unavailable() {
-        let (controller, _trace) = controller(true);
-        controller.toggle_requested();
-
-        let state = controller.reconcile(Some(target("DISPLAY1", 101)));
-
-        assert!(!state.applied);
-        assert!(!state.supported);
+        let (second_request, strength) = controller.begin_visual_request().unwrap();
+        assert_eq!(strength, 80);
         assert_eq!(
-            state.error_key.as_deref(),
-            Some("night_vision.driver_error")
+            controller.native_generation.load(Ordering::SeqCst),
+            second_request
         );
-    }
-
-    #[test]
-    fn strength_is_clamped_and_reapplied_while_active() {
-        let (controller, trace) = controller(false);
         controller.toggle_requested();
-        let game = target("DISPLAY1", 101);
-        controller.reconcile(Some(game.clone()));
-
-        controller.set_strength(u8::MAX);
-        let state = controller.reconcile(Some(game));
-
-        assert_eq!(state.strength, 100);
-        let apply_count = trace
-            .lock()
-            .unwrap()
-            .operations
-            .iter()
-            .filter(|entry| entry.starts_with("apply:"))
-            .count();
-        assert_eq!(apply_count, 2);
+        assert_eq!(controller.native_generation.load(Ordering::SeqCst), 0);
     }
 
     #[test]
     fn unresolved_crash_recovery_blocks_enabling_over_unknown_gamma() {
-        let (controller, _trace) = controller(false);
+        let controller = controller();
 
         controller.block_for_recovery_error();
         controller.toggle_requested();
@@ -1556,87 +1456,23 @@ mod tests {
     }
 
     #[test]
-    fn restore_failure_is_not_hidden_when_user_turns_feature_off() {
-        let trace = Arc::new(Mutex::new(Trace::default()));
-        let controller = NightVisionController::new(
-            FakeFactory {
-                trace,
-                fail_apply: false,
-                fail_restore: true,
-                fail_recovery_cleanup: false,
-            },
-            std::env::temp_dir().join("unused-night-vision-recovery.json"),
-            70,
-        );
+    fn exit_state_is_fail_closed_until_native_cleanup_is_verified() {
+        let controller = controller();
         controller.toggle_requested();
-        controller.reconcile(Some(target("DISPLAY1", 101)));
+        controller.mark_filter_ready();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
+        controller.accept_native_visual(request_id, 70, true, true);
 
-        controller.toggle_requested();
-        let state = controller.reconcile(None);
-
-        assert!(state.gamma_applied);
-        assert!(!state.applied);
-        assert!(!state.supported);
+        let blocked = controller.finish_exit(false);
+        assert!(!blocked.requested);
+        assert!(blocked.applied && blocked.visual_boost_applied);
         assert_eq!(
-            state.error_key.as_deref(),
-            Some("night_vision.driver_rejected")
+            blocked.error_key.as_deref(),
+            Some("night_vision.filter_cleanup_error")
         );
 
-        controller.toggle_requested();
-        let retried = controller.reconcile(Some(target("DISPLAY1", 101)));
-        assert!(retried.gamma_applied);
-        assert!(!retried.applied);
-        assert!(retried.requested);
-        assert!(!retried.supported);
-        let restore_attempts = controller
-            .factory
-            .trace
-            .lock()
-            .unwrap()
-            .operations
-            .iter()
-            .filter(|operation| operation.starts_with("restore:"))
-            .count();
-        assert_eq!(restore_attempts, 2);
-        let apply_attempts = controller
-            .factory
-            .trace
-            .lock()
-            .unwrap()
-            .operations
-            .iter()
-            .filter(|operation| operation.starts_with("apply:"))
-            .count();
-        assert_eq!(
-            apply_attempts, 1,
-            "toggle-on must retry restore before any new gamma apply"
-        );
-    }
-
-    #[test]
-    fn cleanup_failure_never_claims_gamma_is_still_applied_or_blocks_reenable() {
-        let trace = Arc::new(Mutex::new(Trace::default()));
-        let controller = NightVisionController::new(
-            FakeFactory {
-                trace,
-                fail_apply: false,
-                fail_restore: false,
-                fail_recovery_cleanup: true,
-            },
-            std::env::temp_dir().join("unused-night-vision-recovery.json"),
-            70,
-        );
-        controller.toggle_requested();
-        controller.reconcile(Some(target("DISPLAY1", 101)));
-
-        controller.toggle_requested();
-        let restored = controller.reconcile(None);
-        assert!(!restored.applied, "display restore was already verified");
-
-        controller.toggle_requested();
-        let reapplied = controller.reconcile(Some(target("DISPLAY1", 101)));
-        assert!(reapplied.requested && reapplied.gamma_applied && reapplied.supported);
-        assert!(!reapplied.applied);
+        let safe = controller.finish_exit(true);
+        assert!(!safe.applied && !safe.visual_boost_applied && !safe.gamma_applied);
     }
 
     #[test]

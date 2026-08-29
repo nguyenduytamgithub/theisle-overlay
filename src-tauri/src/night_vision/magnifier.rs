@@ -9,19 +9,22 @@ use windows::Win32::UI::Magnification::{
     MAGTRANSFORM, MW_FILTERMODE_EXCLUDE, WC_MAGNIFIER,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, FindWindowExW, IsWindow, SetWindowPos, SET_WINDOW_POS_FLAGS,
-    WS_CHILD, WS_EX_TRANSPARENT, WS_VISIBLE,
+    CreateWindowExW, DestroyWindow, FindWindowExW, IsWindow, IsWindowVisible, SetWindowPos,
+    SET_WINDOW_POS_FLAGS, WS_CHILD, WS_EX_TRANSPARENT,
 };
 
 const CHILD_TITLE: windows::core::PCWSTR = windows::core::w!("Night Boost Magnifier");
-const POSITION_FLAGS: SET_WINDOW_POS_FLAGS = SET_WINDOW_POS_FLAGS(0x0010 | 0x0004 | 0x0040);
+const POSITION_FLAGS: SET_WINDOW_POS_FLAGS = SET_WINDOW_POS_FLAGS(0x0010 | 0x0004);
+const SHOW_FLAGS: SET_WINDOW_POS_FLAGS = SET_WINDOW_POS_FLAGS(0x0010 | 0x0004 | 0x0040);
 static INITIALIZED: OnceLock<Result<(), String>> = OnceLock::new();
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MagnifierReadback {
+    pub(crate) host: isize,
     pub(crate) source: (i32, i32, i32, i32),
     pub(crate) gain: f32,
     pub(crate) child: isize,
+    pub(crate) excluded: Vec<isize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,7 +47,6 @@ pub(crate) fn configure(
     gain: f32,
     excluded: &[isize],
 ) -> Result<MagnifierReadback, MagnifierError> {
-    ensure_initialized()?;
     let (_, _, width, height) = source;
     if host == 0 || width <= 0 || height <= 0 || !gain.is_finite() || !(1.0..=5.0).contains(&gain) {
         return Err(MagnifierError {
@@ -52,31 +54,46 @@ pub(crate) fn configure(
             detail: format!("host={host} source={source:?} gain={gain}"),
         });
     }
+    ensure_initialized()?;
+    destroy(host)?;
 
     let host = hwnd(host);
-    let child = match find_child(host) {
-        Some(child) => child,
-        None => unsafe {
-            CreateWindowExW(
-                WS_EX_TRANSPARENT,
-                WC_MAGNIFIER,
-                CHILD_TITLE,
-                WS_CHILD | WS_VISIBLE,
-                0,
-                0,
-                width,
-                height,
-                Some(host),
-                None,
-                None,
-                None,
-            )
-        }
-        .map_err(|error| MagnifierError {
-            operation: "CreateWindowExW(Magnifier)",
-            detail: error.to_string(),
-        })?,
-    };
+    let child = unsafe {
+        CreateWindowExW(
+            WS_EX_TRANSPARENT,
+            WC_MAGNIFIER,
+            CHILD_TITLE,
+            WS_CHILD,
+            0,
+            0,
+            width,
+            height,
+            Some(host),
+            None,
+            None,
+            None,
+        )
+    }
+    .map_err(|error| MagnifierError {
+        operation: "CreateWindowExW(Magnifier)",
+        detail: error.to_string(),
+    })?;
+
+    let configured = configure_child(child, host, source, gain, excluded);
+    if configured.is_err() {
+        let _ = unsafe { DestroyWindow(child) };
+    }
+    configured
+}
+
+fn configure_child(
+    child: HWND,
+    host: HWND,
+    source: (i32, i32, i32, i32),
+    gain: f32,
+    excluded: &[isize],
+) -> Result<MagnifierReadback, MagnifierError> {
+    let (_, _, width, height) = source;
 
     unsafe { SetWindowPos(child, None, 0, 0, width, height, POSITION_FLAGS) }.map_err(|error| {
         MagnifierError {
@@ -97,12 +114,8 @@ pub(crate) fn configure(
         unsafe { MagSetColorEffect(child, &mut effect) }.as_bool(),
     )?;
 
-    let mut excluded_raw = Vec::with_capacity(excluded.len() + 1);
-    excluded_raw.push(host.0 as isize);
-    excluded_raw.extend(excluded.iter().copied().filter(|raw| *raw != 0));
-    excluded_raw.sort_unstable();
-    excluded_raw.dedup();
-    let mut excluded_windows: Vec<HWND> = excluded_raw.into_iter().map(hwnd).collect();
+    let excluded_raw = normalized_exclusions(host.0 as isize, excluded);
+    let mut excluded_windows: Vec<HWND> = excluded_raw.iter().copied().map(hwnd).collect();
     bool_result(
         "MagSetWindowFilterList",
         unsafe {
@@ -150,10 +163,25 @@ pub(crate) fn configure(
         });
     }
 
+    unsafe { SetWindowPos(child, None, 0, 0, width, height, SHOW_FLAGS) }.map_err(|error| {
+        MagnifierError {
+            operation: "SetWindowPos(Magnifier show)",
+            detail: error.to_string(),
+        }
+    })?;
+    if !unsafe { IsWindowVisible(child) }.as_bool() {
+        return Err(MagnifierError {
+            operation: "IsWindowVisible(Magnifier)",
+            detail: "configured child remained hidden".to_string(),
+        });
+    }
+
     Ok(MagnifierReadback {
+        host: host.0 as isize,
         source,
         gain: actual_effect.transform[0],
         child: child.0 as isize,
+        excluded: excluded_raw,
     })
 }
 
@@ -195,6 +223,15 @@ fn find_child(host: HWND) -> Option<HWND> {
 
 fn hwnd(raw: isize) -> HWND {
     HWND(raw as *mut c_void)
+}
+
+fn normalized_exclusions(host: isize, excluded: &[isize]) -> Vec<isize> {
+    let mut normalized = Vec::with_capacity(excluded.len() + 1);
+    normalized.push(host);
+    normalized.extend(excluded.iter().copied().filter(|raw| *raw != 0));
+    normalized.sort_unstable();
+    normalized.dedup();
+    normalized
 }
 
 fn identity_transform() -> MAGTRANSFORM {
@@ -272,6 +309,14 @@ mod tests {
         assert_eq!(
             (rect.left, rect.top, rect.right, rect.bottom),
             (10, 20, 310, 420)
+        );
+    }
+
+    #[test]
+    fn exclusion_fingerprint_is_sorted_deduplicated_and_includes_host() {
+        assert_eq!(
+            super::normalized_exclusions(30, &[50, 0, 30, 10, 50]),
+            vec![10, 30, 50]
         );
     }
 }

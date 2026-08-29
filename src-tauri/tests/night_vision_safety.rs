@@ -176,11 +176,11 @@ fn night_vision_stays_outside_game_process_and_input_boundaries() {
             "DestroyWindow",
             "FindWindowExW",
             "IsWindow",
+            "IsWindowVisible",
             "SetWindowPos",
             "SET_WINDOW_POS_FLAGS",
             "WS_CHILD",
             "WS_EX_TRANSPARENT",
-            "WS_VISIBLE",
         ]
         .into_iter()
         .map(str::to_string),
@@ -271,6 +271,19 @@ fn visual_filter_is_static_click_through_frontend_with_explicit_capability() {
             );
         }
     }
+
+    let script = fs::read_to_string(frontend.join("main.ts")).expect("read visual host script");
+    let styles = fs::read_to_string(frontend.join("style.css")).expect("read visual host styles");
+    assert!(
+        !script.contains("night-vision-filter://paint")
+            && !script.contains("backgroundColor")
+            && !script.contains("opacity"),
+        "the webview host must not paint the rejected flat gray veil"
+    );
+    assert!(
+        !styles.contains("opacity") && !styles.contains("will-change"),
+        "the webview host must not retain the rejected opacity compositor layer"
+    );
 
     let capability: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(manifest.join("capabilities/default.json"))
