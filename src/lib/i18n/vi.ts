@@ -66,7 +66,7 @@ export const vi = {
   "nav.active": "Đang dẫn đường",
   "nav.start": "Dẫn đường tới điểm này",
   "nav.stop": "Dừng dẫn đường",
-  "nav.arrived": "Đã tới nơi (trong 15 m)",
+  "nav.arrived": "Đã tới nơi (trong bán kính đã đặt)",
 
   // --- tìm kiếm & điều hướng ---
   "search.placeholder": "Tìm địa danh hoặc dán tọa độ…",

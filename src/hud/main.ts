@@ -1,20 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { error } from "@tauri-apps/plugin-log";
+import { error, info } from "@tauri-apps/plugin-log";
 
 import { installGlobalErrorLog } from "../lib/errlog";
+import { compassPoint, type HudLanguage } from "../lib/navigation/guidance";
 import {
-  bearingTo,
-  compassPoint,
-  distanceMetres,
-  relativeBearing,
-  type HudLanguage,
-} from "../lib/navigation/guidance";
-import {
-  projectedPosition,
-  smoothedPosition,
-  type ProjectedPosition,
-} from "../lib/navigation/prediction";
+  localizeFreshness,
+  localizeManeuver,
+  NavigationEstimator,
+  type NavigationSnapshot,
+} from "../lib/navigation/estimator";
 
 installGlobalErrorLog("hud");
 
@@ -23,14 +18,15 @@ interface PositionUpdate {
   yCm: number;
   px: number;
   py: number;
-  headingDeg: number | null;
   velocityXCmS: number | null;
   velocityYCmS: number | null;
   velocityPxXS: number | null;
   velocityPxYS: number | null;
+  serverFacingDeg: number | null;
+  motionCourseDeg: number | null;
   confirmedAtMs: number;
-  predictionHorizonS: number;
-  staleAfterS: number;
+  relocated: boolean;
+  refreshedOnly: boolean;
 }
 
 interface NavigationTarget {
@@ -42,28 +38,30 @@ interface NavigationTarget {
   arrived: boolean;
 }
 
+const FRAME_MS = 1_000 / 30;
+const estimator = new NavigationEstimator();
 const hud = document.getElementById("hud")!;
-const headingEl = document.getElementById("heading")!;
+const courseEl = document.getElementById("course")!;
 const freshnessEl = document.getElementById("freshness")!;
 const navigationEl = document.getElementById("navigation")!;
 const targetArrowEl = document.getElementById("target-arrow")!;
 const targetNameEl = document.getElementById("target-name")!;
 const targetDetailEl = document.getElementById("target-detail")!;
-const turnEl = document.getElementById("turn")!;
+const instructionEl = document.getElementById("instruction")!;
+const progressWarningEl = document.getElementById("progress-warning")!;
 
 let language: HudLanguage = "vi";
-let confirmedPosition: PositionUpdate | null = null;
-let displayedPosition: ProjectedPosition | null = null;
-let correctionFrom: ProjectedPosition | null = null;
-let correctionStartedAtMs = 0;
 let navigation: NavigationTarget | null = null;
-let predictionFrame: number | null = null;
-let staleTimer: number | null = null;
-let lastPaintAtMs = 0;
+let paintTimer: number | null = null;
+let hasPosition = false;
+let lastFreshness: NavigationSnapshot["freshness"] | null = null;
+let lastSampleSource: "motion" | "server" | "none" | null = null;
+let lastConfirmedForDiagnostics: Pick<PositionUpdate, "xCm" | "yCm"> | null = null;
 
 function applySettings(settings: Record<string, unknown>) {
   language = settings.language === "en" ? "en" : "vi";
   const navigationSettings = settings.navigation as Record<string, unknown> | undefined;
+  estimator.setArrivalRadiusM(Number(navigationSettings?.arrival_radius_m ?? 25));
   const opacity = Number(navigationSettings?.hud_opacity ?? 0.92);
   hud.style.opacity = String(Math.max(0.35, Math.min(1, opacity)));
 }
@@ -71,106 +69,121 @@ function applySettings(settings: Record<string, unknown>) {
 const fmtDistance = (metres: number) =>
   metres >= 1_000 ? `${(metres / 1_000).toFixed(1)} km` : `${Math.round(metres)} m`;
 
-function turnInstruction(relative: number, arrived: boolean): string {
-  if (arrived) return language === "vi" ? "ĐÃ TỚI" : "ARRIVED";
-  const degrees = Math.round(Math.abs(relative));
-  if (degrees <= 7) return language === "vi" ? "ĐI THẲNG" : "STRAIGHT";
-  if (relative > 0) return language === "vi" ? `RẼ PHẢI ${degrees}°` : `RIGHT ${degrees}°`;
-  return language === "vi" ? `RẼ TRÁI ${degrees}°` : `LEFT ${degrees}°`;
+function schedulePaint() {
+  if (paintTimer !== null) window.clearTimeout(paintTimer);
+  paintTimer = window.setTimeout(() => paint(Date.now()), FRAME_MS);
 }
 
-function scheduleStaleRefresh(projected: ProjectedPosition) {
-  if (staleTimer !== null) window.clearTimeout(staleTimer);
-  staleTimer = null;
-  if (!confirmedPosition || projected.stale || projected.predicting) return;
-  const remainingMs = Math.max(0, (confirmedPosition.staleAfterS - projected.ageS) * 1_000);
-  staleTimer = window.setTimeout(() => paint(Date.now(), true), remainingMs + 20);
+function paintNow() {
+  if (paintTimer !== null) window.clearTimeout(paintTimer);
+  paintTimer = null;
+  paint(Date.now());
 }
 
-function paint(nowMs: number, force = false) {
-  predictionFrame = null;
-  if (!confirmedPosition) {
+function paintCourse(view: NavigationSnapshot) {
+  if (view.guidanceCourseDeg === null) {
+    courseEl.textContent = language === "vi" ? "HƯỚNG ĐI: CHƯA RÕ" : "COURSE: UNKNOWN";
+    return;
+  }
+  const point = compassPoint(view.guidanceCourseDeg, language);
+  const prefix = language === "vi" ? "HƯỚNG ĐI" : "COURSE";
+  courseEl.textContent = `${prefix}: ${point} ${Math.round(view.guidanceCourseDeg)}°`;
+}
+
+function paintFreshness(view: NavigationSnapshot) {
+  freshnessEl.className = `freshness ${view.freshness}`;
+  freshnessEl.textContent = localizeFreshness(view.freshness, language);
+  if (view.freshness !== lastFreshness) {
+    void info(
+      `[hud-nav] state=${view.freshness} source=local-estimator reset=none`,
+    ).catch(() => {});
+    lastFreshness = view.freshness;
+  }
+}
+
+function paintNavigation(view: NavigationSnapshot) {
+  if (!navigation || view.targetBearingDeg === null || view.targetDistanceM === null) {
+    navigationEl.classList.add("hidden");
+    return;
+  }
+
+  navigationEl.classList.remove("hidden");
+  navigationEl.classList.toggle("arrived", view.arrived);
+  // This arrow is north-up and absolute. Raw server yaw can never rotate it.
+  if (!view.arrived) {
+    targetArrowEl.style.transform = `rotate(${view.targetBearingDeg.toFixed(2)}deg)`;
+  }
+  const cardinal = compassPoint(view.targetBearingDeg, language);
+  targetNameEl.textContent = navigation.name;
+  targetDetailEl.textContent = `${cardinal} ${Math.round(view.targetBearingDeg)}° · ${fmtDistance(view.targetDistanceM)}`;
+  instructionEl.textContent = localizeManeuver(view.maneuver, language, cardinal);
+
+  progressWarningEl.classList.toggle("hidden", !view.noProgress || view.arrived);
+  progressWarningEl.textContent = language === "vi"
+    ? "ĐANG ĐI XA ĐÍCH — KIỂM TRA BẢN ĐỒ"
+    : "NO PROGRESS — CHECK THE MAP";
+}
+
+function paint(nowMs: number) {
+  paintTimer = null;
+  const view = estimator.snapshot(nowMs);
+  if (!view) {
     hud.classList.add("waiting");
-    headingEl.textContent = language === "vi" ? "CHỜ VỊ TRÍ" : "WAITING FOR POSITION";
+    courseEl.textContent = language === "vi" ? "CHỜ VỊ TRÍ" : "WAITING FOR POSITION";
+    freshnessEl.textContent = language === "vi" ? "CHỜ SERVER" : "WAITING FOR SERVER";
     navigationEl.classList.add("hidden");
     return;
   }
 
-  // Limit DOM writes to about 30 fps; enough for a direction HUD and kinder
-  // to game frame time than a second 60 fps overlay.
-  if (!force && nowMs - lastPaintAtMs < 32) {
-    predictionFrame = requestAnimationFrame(() => paint(Date.now()));
-    return;
-  }
-  lastPaintAtMs = nowMs;
-
-  const projected = projectedPosition(confirmedPosition, nowMs);
-  const shown = smoothedPosition(
-    projected,
-    correctionFrom,
-    correctionStartedAtMs,
-    nowMs,
-  );
-  displayedPosition = shown;
   hud.classList.remove("waiting");
-
-  if (confirmedPosition.headingDeg === null) {
-    headingEl.textContent = language === "vi" ? "CHƯA RÕ HƯỚNG" : "HEADING UNKNOWN";
-  } else {
-    const point = compassPoint(confirmedPosition.headingDeg, language);
-    const prefix = language === "vi" ? "ĐANG NHÌN" : "HEADING";
-    headingEl.textContent = `${prefix}: ${point} ${Math.round(confirmedPosition.headingDeg)}°`;
-  }
-
-  freshnessEl.className = "freshness";
-  if (projected.stale) {
-    freshnessEl.classList.add("stale");
-    freshnessEl.textContent = language === "vi" ? "MẤT TÍN HIỆU" : "STALE";
-  } else if (projected.predicting) {
-    freshnessEl.classList.add("predicting");
-    freshnessEl.textContent = language === "vi" ? "ƯỚC TÍNH" : "ESTIMATE";
-  } else {
-    freshnessEl.textContent = "SERVER";
-  }
-
-  if (navigation) {
-    navigationEl.classList.remove("hidden");
-    navigationEl.classList.toggle("arrived", navigation.arrived);
-    const bearing = bearingTo(shown.xCm, shown.yCm, navigation.xCm, navigation.yCm);
-    const distance = distanceMetres(shown.xCm, shown.yCm, navigation.xCm, navigation.yCm);
-    const relative = confirmedPosition.headingDeg === null
-      ? 0
-      : relativeBearing(confirmedPosition.headingDeg, bearing);
-    targetArrowEl.style.transform = `rotate(${relative.toFixed(2)}deg)`;
-    targetNameEl.textContent = navigation.name;
-    targetDetailEl.textContent = `${compassPoint(bearing, language)} · ${fmtDistance(distance)}`;
-    turnEl.textContent = confirmedPosition.headingDeg === null
-      ? (language === "vi" ? "THEO MŨI TÊN BẢN ĐỒ" : "USE MAP ARROW")
-      : turnInstruction(relative, navigation.arrived);
-  } else {
-    navigationEl.classList.add("hidden");
-  }
-
-  const correcting = nowMs - correctionStartedAtMs < 350;
-  if (projected.predicting || correcting) {
-    predictionFrame = requestAnimationFrame(() => paint(Date.now()));
-  } else {
-    scheduleStaleRefresh(projected);
-  }
+  paintCourse(view);
+  paintFreshness(view);
+  paintNavigation(view);
+  schedulePaint();
 }
 
 function acceptPosition(position: PositionUpdate) {
-  if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
-  if (staleTimer !== null) window.clearTimeout(staleTimer);
-  correctionFrom = displayedPosition;
-  correctionStartedAtMs = Date.now();
-  confirmedPosition = position;
-  paint(correctionStartedAtMs, true);
+  hasPosition = true;
+  const moving = position.velocityXCmS !== null
+    && position.velocityYCmS !== null
+    && Math.hypot(position.velocityXCmS, position.velocityYCmS) >= 1;
+  const source = moving && position.motionCourseDeg !== null
+    ? "motion"
+    : position.serverFacingDeg !== null ? "server" : "none";
+  const correctionM = lastConfirmedForDiagnostics
+    ? Math.hypot(
+        position.xCm - lastConfirmedForDiagnostics.xCm,
+        position.yCm - lastConfirmedForDiagnostics.yCm,
+      ) / 100
+    : 0;
+  const reset = position.relocated
+    ? "relocation"
+    : correctionM > 100 ? "large-correction"
+    : position.refreshedOnly ? "refresh"
+    : "none";
+  if (source !== lastSampleSource || reset !== "none") {
+    const ageMs = Math.max(0, Date.now() - position.confirmedAtMs);
+    void info(
+      `[hud-nav] state=confirmed source=${source} age_ms=${Math.round(ageMs)} correction_m=${correctionM.toFixed(1)} reset=${reset}`,
+    ).catch(() => {});
+    lastSampleSource = source;
+  }
+  lastConfirmedForDiagnostics = { xCm: position.xCm, yCm: position.yCm };
+  estimator.accept(position);
+  paintNow();
 }
 
 async function refreshNavigation() {
   navigation = await invoke<NavigationTarget | null>("active_navigation");
-  paint(Date.now(), true);
+  estimator.setTarget(navigation
+    ? {
+        id: navigation.id,
+        name: navigation.name,
+        xCm: navigation.xCm,
+        yCm: navigation.yCm,
+      }
+    : null);
+  paintNow();
 }
 
 async function init() {
@@ -179,25 +192,39 @@ async function init() {
 
   await listen<PositionUpdate>("position://update", (event) => {
     acceptPosition(event.payload);
-    // A persisted target cannot resolve until the first confirmed position;
-    // refresh here so startup does not require the user to re-select it.
-    void refreshNavigation();
+    // A persisted target can become resolvable on the first confirmed sample.
+    if (!navigation) void refreshNavigation();
+  });
+  await listen<{ resetReason: string }>("position://quality", (event) => {
+    estimator.invalidatePrediction();
+    void info(
+      `[hud-nav] state=quality-reset source=server reset=${event.payload.resetReason}`,
+    ).catch(() => {});
+    paintNow();
   });
   await listen("navigation://changed", () => void refreshNavigation());
   await listen("waypoints://changed", () => void refreshNavigation());
   await listen<Record<string, unknown>>("settings://changed", (event) => {
     applySettings(event.payload);
-    paint(Date.now(), true);
+    paintNow();
   });
 
   navigation = await invoke<NavigationTarget | null>("active_navigation");
+  estimator.setTarget(navigation
+    ? {
+        id: navigation.id,
+        name: navigation.name,
+        xCm: navigation.xCm,
+        yCm: navigation.yCm,
+      }
+    : null);
   const current = await invoke<PositionUpdate | null>("get_current_position");
   if (current) acceptPosition(current);
-  else paint(Date.now(), true);
-  await emit("hud://ready", {});
+  else paintNow();
+  await emit("hud://ready", { hasPosition });
 }
 
 void init().catch((reason) => {
   void error(`[hud] init failed: ${reason}`).catch(() => {});
-  void emit("hud://ready", {});
+  void emit("hud://ready", { hasPosition: false });
 });

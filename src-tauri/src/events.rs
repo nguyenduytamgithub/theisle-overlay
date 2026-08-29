@@ -6,6 +6,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 pub const POSITION_UPDATE: &str = "position://update";
+pub const POSITION_QUALITY: &str = "position://quality";
 pub const TRAIL_CHANGED: &str = "trail://changed";
 pub const SETTINGS_CHANGED: &str = "settings://changed";
 pub const NAVIGATION_CHANGED: &str = "navigation://changed";
@@ -25,6 +26,10 @@ pub struct PositionUpdate {
     pub heading_source: Option<&'static str>,
     /// Compass key ("dir.N".."dir.NW") for the heading, when known.
     pub compass_key: Option<&'static str>,
+    /// Raw server-facing bearing, separate from confirmed travel course.
+    pub server_facing_deg: Option<f64>,
+    /// Bearing derived from accepted coordinate movement only.
+    pub motion_course_deg: Option<f64>,
     pub velocity_x_cm_s: Option<f64>,
     pub velocity_y_cm_s: Option<f64>,
     pub velocity_px_x_s: Option<f64>,
@@ -32,7 +37,16 @@ pub struct PositionUpdate {
     pub confirmed_at_ms: i64,
     pub prediction_horizon_s: f64,
     pub stale_after_s: f64,
+    pub relocated: bool,
+    pub refreshed_only: bool,
     pub in_bounds: bool,
+}
+
+/// Coordinate-free signal telling every webview to stop local extrapolation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionQuality {
+    pub reset_reason: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

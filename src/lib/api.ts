@@ -18,6 +18,8 @@ export interface PositionUpdate {
   headingDeg: number | null;
   headingSource: "server" | "motion" | null;
   compassKey: string | null;
+  serverFacingDeg: number | null;
+  motionCourseDeg: number | null;
   velocityXCmS: number | null;
   velocityYCmS: number | null;
   velocityPxXS: number | null;
@@ -25,7 +27,13 @@ export interface PositionUpdate {
   confirmedAtMs: number;
   predictionHorizonS: number;
   staleAfterS: number;
+  relocated: boolean;
+  refreshedOnly: boolean;
   inBounds: boolean;
+}
+
+export interface PositionQuality {
+  resetReason: string;
 }
 
 export interface TrailPayload {
@@ -84,6 +92,13 @@ export type Settings = Record<string, unknown> & {
 export const onPositionUpdate = (
   cb: (p: PositionUpdate) => void,
 ): Promise<UnlistenFn> => listen<PositionUpdate>("position://update", (e) => cb(e.payload));
+
+export const onPositionQuality = (
+  cb: (quality: PositionQuality) => void,
+): Promise<UnlistenFn> => listen<PositionQuality>(
+  "position://quality",
+  (e) => cb(e.payload),
+);
 
 export const onTrailChanged = (
   cb: (t: TrailPayload) => void,

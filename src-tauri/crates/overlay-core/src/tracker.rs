@@ -148,6 +148,7 @@ impl PositionTracker {
         let mut outcome = SampleOutcome::default();
 
         if !x.is_finite() || !y.is_finite() || !z.is_finite() || !now_s.is_finite() {
+            self.velocity_cm_s = None;
             outcome.rejected_outlier = true;
             return outcome;
         }
@@ -156,6 +157,7 @@ impl PositionTracker {
             let moved = distance_m(current.x, current.y, x, y);
             let gap_s = now_s - current.at_s;
             if gap_s <= 0.0 {
+                self.velocity_cm_s = None;
                 outcome.rejected_outlier = true;
                 return outcome;
             }
@@ -195,6 +197,7 @@ impl PositionTracker {
             let plausible_m = POSITION_UNCERTAINTY_M + MAX_PLAUSIBLE_SPEED_MPS * gap_s;
             if moved > plausible_m {
                 self.pending_jump = Some(sample);
+                self.velocity_cm_s = None;
                 outcome.rejected_outlier = true;
                 return outcome;
             }
@@ -264,21 +267,39 @@ impl PositionTracker {
     }
 
     pub fn heading_with_source(&self, now_s: f64) -> Option<(f64, HeadingSource)> {
+        self.server_facing(now_s)
+            .map(|heading| (heading, HeadingSource::Server))
+            .or_else(|| {
+                self.motion_course(now_s)
+                    .map(|heading| (heading, HeadingSource::Motion))
+            })
+    }
+
+    /// Fresh facing supplied by the server, kept independent from travel.
+    pub fn server_facing(&self, now_s: f64) -> Option<f64> {
+        let current = self.current?;
+        (current.age_s(now_s) <= HEADING_MAX_AGE_S)
+            .then_some(current.heading_deg)
+            .flatten()
+    }
+
+    /// Course derived only from confirmed movement, never from server yaw.
+    pub fn motion_course(&self, now_s: f64) -> Option<f64> {
         let current = self.current?;
         if current.age_s(now_s) > HEADING_MAX_AGE_S {
             return None;
-        }
-        if let Some(heading) = current.heading_deg {
-            return Some((heading, HeadingSource::Server));
         }
         let anchor = self.history.iter().find(|sample| {
             current.at_s - sample.at_s <= HEADING_MAX_AGE_S
                 && distance_m(sample.x, sample.y, current.x, current.y)
                     >= HEADING_MIN_DISTANCE_M
         })?;
-        Some((
-            bearing_deg(anchor.x, anchor.y, current.x, current.y, &self.cal),
-            HeadingSource::Motion,
+        Some(bearing_deg(
+            anchor.x,
+            anchor.y,
+            current.x,
+            current.y,
+            &self.cal,
         ))
     }
 

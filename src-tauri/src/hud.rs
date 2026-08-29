@@ -16,6 +16,30 @@ const HUD_WIDTH: f64 = 720.0;
 const HUD_HEIGHT: f64 = 104.0;
 const HUD_TOP_MARGIN: f64 = 18.0;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadyAction {
+    Recreate,
+    StartSupervisor,
+    None,
+}
+
+#[derive(Default)]
+struct ReadyRecovery {
+    timeouts: u8,
+}
+
+impl ReadyRecovery {
+    fn on_timeout(&mut self) -> ReadyAction {
+        let action = match self.timeouts {
+            0 => ReadyAction::Recreate,
+            1 => ReadyAction::StartSupervisor,
+            _ => ReadyAction::None,
+        };
+        self.timeouts = self.timeouts.saturating_add(1);
+        action
+    }
+}
+
 fn build_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     let window = WebviewWindowBuilder::new(app, "hud", WebviewUrl::App("hud.html".into()))
         .title("navigation hud")
@@ -57,10 +81,31 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
     let fallback_app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(5));
-        if !started.swap(true, Ordering::SeqCst) {
-            log::warn!("hud://ready never arrived; starting supervisor anyway");
-            spawn_supervisor(fallback_app);
+        let mut recovery = ReadyRecovery::default();
+        loop {
+            std::thread::sleep(Duration::from_secs(5));
+            if started.load(Ordering::SeqCst) {
+                return;
+            }
+            match recovery.on_timeout() {
+                ReadyAction::Recreate => {
+                    log::warn!("hud ready timeout: recreating the webview once");
+                    if let Some(window) = fallback_app.get_webview_window("hud") {
+                        let _ = window.destroy();
+                    }
+                    if let Err(error) = build_window(&fallback_app) {
+                        log::warn!("hud one-shot recreation failed: {error}");
+                    }
+                }
+                ReadyAction::StartSupervisor => {
+                    if !started.swap(true, Ordering::SeqCst) {
+                        log::warn!("hud ready timeout after one recreation: starting supervisor");
+                        spawn_supervisor(fallback_app);
+                    }
+                    return;
+                }
+                ReadyAction::None => return,
+            }
         }
     });
     Ok(())
@@ -90,7 +135,10 @@ struct GamePresence {
 
 impl GamePresence {
     fn new() -> Self {
-        Self { hwnd: None, misses: 0 }
+        Self {
+            hwnd: None,
+            misses: 0,
+        }
     }
 
     fn observe(&mut self, found: Option<isize>) {
@@ -212,12 +260,7 @@ fn spawn_supervisor(app: AppHandle) {
     });
 }
 
-fn anchor_position(
-    rect: (i32, i32, i32, i32),
-    scale: f64,
-    width: f64,
-    margin: f64,
-) -> (i32, i32) {
+fn anchor_position(rect: (i32, i32, i32, i32), scale: f64, width: f64, margin: f64) -> (i32, i32) {
     let (game_x, game_y, game_width, _) = rect;
     let physical_width = (width * scale).round() as i32;
     let physical_margin = (margin * scale).round() as i32;
@@ -263,5 +306,13 @@ mod tests {
             windows.iter().any(|window| window.as_str() == Some("hud")),
             "the HUD webview must be authorized to invoke commands and emit its ready event"
         );
+    }
+
+    #[test]
+    fn missing_ready_allows_one_recreation_then_starts_supervisor() {
+        let mut recovery = ReadyRecovery::default();
+        assert_eq!(recovery.on_timeout(), ReadyAction::Recreate);
+        assert_eq!(recovery.on_timeout(), ReadyAction::StartSupervisor);
+        assert_eq!(recovery.on_timeout(), ReadyAction::None);
     }
 }

@@ -2,7 +2,8 @@
 //! windows. Port of the sample-handling wiring from the original `main.py`.
 
 use overlay_core::{
-    bearing_to_compass_key, world_to_pixel, Calibration, HeadingSource, Sample, SampleOutcome,
+    bearing_to_compass_key, distance_m, world_to_pixel, Calibration, HeadingSource, Sample,
+    SampleOutcome,
 };
 // Note: every px in these payloads is computed with state.active_calibration()
 // at emit time — nothing px-shaped is cached, so a basemap switch only needs a
@@ -10,8 +11,8 @@ use overlay_core::{
 use tauri::{AppHandle, Manager};
 
 use crate::events::{
-    emit_all, PositionUpdate, TrailPayload, POSITION_UPDATE, SETTINGS_CHANGED,
-    TRAIL_CHANGED,
+    emit_all, PositionQuality, PositionUpdate, TrailPayload, POSITION_QUALITY, POSITION_UPDATE,
+    SETTINGS_CHANGED, TRAIL_CHANGED,
 };
 use crate::state::{AppState, LockExt};
 
@@ -32,21 +33,61 @@ pub fn ingest_sample_with_heading(
     let now_s = state.now_s();
     let cal = state.active_calibration();
 
-    let (outcome, current, heading, velocity, trail) = {
+    let (outcome, current, heading, server_facing, motion_course, velocity, correction_m, trail) = {
         let mut tracker = state.tracker.lock_safe();
+        let previous = tracker.current;
         let outcome = tracker.add_sample_with_heading(x, y, z, heading_deg, now_s);
         let current = tracker.current;
         let heading = tracker.heading_with_source(now_s);
+        let server_facing = tracker.server_facing(now_s);
+        let motion_course = tracker.motion_course(now_s);
         let velocity = tracker.velocity_cm_s();
+        let correction_m = previous
+            .zip(current)
+            .map(|(from, to)| distance_m(from.x, from.y, to.x, to.y));
         let trail = outcome
             .trail_changed
             .then(|| trail_payload(&tracker.segments, cal));
-        (outcome, current, heading, velocity, trail)
+        (
+            outcome,
+            current,
+            heading,
+            server_facing,
+            motion_course,
+            velocity,
+            correction_m,
+            trail,
+        )
     };
 
     if !should_publish(outcome) {
-        log::warn!("position sample quarantined as implausible");
+        if let Some(quality) = quality_reset_for(outcome) {
+            emit_all(app, POSITION_QUALITY, quality);
+        }
+        log::warn!("navigation state=quarantined reset=outlier");
         return;
+    }
+
+    if outcome.relocated || outcome.refreshed_only || outcome.broke_segment {
+        let source = heading
+            .map(|(_, source)| heading_source_key(source))
+            .unwrap_or("none");
+        let state_key = if outcome.relocated {
+            "relocated"
+        } else if outcome.refreshed_only {
+            "refreshed"
+        } else {
+            "segment-start"
+        };
+        let reset = if outcome.relocated {
+            "relocation"
+        } else {
+            "none"
+        };
+        log::debug!(
+            "navigation state={state_key} source={source} age_ms=0 correction_m={:.1} reset={reset}",
+            correction_m.unwrap_or(0.0)
+        );
     }
 
     if should_persist(outcome) {
@@ -60,8 +101,13 @@ pub fn ingest_sample_with_heading(
 
     let payload = position_payload(
         current.expect("accepted sample is current"),
-        heading,
-        velocity,
+        PositionMetadata {
+            heading,
+            server_facing_deg: server_facing,
+            motion_course_deg: motion_course,
+            velocity,
+            outcome,
+        },
         now_s,
         cal,
     );
@@ -79,6 +125,12 @@ fn should_persist(outcome: SampleOutcome) -> bool {
     outcome.accepted && !outcome.refreshed_only
 }
 
+fn quality_reset_for(outcome: SampleOutcome) -> Option<PositionQuality> {
+    outcome.rejected_outlier.then_some(PositionQuality {
+        reset_reason: "outlier",
+    })
+}
+
 const PREDICTION_HORIZON_S: f64 = 4.0;
 const STALE_AFTER_S: f64 = 12.0;
 
@@ -89,16 +141,24 @@ fn heading_source_key(source: HeadingSource) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+struct PositionMetadata {
+    heading: Option<(f64, HeadingSource)>,
+    server_facing_deg: Option<f64>,
+    motion_course_deg: Option<f64>,
+    velocity: Option<(f64, f64)>,
+    outcome: SampleOutcome,
+}
+
 fn position_payload(
     current: Sample,
-    heading: Option<(f64, HeadingSource)>,
-    velocity: Option<(f64, f64)>,
+    metadata: PositionMetadata,
     now_s: f64,
     cal: &Calibration,
 ) -> PositionUpdate {
     let (px, py) = world_to_pixel(current.x, current.y, cal);
     let ((velocity_x_cm_s, velocity_y_cm_s), (velocity_px_x_s, velocity_px_y_s)) =
-        match velocity {
+        match metadata.velocity {
             Some((vx, vy)) => {
                 let (next_px, next_py) = world_to_pixel(current.x + vx, current.y + vy, cal);
                 (
@@ -109,7 +169,7 @@ fn position_payload(
             None => ((None, None), (None, None)),
         };
     let age_ms = ((now_s - current.at_s).max(0.0) * 1000.0).round() as i64;
-    let heading_deg = heading.map(|(degrees, _)| degrees);
+    let heading_deg = metadata.heading.map(|(degrees, _)| degrees);
     PositionUpdate {
         x_cm: current.x,
         y_cm: current.y,
@@ -117,8 +177,12 @@ fn position_payload(
         px,
         py,
         heading_deg,
-        heading_source: heading.map(|(_, source)| heading_source_key(source)),
+        heading_source: metadata
+            .heading
+            .map(|(_, source)| heading_source_key(source)),
         compass_key: heading_deg.map(bearing_to_compass_key),
+        server_facing_deg: metadata.server_facing_deg,
+        motion_course_deg: metadata.motion_course_deg,
         velocity_x_cm_s,
         velocity_y_cm_s,
         velocity_px_x_s,
@@ -126,6 +190,8 @@ fn position_payload(
         confirmed_at_ms: chrono::Utc::now().timestamp_millis() - age_ms,
         prediction_horizon_s: PREDICTION_HORIZON_S,
         stale_after_s: STALE_AFTER_S,
+        relocated: metadata.outcome.relocated,
+        refreshed_only: metadata.outcome.refreshed_only,
         in_bounds: overlay_core::is_in_bounds(px, py, cal),
     }
 }
@@ -137,16 +203,29 @@ fn position_payload(
 pub fn current_payload(state: &AppState) -> Option<PositionUpdate> {
     let now_s = state.now_s();
     let cal = state.active_calibration();
-    let (current, heading, velocity) = {
+    let (current, heading, server_facing, motion_course, velocity) = {
         let tracker = state.tracker.lock_safe();
         (
             tracker.current,
             tracker.heading_with_source(now_s),
+            tracker.server_facing(now_s),
+            tracker.motion_course(now_s),
             tracker.velocity_cm_s(),
         )
     };
     let cur = current?;
-    Some(position_payload(cur, heading, velocity, now_s, cal))
+    Some(position_payload(
+        cur,
+        PositionMetadata {
+            heading,
+            server_facing_deg: server_facing,
+            motion_course_deg: motion_course,
+            velocity,
+            outcome: SampleOutcome::default(),
+        },
+        now_s,
+        cal,
+    ))
 }
 
 /// Re-send the full current state to every window. Belt-and-braces: hidden
@@ -188,7 +267,7 @@ pub fn trail_payload(segments_cm: &[Vec<(f64, f64)>], cal: &Calibration) -> Trai
 
 #[cfg(test)]
 mod tests {
-    use overlay_core::SampleOutcome;
+    use overlay_core::{Calibration, HeadingSource, Sample, SampleOutcome};
 
     #[test]
     fn quarantined_sample_is_not_published_or_persisted() {
@@ -201,6 +280,18 @@ mod tests {
     }
 
     #[test]
+    fn quarantined_sample_requests_coordinate_free_quality_reset() {
+        let rejected = SampleOutcome {
+            rejected_outlier: true,
+            ..SampleOutcome::default()
+        };
+        assert_eq!(
+            super::quality_reset_for(rejected).map(|quality| quality.reset_reason),
+            Some("outlier"),
+        );
+    }
+
+    #[test]
     fn accepted_duplicate_updates_heading_but_not_the_trail_file() {
         let refreshed = SampleOutcome {
             accepted: true,
@@ -209,5 +300,38 @@ mod tests {
         };
         assert!(super::should_publish(refreshed));
         assert!(!super::should_persist(refreshed));
+    }
+
+    #[test]
+    fn payload_keeps_independent_heading_and_sample_outcome_metadata() {
+        let outcome = SampleOutcome {
+            accepted: true,
+            relocated: true,
+            refreshed_only: true,
+            ..SampleOutcome::default()
+        };
+        let payload = super::position_payload(
+            Sample {
+                x: 0.0,
+                y: 10_000.0,
+                z: 0.0,
+                at_s: 10.0,
+                heading_deg: Some(5.0),
+            },
+            super::PositionMetadata {
+                heading: Some((5.0, HeadingSource::Server)),
+                server_facing_deg: Some(5.0),
+                motion_course_deg: Some(90.0),
+                velocity: None,
+                outcome,
+            },
+            10.0,
+            Calibration::gateway(),
+        );
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["serverFacingDeg"], 5.0);
+        assert_eq!(json["motionCourseDeg"], 90.0);
+        assert_eq!(json["relocated"], true);
+        assert_eq!(json["refreshedOnly"], true);
     }
 }

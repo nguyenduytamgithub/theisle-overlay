@@ -8,11 +8,11 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
 
-The current source is the **v1.7.2 Magnifier Night Boost candidate**; the latest
-public download remains v1.7.0 until the candidate passes a real dark-scene
-acceptance check. Its goal is reliable position, heading, trails, waypoint
+The current source is the integrated **v1.7.4 Navigation + Magnifier Night
+Boost candidate**. Its goal is reliable position, heading, trails, waypoint
 guidance, and useful dark-scene visibility without touching game memory or Easy
-Anti-Cheat.
+Anti-Cheat. A public release is gated on real in-game dark-scene and navigation
+acceptance.
 
 Upstream 2.x is now a closed-source release with separate Pro features. This
 fork does **not** contain 2.x voice, friend positions, the skin editor, or Pro
@@ -27,19 +27,19 @@ installer with manual fork updates.
 
 ## What does this fork improve?
 
-| While playing | Open-source upstream v1.5.2 | Magnifier Night Boost v1.7.2 candidate |
+| While playing | Open-source upstream v1.5.2 | Integrated v1.7.4 candidate |
 |---|---|---|
 | IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
-| Motion between server samples | Position jumps on every response | Up to **4 seconds** of bounded visual prediction, then freezes for confirmation; **350 ms** correction blend |
-| Bad coordinate spikes | Can draw a trail kilometres away | Impossible samples are quarantined; a far relocation needs **two consistent samples** |
-| Heading | Mainly inferred from travelled path | Prefers fresh **server yaw**, with motion heading as fallback |
+| Motion between server samples | Position jumps on every response | Linear for 4 seconds, decays through 12 seconds, then holds; **300/650 ms** correction based on distance |
+| Bad coordinate spikes | Can draw a trail kilometres away | Impossible samples are quarantined and stop old prediction; a far relocation needs **two consistent samples** |
+| Travel course | Mainly inferred from travelled path | Separates server facing from motion course, switches source after 1 stable second, and crosses 0° without full spins |
 | Waypoints | Rim arrow points to the nearest waypoint | Pick one explicit destination shared by the full map, minimap, and HUD |
-| In-game guidance | No dedicated navigation HUD | Click-through top-centre HUD with compass, degrees, turn arrow, target name, and distance |
-| Delayed data | Freshness is unclear | Explicit **SERVER / ESTIMATE / STALE** state |
+| In-game guidance | No dedicated navigation HUD | Stable north-up target arrow plus **GO STRAIGHT / BEAR / TURN / TURN AROUND** and cardinal course text |
+| Delayed data | Freshness is unclear | Explicit **TRACKING / ESTIMATING / WAITING FOR SERVER** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
 | Scenes too dark to read | No dedicated visibility control | Windows Magnification contrast boost from the displayed scene; **NIGHT VISION** button + `Ctrl+Alt+N`, strength 0–100, focus-aware cleanup/reapply |
 
-Smooth motion is a **bounded estimate**, not fake realtime. The server still
+The 30 FPS presentation is a **bounded local estimate**, not fake confirmed realtime. The server still
 confirms real coordinates every five seconds. Without IslePilot live-map
 support, use `Tab` → **Asset Location** as before.
 
@@ -57,11 +57,12 @@ support, use `Tab` → **Asset Location** as before.
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
   never blocks play. North stays up; its rim arrow points to the waypoint you selected.
-- **In-game Navigation HUD**: N/E/S/W compass, heading in degrees, required-turn
-  arrow, target name, distance, and data freshness; auto-hides on Alt-Tab and
-  toggles with `Ctrl+Alt+H`.
+- **In-game Navigation HUD**: a large **absolute destination arrow** with north
+  up, N/E/S/W travel-course text, plain maneuver instructions, target name,
+  distance, and data freshness; auto-hides on Alt-Tab and toggles with
+  `Ctrl+Alt+H`.
 - **Display Night Vision**: a top-right **NIGHT VISION** button plus
-  `Ctrl+Alt+N`, with strength 0–100 in Settings. v1.7.2 uses Windows
+  `Ctrl+Alt+N`, with strength 0–100 in Settings. v1.7.4 uses Windows
   Magnification to locally redraw displayed screen pixels with higher contrast;
   display gamma is no longer applied. The native surface is click-through,
   cleans up on Alt-Tab/switch-off/exit, and reports ON only after native readback
@@ -82,7 +83,10 @@ support, use `Tab` → **Asset Location** as before.
   map, minimap, and HUD all use the same destination.
 - **Search & navigation**: search places/waypoints, paste coordinates to jump
   there, and draw a direct line and arrow from your position to the selected
-  destination; arrival is reported inside a 15 m radius.
+  destination; both maps show local estimates as a dashed blue segment;
+  arrival is latched inside a default 25 m radius so the arrow cannot flip
+  after prediction passes the pin. This is a direct bearing to the pin,
+  **not** terrain-safe routing or a navmesh path.
 - **More reliable travel trail** recorded per session: the previous session is
   restored, impossible jumps are rejected, and predicted display points are
   never written into history.
@@ -99,8 +103,8 @@ support, use `Tab` → **Asset Location** as before.
 ## Quick install
 
 1. Open the [fork Releases](https://github.com/nguyenduytamgithub/theisle-overlay/releases)
-   and download `TheIsle Overlay_1.7.0_x64-setup.exe` from
-   **v1.7.0-night-vision**.
+   and download the `TheIsle Overlay_*_x64-setup.exe` asset from the latest
+   accepted release.
 2. Exit any older Overlay from the system tray, then run the installer. Existing
    settings and waypoints are preserved.
 3. If SmartScreen warns, choose **More info → Run anyway**. The installer is
@@ -122,8 +126,10 @@ want to keep Navigation HUD; install future builds from this fork's Releases.
 2. Open the full map with `Ctrl+Alt+F`.
 3. Right-click the destination to create a waypoint, or select a saved waypoint.
 4. Choose **Navigate to this waypoint** from its menu.
-5. Return to the game. The HUD shows heading, turn arrow, and distance; the
-   minimap points to the same target. Choose **Stop navigation** when finished.
+5. Return to the game. Keep north at the top: the large blue arrow is the
+   absolute bearing to the destination; **COURSE** and the plain maneuver text
+   tell you how to adjust. The minimap uses the same target. Choose **Stop
+   navigation** when finished.
 
 | Key | Action |
 |---|---|
@@ -188,18 +194,19 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-The v1.7.2 candidate identity, installation, and runtime evidence are recorded
-in the [verification record](docs/verification/night-boost-v1.7.2.md). Its hash
-must not be presented as a public release until real dark-scene acceptance.
+The integrated v1.7.4 candidate identity, installation, and runtime evidence are
+recorded after build and verification. Its hash must not be presented as a
+public release until real dark-scene and navigation acceptance.
 
 | Item | Size |
 |---|---|
-| v1.7.2 candidate NSIS installer | Recorded after build with SHA-256 |
-| v1.7.2 candidate installed executable | Recorded after build with SHA-256 |
+| v1.7.4 candidate NSIS installer | Recorded after build with SHA-256 |
+| v1.7.4 candidate installed executable | Recorded after build with SHA-256 |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 
-The HUD caps DOM writes at roughly 30 FPS and predicts only while a moving sample
-is active; there is no background game-memory reader or scanner. Runtime RAM
+The HUD and maps cap local presentation at roughly 30 FPS, run linearly for four
+seconds, decay through twelve seconds, then hold and show **WAITING FOR SERVER**;
+there is no background game-memory reader or scanner. Runtime RAM
 depends on WebView2, open tabs, and cached 3D models, so this fork does not publish
 one fixed RAM claim.
 
@@ -208,18 +215,19 @@ one fixed RAM claim.
 1. **Game display mode**: no out-of-process overlay can draw over **Exclusive
    Fullscreen** — a Windows limitation. Use **Windowed** or **Borderless
    Fullscreen**. The app reads your game config and warns you if the mode is wrong.
-2. **Automatic position depends on the server**: an IslePilot live map confirms
-   position every five seconds by default. Between responses the app estimates for
-   at most four seconds. If live map is disabled, use `Tab` → **Asset Location**.
-3. **Heading prefers server yaw**. Without yaw, the app needs at least two valid
-   movement samples to infer direction; stale data becomes **STALE** instead of
-   continuing to point confidently.
-4. **Night Vision v1.7.2 requires Windowed/Borderless** so Windows Magnification
+2. **Confirmed position still depends on the server**: an IslePilot live map
+   confirms position every five seconds by default. Between responses the local
+   view decays after four seconds and fully holds after twelve. If live map is
+   disabled, use `Tab` → **Asset Location**.
+3. **The destination arrow never consumes server yaw**, so looking around cannot
+   spin it. COURSE prefers confirmed motion and uses stable server facing only as
+   fallback; old data becomes **WAITING FOR SERVER**.
+4. **Night Vision v1.7.4 requires Windowed/Borderless** so Windows Magnification
    can compose the contrast-boosted image over the game; out-of-process overlays
-   cannot appear in Exclusive Fullscreen. It reads displayed screen pixels on
-   this PC, but does not open the game process, read game memory, inject or hook
-   code, synthesize input, access the network, or save/send images. Server rules
-   still decide whether third-party tools are permitted.
+   cannot appear in Exclusive Fullscreen. It processes displayed screen pixels
+   on this PC, but does not open the game process, read game memory, inject or
+   hook code, synthesize input, access the network, or save/send images. Server
+   rules still decide whether third-party tools are permitted.
 5. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
 6. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
@@ -252,9 +260,10 @@ The game runs kernel-level Easy Anti-Cheat. This app is safe because it
   server/game-provided data outside the game process.
 - Hotkeys use `RegisterHotKey` (Windows' cooperative API), **not** a keyboard
   hook.
-- Night Vision uses a static, opacity-controlled, click-through WebView that
-  never captures pixels; Windows gamma readback/recovery is supplemental. It
-  never obtains game content.
+- Night Vision uses Windows Magnification to process pixels **already displayed
+  on this screen** and redraw them locally with higher contrast in a
+  click-through native surface. It does not open the game process, read memory,
+  inject or hook code, access the network, or save/send images.
 - Dino stats / Garage / 3D models come over **HTTPS from the IslePilot system**
   (the islepilot.eu API or the server's own website) — again, nothing to do
   with the game process.

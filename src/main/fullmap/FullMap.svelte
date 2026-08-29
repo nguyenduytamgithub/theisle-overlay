@@ -31,6 +31,7 @@
     onNavigationChanged,
     onWaypointsChanged,
     onPositionUpdate,
+    onPositionQuality,
     onSettingsChanged,
     onTrailChanged,
     renameWaypoint,
@@ -59,10 +60,9 @@
   import LayerPanel from "./LayerPanel.svelte";
   import NamePrompt from "./NamePrompt.svelte";
   import {
-    projectedPosition,
-    smoothedPosition,
-    type ProjectedPosition,
-  } from "$lib/navigation/prediction";
+    NavigationEstimator,
+    type NavigationSnapshot,
+  } from "$lib/navigation/estimator";
   import { t, tNow } from "$lib/i18n";
   import { ask } from "@tauri-apps/plugin-dialog";
 
@@ -105,6 +105,10 @@
   let currentTrail: L.LayerGroup | undefined;
   let previousTrail: L.LayerGroup | undefined;
   let navigationGroup: L.LayerGroup | undefined;
+  let navigationLine: L.Polyline | undefined;
+  let navigationArrow: L.Marker | undefined;
+  let navigationArrowEl: HTMLElement | null = null;
+  let predictionTail: L.Polyline | undefined;
   let playerMarker: L.Marker | undefined;
   let playerArrowEl: HTMLElement | null = null;
 
@@ -112,16 +116,17 @@
   let position = $state<PositionUpdate | null>(null);
   let navigation = $state<NavigationTarget | null>(null);
   let confirmedPosition: PositionUpdate | null = null;
-  let displayedPosition: ProjectedPosition | null = null;
-  let correctionFrom: ProjectedPosition | null = null;
-  let correctionStartedAtMs = 0;
-  let predictionFrame: number | null = null;
+  let navigationSnapshot: NavigationSnapshot | null = null;
+  const estimator = new NavigationEstimator();
+  let predictionTimer: number | null = null;
   // The newest sample/trail that arrived while the tab was hidden. Nothing is
   // painted for them until the tab shows again: keeping the map alive must
   // not become a map that pans, re-projects and round-trips to Rust for the
   // nearest waypoint on every sample while nobody is looking at it — that
   // would trade a rebuild-per-visit for a cost-per-sample and come out worse.
   let parkedPosition: PositionUpdate | null = null;
+  // True only when a quality reset arrived after the currently parked sample.
+  let parkedQualityReset = false;
   let parkedTrail: TrailPayload | null = null;
   let availableLayers = $state<string[]>([]);
   let promptOpen = $state(false);
@@ -423,44 +428,104 @@
 
   function drawNavigation() {
     if (!navigationGroup) return;
-    navigationGroup.clearLayers();
-    if (!position || !navigation) return;
+    if (!position || !navigation) {
+      navigationGroup.clearLayers();
+      navigationLine = undefined;
+      navigationArrow = undefined;
+      navigationArrowEl = null;
+      return;
+    }
 
-    const color = navigation.arrived ? "#66bb6a" : (navigation.color ?? COLORS.waypoint);
+    const arrived = navigationSnapshot?.arrived ?? navigation.arrived;
+    const color = arrived ? "#66bb6a" : (navigation.color ?? COLORS.waypoint);
     const from = toLatLng(position.px, position.py);
     const to = toLatLng(navigation.px, navigation.py);
-    L.polyline([from, to], {
-      color,
-      weight: 3,
-      opacity: 0.92,
-      dashArray: navigation.arrived ? undefined : "10 7",
-      interactive: false,
-    }).addTo(navigationGroup);
+    if (!navigationLine) {
+      navigationLine = L.polyline([from, to], {
+        color,
+        weight: 3,
+        opacity: 0.92,
+        dashArray: arrived ? undefined : "10 7",
+        interactive: false,
+      }).addTo(navigationGroup);
+    } else {
+      navigationLine.setLatLngs([from, to]);
+      navigationLine.setStyle({ color, dashArray: arrived ? undefined : "10 7" });
+    }
 
-    if (!navigation.arrived) {
+    if (arrived) {
+      if (navigationArrow) navigationGroup.removeLayer(navigationArrow);
+      navigationArrow = undefined;
+      navigationArrowEl = null;
+    } else {
       const mid = toLatLng(
         (position.px + navigation.px) / 2,
         (position.py + navigation.py) / 2,
       );
-      L.marker(mid, {
-        icon: L.divIcon({
-          className: "navigation-arrow",
-          html: `<span style="color:${color};transform:rotate(${(
-            (Math.atan2(navigation.px - position.px, -(navigation.py - position.py)) * 180) /
-            Math.PI
-          ).toFixed(2)}deg)">▲</span>`,
-          iconSize: [22, 22],
-          iconAnchor: [11, 11],
-        }),
+      if (!navigationArrow) {
+        navigationArrow = L.marker(mid, {
+          icon: L.divIcon({
+            className: "navigation-arrow",
+            html: `<span>▲</span>`,
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+          }),
+          interactive: false,
+          keyboard: false,
+        }).addTo(navigationGroup);
+        navigationArrowEl = navigationArrow.getElement()?.querySelector("span") ?? null;
+      } else {
+        navigationArrow.setLatLng(mid);
+      }
+      if (navigationArrowEl) {
+        const bearing = navigationSnapshot?.targetBearingDeg
+          ?? ((Math.atan2(navigation.yCm - position.yCm, -(navigation.xCm - position.xCm))
+            * 180) / Math.PI);
+        navigationArrowEl.style.color = color;
+        navigationArrowEl.style.transform = `rotate(${bearing.toFixed(2)}deg)`;
+      }
+    }
+  }
+
+  function drawPredictionTail(shown: NavigationSnapshot) {
+    if (!map || !confirmedPosition || !shown.predicting) {
+      if (predictionTail && map) map.removeLayer(predictionTail);
+      predictionTail = undefined;
+      return;
+    }
+    const tailLengthPx = Math.hypot(
+      shown.px - confirmedPosition.px,
+      shown.py - confirmedPosition.py,
+    );
+    if (tailLengthPx < 0.25) {
+      if (predictionTail) map.removeLayer(predictionTail);
+      predictionTail = undefined;
+      return;
+    }
+    const points = [
+      toLatLng(confirmedPosition.px, confirmedPosition.py),
+      toLatLng(shown.px, shown.py),
+    ];
+    if (!predictionTail) {
+      predictionTail = L.polyline(points, {
+        color: "#59d6ff",
+        weight: 2,
+        opacity: 0.78,
+        dashArray: "4 6",
         interactive: false,
-        keyboard: false,
-      }).addTo(navigationGroup);
+      }).addTo(map);
+      predictionTail.bringToBack();
+    } else {
+      predictionTail.setLatLngs(points);
     }
   }
 
   async function refreshNavigation() {
     navigation = await getActiveNavigation();
-    drawNavigation();
+    estimator.setTarget(navigation
+      ? { id: navigation.id, name: navigation.name, xCm: navigation.xCm, yCm: navigation.yCm }
+      : null);
+    paintPredictedNow();
   }
 
   let waypointsPx = $state<WaypointPx[]>([]);
@@ -651,42 +716,46 @@
   }
 
   function paintPredictedPosition(nowMs: number) {
-    predictionFrame = null;
+    predictionTimer = null;
     if (!confirmedPosition || !visible) return;
-    const projected = projectedPosition(confirmedPosition, nowMs);
-    const shown = smoothedPosition(
-      projected,
-      correctionFrom,
-      correctionStartedAtMs,
-      nowMs,
-    );
-    displayedPosition = shown;
+    const shown = estimator.snapshot(nowMs);
+    if (!shown) return;
+    navigationSnapshot = shown;
     const p: PositionUpdate = {
       ...confirmedPosition,
       xCm: shown.xCm,
       yCm: shown.yCm,
       px: shown.px,
       py: shown.py,
+      headingDeg: shown.guidanceCourseDeg,
     };
     position = p;
     if (!map) return;
     upsertPlayer(p);
+    drawPredictionTail(shown);
     drawNavigation();
     if (follow) map.panTo(toLatLng(p.px, p.py), { animate: false });
     updateEdgeArrow();
 
-    const correcting = nowMs - correctionStartedAtMs < 350;
-    if (projected.predicting || correcting) {
-      predictionFrame = requestAnimationFrame(() => paintPredictedPosition(Date.now()));
+    if (shown.freshness !== "waiting") {
+      predictionTimer = window.setTimeout(
+        () => paintPredictedPosition(Date.now()),
+        1_000 / 30,
+      );
     }
   }
 
-  function acceptConfirmedPosition(p: PositionUpdate) {
-    if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
-    correctionFrom = displayedPosition;
-    correctionStartedAtMs = Date.now();
+  function paintPredictedNow() {
+    if (predictionTimer !== null) window.clearTimeout(predictionTimer);
+    predictionTimer = null;
+    paintPredictedPosition(Date.now());
+  }
+
+  function acceptConfirmedPosition(p: PositionUpdate, resetPrediction = false) {
     confirmedPosition = p;
-    paintPredictedPosition(correctionStartedAtMs);
+    estimator.accept(p);
+    if (resetPrediction) estimator.invalidatePrediction();
+    paintPredictedNow();
   }
 
   // Coming back from display:none. Leaflet measured a 0x0 container while
@@ -712,11 +781,16 @@
       if (trail && currentTrail) drawTrail(currentTrail, trail, false);
       const p = parkedPosition;
       parkedPosition = null;
+      const resetPrediction = parkedQualityReset;
+      parkedQualityReset = false;
       if (p) {
-        acceptConfirmedPosition(p);
+        // Apply a later quality reset after accept so an older parked velocity
+        // cannot be resurrected when this tab becomes visible again.
+        acceptConfirmedPosition(p, resetPrediction);
         void refreshNavigation();
       } else if (confirmedPosition) {
-        paintPredictedPosition(Date.now());
+        if (resetPrediction) estimator.invalidatePrediction();
+        paintPredictedNow();
       }
     });
   });
@@ -724,6 +798,7 @@
   onMount(() => {
     (async () => {
       settings = await getSettings();
+      estimator.setArrivalRadiusM(Number(settings.navigation?.arrival_radius_m ?? 25));
       const info = await getMapInfo();
       // Unmounted meanwhile: a Leaflet map built now would sit on a detached
       // element and never be removed (onDestroy already ran).
@@ -793,10 +868,22 @@
         onPositionUpdate(async (p) => {
           if (!visible) {
             parkedPosition = p;
+            // This confirmed event is newer than any earlier quality reset.
+            parkedQualityReset = false;
             return;
           }
           acceptConfirmedPosition(p);
-          await refreshNavigation();
+          if (!navigation) await refreshNavigation();
+        }),
+      );
+      await bag.add(
+        onPositionQuality(() => {
+          estimator.invalidatePrediction();
+          if (!visible) {
+            parkedQualityReset = true;
+            return;
+          }
+          paintPredictedNow();
         }),
       );
       await bag.add(
@@ -811,6 +898,7 @@
       await bag.add(
         onSettingsChanged((s) => {
           settings = s;
+          estimator.setArrivalRadiusM(Number(s.navigation?.arrival_radius_m ?? 25));
           applyLayerVisibility(s.layers, zoneLabelsOn(s));
         }),
       );
@@ -846,7 +934,7 @@
 
   onDestroy(() => {
     destroyed = true;
-    if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
+    if (predictionTimer !== null) window.clearTimeout(predictionTimer);
     try {
       if (map) {
         // Leaflet ends a zoom animation on a 250 ms timer (Map._animateZoom,

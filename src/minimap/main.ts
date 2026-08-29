@@ -1,16 +1,12 @@
 // Minimap overlay entry. Deliberately tiny: no Skeleton, no Leaflet, no
-// framework — this webview runs beside the game for hours. Rendering is
-// event-driven only (zero idle CPU: no rAF loop, no animations, no timers).
+// framework — this webview runs beside the game for hours. Position paint is
+// capped at 30 fps and sleeps once the local estimate reaches its hold state.
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { error } from "@tauri-apps/plugin-log";
 import { installGlobalErrorLog } from "../lib/errlog";
-import {
-  projectedPosition,
-  smoothedPosition,
-  type ProjectedPosition,
-} from "../lib/navigation/prediction";
+import { NavigationEstimator } from "../lib/navigation/estimator";
 import { ANIMAL_GLYPHS, waypointGlyph } from "../lib/theme";
 import {
   PANEL_H,
@@ -35,6 +31,8 @@ interface PositionUpdate {
   py: number;
   headingDeg: number | null;
   compassKey: string | null;
+  serverFacingDeg: number | null;
+  motionCourseDeg: number | null;
   velocityXCmS: number | null;
   velocityYCmS: number | null;
   velocityPxXS: number | null;
@@ -42,6 +40,8 @@ interface PositionUpdate {
   confirmedAtMs: number;
   predictionHorizonS: number;
   staleAfterS: number;
+  relocated: boolean;
+  refreshedOnly: boolean;
 }
 interface PoiLayer {
   key: string;
@@ -91,6 +91,7 @@ let settings: Settings = {};
 const state: MinimapState = {
   position: null,
   trailPx: [],
+  predictionTailPx: null,
   pois: [],
   waypoints: [],
   nearestWaypoint: null,
@@ -118,47 +119,62 @@ const state: MinimapState = {
 let lastHeadingKey: string | null = null;
 let lastHeadingDeg: number | null = null;
 let confirmedPosition: PositionUpdate | null = null;
-let displayedPosition: ProjectedPosition | null = null;
-let correctionFrom: ProjectedPosition | null = null;
-let correctionStartedAtMs = 0;
-let predictionFrame: number | null = null;
+let estimator = new NavigationEstimator();
+let predictionTimer: number | null = null;
+
+const headingKey = (bearingDeg: number): string => {
+  const keys = ["dir.N", "dir.NE", "dir.E", "dir.SE", "dir.S", "dir.SW", "dir.W", "dir.NW"];
+  return keys[Math.round((((bearingDeg % 360) + 360) % 360) / 45) % 8];
+};
 
 function paintPredictedPosition(nowMs: number) {
-  predictionFrame = null;
+  predictionTimer = null;
   if (!confirmedPosition) return;
-  const projected = projectedPosition(confirmedPosition, nowMs);
-  const shown = smoothedPosition(
-    projected,
-    correctionFrom,
-    correctionStartedAtMs,
-    nowMs,
-  );
-  displayedPosition = shown;
+  const shown = estimator.snapshot(nowMs);
+  if (!shown) return;
   state.position = {
     xCm: shown.xCm,
     yCm: shown.yCm,
     px: shown.px,
     py: shown.py,
-    headingDeg: confirmedPosition.headingDeg,
+    headingDeg: shown.guidanceCourseDeg,
   };
+  const tailLengthPx = Math.hypot(
+    shown.px - confirmedPosition.px,
+    shown.py - confirmedPosition.py,
+  );
+  state.predictionTailPx = shown.predicting && tailLengthPx >= 0.25
+    ? [[confirmedPosition.px, confirmedPosition.py], [shown.px, shown.py]]
+    : null;
+  lastHeadingDeg = shown.guidanceCourseDeg;
+  lastHeadingKey = shown.guidanceCourseDeg === null ? null : headingKey(shown.guidanceCourseDeg);
+  refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
+  if (state.nearestWaypoint && shown.targetBearingDeg !== null && shown.targetDistanceM !== null) {
+    state.nearestWaypoint.bearingDeg = shown.targetBearingDeg;
+    state.nearestWaypoint.distanceM = shown.targetDistanceM;
+  }
   draw();
 
-  const correcting = nowMs - correctionStartedAtMs < 350;
-  if (projected.predicting || correcting) {
-    predictionFrame = requestAnimationFrame(() => paintPredictedPosition(Date.now()));
+  if (shown.freshness !== "waiting") {
+    predictionTimer = window.setTimeout(() => paintPredictedPosition(Date.now()), 1_000 / 30);
   }
 }
 
+function paintPredictedNow() {
+  if (predictionTimer !== null) window.clearTimeout(predictionTimer);
+  predictionTimer = null;
+  paintPredictedPosition(Date.now());
+}
+
 function acceptConfirmedPosition(position: PositionUpdate) {
-  if (predictionFrame !== null) cancelAnimationFrame(predictionFrame);
-  correctionFrom = displayedPosition;
-  correctionStartedAtMs = Date.now();
   confirmedPosition = position;
-  paintPredictedPosition(correctionStartedAtMs);
+  estimator.accept(position);
+  paintPredictedNow();
 }
 
 function applySettings(s: Settings) {
   settings = s;
+  estimator.setArrivalRadiusM(Number(s.navigation?.arrival_radius_m ?? 25));
   const mm = s.minimap ?? {};
   state.sizePx = Number(mm.size_px ?? 260);
   state.radiusM = Number(mm.radius_m ?? 600);
@@ -372,8 +388,13 @@ async function refreshNavigation() {
           glyph: target ? waypointGlyph(target.name) : undefined,
         }
       : null;
+    estimator.setTarget(near
+      ? { id: near.id, name: target?.name ?? "Target", xCm: near.xCm, yCm: near.yCm }
+      : null);
+    paintPredictedNow();
   } catch {
     state.nearestWaypoint = null;
+    estimator.setTarget(null);
   }
 }
 
@@ -392,8 +413,17 @@ async function reloadMapSource() {
     if (p) {
       // px belongs to a different calibration after a basemap switch; never
       // interpolate between the old and new pixel frames.
-      displayedPosition = null;
-      correctionFrom = null;
+      if (predictionTimer !== null) window.clearTimeout(predictionTimer);
+      estimator = new NavigationEstimator();
+      estimator.setArrivalRadiusM(Number(settings.navigation?.arrival_radius_m ?? 25));
+      if (state.nearestWaypoint) {
+        estimator.setTarget({
+          id: "active",
+          name: "Target",
+          xCm: state.nearestWaypoint.xCm,
+          yCm: state.nearestWaypoint.yCm,
+        });
+      }
       acceptConfirmedPosition(p);
     }
     const trail = await invoke<{ segmentsPx: [number, number][][] }>("get_current_trail");
@@ -415,12 +445,11 @@ async function init() {
   await listen<PositionUpdate>("position://update", (e) => {
     const p = e.payload;
     acceptConfirmedPosition(p);
-    lastHeadingKey = p.compassKey;
-    lastHeadingDeg = p.headingDeg;
-    refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
-    // The selected-target rim arrow re-aims from the new position; repaints once more when
-    // the answer arrives (still purely event-driven).
-    void refreshNavigation().then(draw);
+    if (!state.nearestWaypoint) void refreshNavigation().then(draw);
+  });
+  await listen<{ resetReason: string }>("position://quality", () => {
+    estimator.invalidatePrediction();
+    paintPredictedNow();
   });
   await listen("waypoints://changed", () => void refreshWaypoints());
   await listen("navigation://changed", () => void refreshNavigation().then(draw));
@@ -495,9 +524,6 @@ async function init() {
     const p = await invoke<PositionUpdate | null>("get_current_position");
     if (p) {
       acceptConfirmedPosition(p);
-      lastHeadingKey = p.compassKey;
-      lastHeadingDeg = p.headingDeg;
-      refreshHeadingLabel(settings.language === "en" ? "en" : "vi");
     }
     const trail = await invoke<{ segmentsPx: [number, number][][] }>("get_current_trail");
     state.trailPx = trail.segmentsPx;

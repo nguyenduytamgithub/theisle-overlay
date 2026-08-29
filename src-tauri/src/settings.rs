@@ -154,9 +154,9 @@ pub fn default_settings() -> Value {
             "min_node_distance_m": 5,
         },
         "navigation": {
-            "schema_version": 1,
+            "schema_version": 2,
             "target_waypoint_id": null,
-            "arrival_radius_m": 15.0,
+            "arrival_radius_m": 25.0,
             "hud_visible": true,
             "hud_opacity": 0.92,
         },
@@ -221,11 +221,13 @@ pub fn load_settings() -> Value {
         Some(over @ Value::Object(_)) => {
             let legacy_ten_second_poll = get_path(&over, &["navigation", "schema_version"])
                 .is_none()
-                && get_path(&over, &["islepilot", "poll_interval_s"])
-                    .and_then(Value::as_f64)
+                && get_path(&over, &["islepilot", "poll_interval_s"]).and_then(Value::as_f64)
                     == Some(10.0);
+            let legacy_navigation = get_path(&over, &["navigation", "schema_version"])
+                .and_then(Value::as_u64)
+                .is_some_and(|version| version < 2);
             let merged = merge_loaded_settings(&over);
-            if legacy_ten_second_poll {
+            if legacy_ten_second_poll || legacy_navigation {
                 if let Err(error) = save_settings(&merged) {
                     log::warn!("saving migrated poll interval failed: {error}");
                 }
@@ -239,11 +241,20 @@ pub fn load_settings() -> Value {
 fn merge_loaded_settings(over: &Value) -> Value {
     let mut merged = merge(&default_settings(), over);
     let legacy_navigation = get_path(over, &["navigation", "schema_version"]).is_none();
-    let legacy_default_poll = get_path(over, &["islepilot", "poll_interval_s"])
-        .and_then(Value::as_f64)
-        == Some(10.0);
+    let legacy_default_poll =
+        get_path(over, &["islepilot", "poll_interval_s"]).and_then(Value::as_f64) == Some(10.0);
     if legacy_navigation && legacy_default_poll {
         merged["islepilot"]["poll_interval_s"] = json!(5.0);
+    }
+    let schema_version = get_path(over, &["navigation", "schema_version"]).and_then(Value::as_u64);
+    if schema_version.is_some_and(|version| version < 2) {
+        let legacy_default_arrival = get_path(over, &["navigation", "arrival_radius_m"])
+            .and_then(Value::as_f64)
+            == Some(15.0);
+        if legacy_default_arrival {
+            merged["navigation"]["arrival_radius_m"] = json!(25.0);
+        }
+        merged["navigation"]["schema_version"] = json!(2);
     }
     merged
 }
@@ -305,15 +316,21 @@ pub fn get_path<'a>(settings: &'a Value, path: &[&str]) -> Option<&'a Value> {
 }
 
 pub fn get_f64(settings: &Value, path: &[&str], default: f64) -> f64 {
-    get_path(settings, path).and_then(Value::as_f64).unwrap_or(default)
+    get_path(settings, path)
+        .and_then(Value::as_f64)
+        .unwrap_or(default)
 }
 
 pub fn get_bool(settings: &Value, path: &[&str], default: bool) -> bool {
-    get_path(settings, path).and_then(Value::as_bool).unwrap_or(default)
+    get_path(settings, path)
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
 }
 
 pub fn get_str<'a>(settings: &'a Value, path: &[&str], default: &'a str) -> &'a str {
-    get_path(settings, path).and_then(Value::as_str).unwrap_or(default)
+    get_path(settings, path)
+        .and_then(Value::as_str)
+        .unwrap_or(default)
 }
 
 #[cfg(test)]
@@ -343,15 +360,21 @@ mod tests {
         assert_eq!(merged["minimap"]["corner"], "bottom-right");
         assert_eq!(merged["minimap"]["opacity"], 0.5);
         assert_eq!(merged["minimap"]["size_px"], 260, "defaults still present");
-        assert_eq!(merged["minimap"]["require_game"], true, "new key gets its default");
+        assert_eq!(
+            merged["minimap"]["require_game"], true,
+            "new key gets its default"
+        );
         assert_eq!(merged["hotkeys"]["toggle_minimap"], "Ctrl+Shift+M");
         assert_eq!(merged["hotkeys"]["toggle_fullmap"], "Ctrl+Alt+F");
         assert_eq!(merged["layers"]["food"], true);
         assert_eq!(merged["number_format"], "eu");
         assert_eq!(merged["language"], "vi", "new key gets its default");
-        assert_eq!(merged["map"]["basemap"], "vulnona", "new key gets its default");
+        assert_eq!(
+            merged["map"]["basemap"], "vulnona",
+            "new key gets its default"
+        );
         assert!(merged["navigation"]["target_waypoint_id"].is_null());
-        assert_eq!(merged["navigation"]["arrival_radius_m"], 15.0);
+        assert_eq!(merged["navigation"]["arrival_radius_m"], 25.0);
         assert_eq!(merged["navigation"]["hud_visible"], true);
         assert_eq!(merged["navigation"]["hud_opacity"], 0.92);
         assert_eq!(merged["hotkeys"]["toggle_hud"], "Ctrl+Alt+H");
@@ -370,7 +393,7 @@ mod tests {
         let legacy = json!({"islepilot": {"poll_interval_s": 10}});
         let merged = merge_loaded_settings(&legacy);
         assert_eq!(merged["islepilot"]["poll_interval_s"], 5.0);
-        assert_eq!(merged["navigation"]["schema_version"], 1);
+        assert_eq!(merged["navigation"]["schema_version"], 2);
     }
 
     #[test]
@@ -378,5 +401,18 @@ mod tests {
         let custom = json!({"islepilot": {"poll_interval_s": 20}});
         let merged = merge_loaded_settings(&custom);
         assert_eq!(merged["islepilot"]["poll_interval_s"], 20);
+    }
+
+    #[test]
+    fn schema_v1_default_arrival_migrates_but_custom_survives() {
+        let legacy = json!({"navigation":{"schema_version":1,"arrival_radius_m":15.0}});
+        let migrated = merge_loaded_settings(&legacy);
+        assert_eq!(migrated["navigation"]["schema_version"], 2);
+        assert_eq!(migrated["navigation"]["arrival_radius_m"], 25.0);
+
+        let custom = json!({"navigation":{"schema_version":1,"arrival_radius_m":40.0}});
+        let preserved = merge_loaded_settings(&custom);
+        assert_eq!(preserved["navigation"]["schema_version"], 2);
+        assert_eq!(preserved["navigation"]["arrival_radius_m"], 40.0);
     }
 }

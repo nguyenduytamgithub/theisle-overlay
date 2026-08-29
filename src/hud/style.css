@@ -58,7 +58,7 @@ body {
   filter: drop-shadow(0 0 4px rgba(255, 230, 0, 0.55));
 }
 
-#heading {
+#course {
   min-width: 210px;
   font-size: 17px;
   letter-spacing: 0.05em;
@@ -77,19 +77,19 @@ body {
   text-align: center;
 }
 
-.freshness.predicting {
+.freshness.estimating {
   border-color: rgba(255, 183, 77, 0.65);
   color: #ffcc80;
 }
 
-.freshness.stale {
+.freshness.waiting {
   border-color: rgba(239, 83, 80, 0.72);
   color: #ff8a80;
 }
 
 .navigation {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 150px;
+  grid-template-columns: 32px minmax(0, 1fr) 205px;
   align-items: center;
   gap: 9px;
   min-height: 37px;
@@ -133,15 +133,37 @@ body {
   font-size: 10px;
 }
 
-.turn {
-  color: #ffcc80;
-  font-size: 12px;
-  letter-spacing: 0.04em;
+.instruction-copy {
+  display: block;
+  min-width: 0;
   text-align: right;
 }
 
+.instruction {
+  display: block;
+  color: #ffcc80;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.progress-warning {
+  display: block;
+  overflow: hidden;
+  color: #ff8a80;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-warning.hidden {
+  display: none;
+}
+
 .navigation.arrived .target-arrow,
-.navigation.arrived .turn {
+.navigation.arrived .instruction {
   color: #81c784;
 }
 

@@ -163,6 +163,22 @@ fn impossible_spike_is_quarantined_and_return_to_route_is_accepted() {
 }
 
 #[test]
+fn quarantined_spike_invalidates_previous_prediction_velocity() {
+    let mut t = tracker();
+    t.add_sample(0.0, 0.0, 0.0, 0.0);
+    t.add_sample(100.0, 0.0, 0.0, 1.0);
+    assert_eq!(t.velocity_cm_s(), Some((100.0, 0.0)));
+
+    let spike = t.add_sample(500_000.0, 500_000.0, 0.0, 2.0);
+    assert!(spike.rejected_outlier);
+    assert_eq!(
+        t.velocity_cm_s(),
+        None,
+        "an outlier must stop extrapolation from the prior route",
+    );
+}
+
+#[test]
 fn two_consistent_far_samples_confirm_a_relocation_without_a_connecting_line() {
     let mut t = tracker();
     t.add_sample(0.0, 0.0, 0.0, 0.0);
@@ -205,6 +221,15 @@ fn fresh_server_heading_wins_and_motion_is_the_fallback() {
     fallback.add_sample(0.0, 0.0, 0.0, 0.0);
     fallback.add_sample(0.0, 10_000.0, 0.0, 10.0);
     assert_eq!(fallback.heading_with_source(10.0), Some((90.0, HeadingSource::Motion)));
+}
+
+#[test]
+fn motion_course_is_independent_from_server_facing() {
+    let mut t = tracker();
+    t.add_sample_with_heading(0.0, 0.0, 0.0, Some(270.0), 0.0);
+    t.add_sample_with_heading(0.0, 10_000.0, 0.0, Some(5.0), 10.0);
+    assert_eq!(t.server_facing(10.0), Some(5.0));
+    assert_eq!(t.motion_course(10.0), Some(90.0));
 }
 
 #[test]

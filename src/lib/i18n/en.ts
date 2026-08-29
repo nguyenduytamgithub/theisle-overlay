@@ -61,7 +61,7 @@ export const en: Record<MsgKey, string> = {
   "nav.active": "Navigating",
   "nav.start": "Navigate to this waypoint",
   "nav.stop": "Stop navigation",
-  "nav.arrived": "Arrived (within 15 m)",
+  "nav.arrived": "Arrived (inside the configured radius)",
 
   "search.placeholder": "Search places or paste coords…",
   "search.goto_coords": "Go to these coordinates",
