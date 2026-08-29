@@ -79,7 +79,7 @@
       return "night_vision.status_recovery_error";
     }
     if (!nightVision.supported) return "night_vision.status_unavailable";
-    if (nightVision.applied) return "night_vision.status_applied";
+    if (nightVision.visualBoostApplied) return "night_vision.status_applied";
     if (nightVision.requested) return "night_vision.status_waiting";
     return "night_vision.status_off";
   }
@@ -200,7 +200,7 @@
         <div class="flex items-center justify-between gap-3">
           <button
             class="cursor-pointer rounded border px-3 py-1 text-sm font-semibold disabled:opacity-50"
-            style={nightVision?.applied
+            style={nightVision?.visualBoostApplied
               ? "background: #607d26; color: #f2ffc4; border-color: #d8ff57"
               : "border-color: var(--color-border)"}
             disabled={nightVisionBusy}
@@ -210,7 +210,7 @@
           </button>
           <span
             class="text-xs font-semibold"
-            style:color={nightVision?.applied
+            style:color={nightVision?.visualBoostApplied
               ? "#c9f46b"
               : nightVision && !nightVision.supported
                 ? "#ff8a80"
@@ -250,6 +250,22 @@
         <p class="text-xs leading-relaxed" style="color: var(--color-muted)">
           {$t("settings.night_vision_hint")}
         </p>
+        <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <span style="color: var(--color-muted)">{$t("settings.night_vision_visual")}</span>
+          <strong style:color={nightVision?.visualBoostApplied ? "#c9f46b" : "#ffb86b"}>
+            {nightVision?.visualBoostApplied
+              ? $t("night_vision.visual_on")
+              : $t("night_vision.visual_off")}
+          </strong>
+          <span style="color: var(--color-muted)">{$t("settings.night_vision_gamma")}</span>
+          <span>
+            {nightVision?.gammaApplied
+              ? $t("night_vision.gamma_on")
+              : $t("night_vision.gamma_off")}
+          </span>
+          <span style="color: var(--color-muted)">{$t("settings.night_vision_build")}</span>
+          <code>{nightVision?.buildFingerprint ?? "—"}</code>
+        </div>
       </div>
     </section>
 

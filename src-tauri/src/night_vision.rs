@@ -33,9 +33,9 @@ const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";
 const FILTER_PAINT_EVENT: &str = "night-vision-filter://paint";
 const FILTER_PAINTED_EVENT: &str = "night-vision-filter://painted";
 const FILTER_COLOR: &str = "rgb(235, 240, 230)";
-const BUTTON_WIDTH: f64 = 164.0;
-const BUTTON_HEIGHT: f64 = 42.0;
-const BUTTON_MARGIN: f64 = 12.0;
+const BUTTON_WIDTH: f64 = 190.0;
+const BUTTON_HEIGHT: f64 = 48.0;
+const BUTTON_MARGIN: f64 = 16.0;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -652,10 +652,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             since_topmost = since_topmost.saturating_add(TICK_MS);
 
             let Some(window) = app.get_webview_window(FILTER_LABEL) else {
-                let state = app
-                    .state::<NightVision>()
-                    .controller
-                    .mark_filter_failed();
+                let state = app.state::<NightVision>().controller.mark_filter_failed();
                 emit_state(&app, &state);
                 if since_recreate >= RECREATE_MS {
                     since_recreate = 0;
@@ -698,10 +695,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             if ready && heartbeat_age_ms >= 6_000 {
                 log::warn!("night vision filter heartbeat stale; recreating owned window");
                 let _ = window.close();
-                let failed = app
-                    .state::<NightVision>()
-                    .controller
-                    .mark_filter_failed();
+                let failed = app.state::<NightVision>().controller.mark_filter_failed();
                 emit_state(&app, &failed);
                 continue;
             }
@@ -733,15 +727,10 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                 let (left, top, width, height) = rect;
                 if window
                     .set_position(PhysicalPosition::new(left, top))
-                    .and_then(|_| {
-                        window.set_size(PhysicalSize::new(width as u32, height as u32))
-                    })
+                    .and_then(|_| window.set_size(PhysicalSize::new(width as u32, height as u32)))
                     .is_err()
                 {
-                    let failed = app
-                        .state::<NightVision>()
-                        .controller
-                        .mark_filter_failed();
+                    let failed = app.state::<NightVision>().controller.mark_filter_failed();
                     emit_state(&app, &failed);
                     continue;
                 }
@@ -752,10 +741,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             if crate::win::vis::is_visible(FILTER_LABEL) != Some(true) {
                 crate::webview_mem::on_shown(&window);
                 if window.show().is_err() || !crate::win::vis::wait_visible(FILTER_LABEL, 500) {
-                    let failed = app
-                        .state::<NightVision>()
-                        .controller
-                        .mark_filter_failed();
+                    let failed = app.state::<NightVision>().controller.mark_filter_failed();
                     emit_state(&app, &failed);
                     continue;
                 }
@@ -768,10 +754,8 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                 && since_paint >= PAINT_RETRY_MS
             {
                 since_paint = 0;
-                if let Some(request_id) = app
-                    .state::<NightVision>()
-                    .controller
-                    .begin_visual_request()
+                if let Some(request_id) =
+                    app.state::<NightVision>().controller.begin_visual_request()
                 {
                     let request = FilterPaintRequest {
                         request_id,
@@ -1647,13 +1631,18 @@ mod tests {
     #[test]
     fn button_anchor_stays_inside_game_top_right_at_display_scale() {
         let rect = (100, 200, 1920, 1080);
-        let (x, y) = super::button_anchor(rect, 1.5, (164.0, 42.0), 12.0);
+        let (x, y) = super::button_anchor(
+            rect,
+            1.5,
+            (super::BUTTON_WIDTH, super::BUTTON_HEIGHT),
+            super::BUTTON_MARGIN,
+        );
 
-        assert_eq!((x, y), (1756, 218));
+        assert_eq!((x, y), (1711, 224));
         assert!(x >= rect.0);
         assert!(y >= rect.1);
-        assert!(x + (164.0_f64 * 1.5).round() as i32 <= rect.0 + rect.2);
-        assert!(y + (42.0_f64 * 1.5).round() as i32 <= rect.1 + rect.3);
+        assert!(x + (super::BUTTON_WIDTH * 1.5).round() as i32 <= rect.0 + rect.2);
+        assert!(y + (super::BUTTON_HEIGHT * 1.5).round() as i32 <= rect.1 + rect.3);
     }
 
     #[test]

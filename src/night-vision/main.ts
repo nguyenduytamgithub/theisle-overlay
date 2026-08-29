@@ -12,6 +12,10 @@ interface NightVisionState {
   supported: boolean;
   strength: number;
   errorKey: string | null;
+  visualBoostReady: boolean;
+  visualBoostApplied: boolean;
+  gammaApplied: boolean;
+  buildFingerprint: string;
 }
 
 type Language = "vi" | "en";
@@ -27,6 +31,10 @@ let state: NightVisionState = {
   supported: true,
   strength: 70,
   errorKey: null,
+  visualBoostReady: false,
+  visualBoostApplied: false,
+  gammaApplied: false,
+  buildFingerprint: "loading",
 };
 
 function applySettings(settings: Record<string, unknown>) {
@@ -41,13 +49,18 @@ function stateTitle(value: NightVisionState): string {
   }
   if (!value.supported) {
     return language === "vi"
-      ? "Màn hình hoặc chế độ HDR hiện tại không nhận chỉnh gamma."
-      : "The current display or HDR mode rejected gamma adjustment.";
+      ? "Lớp tăng sáng chưa hoạt động; nút này chưa được phép báo BẬT."
+      : "The visual boost is not active; this button cannot report ON yet.";
   }
-  if (value.requested && !value.applied) {
+  if (value.requested && !value.visualBoostApplied) {
     return language === "vi"
       ? "Đã yêu cầu; đang chờ The Isle ở màn hình trước."
       : "Requested; waiting for The Isle to be foreground.";
+  }
+  if (value.visualBoostApplied && !value.gammaApplied) {
+    return language === "vi"
+      ? `Lớp tăng sáng đã bật ở ${value.strength}%. Gamma phụ trợ không được driver nhận.`
+      : `Visual boost is on at ${value.strength}%. Supplemental gamma was not accepted.`;
   }
   return language === "vi"
     ? `Cường độ ${value.strength}%. Bấm hoặc nhấn Ctrl+Alt+N.`
@@ -56,18 +69,18 @@ function stateTitle(value: NightVisionState): string {
 
 function render() {
   button.disabled = busy;
-  button.className = state.applied
+  button.className = state.visualBoostApplied
     ? "on"
     : !state.supported
       ? "unavailable"
       : state.requested
         ? "waiting"
         : "off";
-  button.setAttribute("aria-pressed", String(state.applied));
+  button.setAttribute("aria-pressed", String(state.visualBoostApplied));
   button.title = stateTitle(state);
   if (!state.supported) {
     label.textContent = language === "vi" ? "KHÔNG HỖ TRỢ" : "UNAVAILABLE";
-  } else if (state.applied) {
+  } else if (state.visualBoostApplied) {
     label.textContent = language === "vi" ? "NHÌN ĐÊM: BẬT" : "NIGHT VISION: ON";
   } else {
     label.textContent = language === "vi" ? "NHÌN ĐÊM: TẮT" : "NIGHT VISION: OFF";
