@@ -2,8 +2,23 @@
 
 **Recorded:** 2026-08-29 09:56:28 +07:00
 
-**Status:** PARTIAL — machine qualification passes; mandatory human dark-scene
-acceptance is still UNKNOWN, so this candidate is not released publicly.
+**Status:** REJECTED — live screenshots proved the constant-color veil raised
+the scene toward flat gray but destroyed useful local contrast. This candidate
+must not be released and is superseded by the v1.7.2 Magnifier candidate.
+
+## Visual rejection evidence
+
+### FACT
+
+- Central play-area OFF luminance: mean `1.56`, standard deviation `3.43`.
+- The same area with v1.7.1 ON: mean `54.43`, standard deviation `1.13`.
+- The ON image was brighter numerically but had less luminance variation, so
+  foliage, terrain, the dinosaur, and travel direction were not usefully revealed.
+
+### DECISION
+
+The runtime painted acknowledgement below proves only that the rejected veil
+was drawn. It is not evidence that the feature helped the player see at night.
 
 ## Candidate identity
 
@@ -96,16 +111,12 @@ processes, so it is recorded but not attributed to Night Vision.
 - Build, tests, package identity, local installation, painted acknowledgement,
   focus lifecycle, switch-off cleanup, and incremental performance.
 
-### UNKNOWN
+### FAIL
 
-- Whether the actual current in-game night scene is visibly and usefully
-  brighter to the user.
-- Whether strength 70 is the user's preferred balance between visibility and a
-  pale image.
+- Real dark-scene usefulness: FAIL.
+- Local detail/contrast preservation: FAIL.
 
 ### DECISION
 
-Do not push, tag, or publish v1.7.1 until the user explicitly confirms the
-installed candidate is clearly brighter in a real dark scene. If it is still
-too dark or too pale, tune the opacity mapping, rebuild, reinstall, and repeat
-the same gates.
+Do not push, tag, or publish v1.7.1. Preserve this record as evidence of the
+failed approach; validate v1.7.2 independently with matched OFF/ON screenshots.

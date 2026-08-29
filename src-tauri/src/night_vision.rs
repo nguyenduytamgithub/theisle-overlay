@@ -26,7 +26,7 @@ pub(crate) struct GameTarget {
 }
 
 pub const CHANGED_EVENT: &str = "night-vision://changed";
-pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-visual-boost-a");
+pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-magnifier-boost-a");
 const FILTER_LABEL: &str = "night-vision-filter";
 const FILTER_READY_EVENT: &str = "night-vision-filter://ready";
 const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";

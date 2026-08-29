@@ -33,14 +33,40 @@ fn manual_release_does_not_require_an_updater_private_key() {
 }
 
 #[test]
-fn visual_boost_candidate_versions_are_consistently_1_7_1() {
+fn magnifier_boost_candidate_versions_are_consistently_1_7_2() {
     let package: Value = serde_json::from_str(include_str!("../../package.json"))
         .expect("package.json must be JSON");
 
-    assert_eq!(env!("CARGO_PKG_VERSION"), "1.7.1");
-    assert_eq!(package["version"], Value::String("1.7.1".to_owned()));
-    assert_eq!(
-        tauri_config()["version"],
-        Value::String("1.7.1".to_owned())
-    );
+    assert_eq!(env!("CARGO_PKG_VERSION"), "1.7.2");
+    assert_eq!(package["version"], Value::String("1.7.2".to_owned()));
+    assert_eq!(tauri_config()["version"], Value::String("1.7.2".to_owned()));
+
+    let runtime = include_str!("../src/night_vision.rs");
+    assert!(runtime.contains("magnifier-boost-a"));
+    assert!(!runtime.contains("visual-boost-a"));
+}
+
+#[test]
+fn magnification_copy_discloses_capture_boundary_without_flat_tint_claims() {
+    let readme_vi = include_str!("../../README.md");
+    let readme_en = include_str!("../../README.en.md");
+    let copy_vi = include_str!("../../src/lib/i18n/vi.ts");
+    let copy_en = include_str!("../../src/lib/i18n/en.ts");
+    let combined = format!("{readme_vi}\n{readme_en}\n{copy_vi}\n{copy_en}");
+
+    assert!(combined.contains("Windows Magnification"));
+    assert!(combined.contains("Windowed/Borderless"));
+    assert!(combined.contains("displayed screen pixels"));
+    assert!(combined.contains("pixel màn hình đang hiển thị"));
+    for rejected in [
+        "Lớp sáng tĩnh",
+        "static light layer",
+        "Painted click-through brightness layer",
+        "painted acknowledgement",
+    ] {
+        assert!(
+            !combined.contains(rejected),
+            "rejected v1.7.1 flat-tint copy remains: {rejected}"
+        );
+    }
 }

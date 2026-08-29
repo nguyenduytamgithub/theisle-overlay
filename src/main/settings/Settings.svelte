@@ -191,7 +191,7 @@
       </div>
     </section>
 
-    <!-- Display-only Night Vision -->
+    <!-- Native Magnification Night Vision (display pixels only, no game memory) -->
     <section>
       <h2 class="mb-2 font-semibold" style="color: var(--color-accent)">
         {$t("settings.night_vision")}

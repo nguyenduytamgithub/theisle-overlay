@@ -8,7 +8,7 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > (`f628a18`). Tác giả và dự án gốc: **Trần Quốc Toản**.
 
-Nguồn hiện tại là ứng viên **v1.7.1 Visual Night Boost**; bản tải công khai vẫn
+Nguồn hiện tại là ứng viên **v1.7.2 Magnifier Night Boost**; bản tải công khai vẫn
 là v1.7.0 cho tới khi ứng viên vượt qua nghiệm thu cảnh đêm thật. Mục tiêu là
 làm vị trí, hướng đi, đường đã đi, waypoint và khả năng quan sát cảnh tối hữu
 dụng hơn trong lúc chơi — không đọc bộ nhớ game và không can thiệp Easy
@@ -26,7 +26,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 
 ## Fork này cải thiện gì?
 
-| Khi đang chơi | Upstream mã mở v1.5.2 | Ứng viên Visual Night Boost v1.7.1 |
+| Khi đang chơi | Upstream mã mở v1.5.2 | Ứng viên Magnifier Night Boost v1.7.2 |
 |---|---|---|
 | Nhịp lấy vị trí IslePilot | Mặc định 10 giây | Mặc định **5 giây**; giữ nguyên nếu bạn đã tự đặt giá trị khác |
 | Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Ước tính hiển thị tối đa **4 giây**, sau đó đứng chờ xác nhận; hiệu chỉnh mềm **350 ms** |
@@ -36,7 +36,7 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 | Dẫn đường trên màn hình game | Không có HUD riêng | HUD click-through ở giữa phía trên: BẮC/ĐÔNG/NAM/TÂY, số độ, mũi tên rẽ, tên đích và khoảng cách |
 | Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **SERVER / ƯỚC TÍNH / MẤT TÍN HIỆU** |
 | Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
-| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Lớp tăng sáng click-through đã xác nhận vẽ + gamma bổ trợ; nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, cường độ 0–100, tự ẩn/phục hồi theo game |
+| Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Windows Magnification khuếch đại độ tương phản từ cảnh đang hiển thị; nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, cường độ 0–100, tự ẩn/dọn theo game |
 
 Điểm quan trọng: chuyển động mượt là **ước tính có giới hạn**, không bịa thành
 realtime. Tọa độ thật vẫn được server xác nhận theo chu kỳ 5 giây. Server không
@@ -60,10 +60,11 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
   mũi tên cần rẽ, tên đích, khoảng cách và trạng thái dữ liệu; tự ẩn khi
   Alt-Tab và bật/tắt bằng `Ctrl+Alt+H`.
 - **Nhìn đêm trực tiếp trên màn hình**: nút **NHÌN ĐÊM** góc trên bên phải và
-  `Ctrl+Alt+N`; chỉnh cường độ 0–100 trong Cài đặt. v1.7.1 dùng một lớp tăng
-  sáng tĩnh, bấm xuyên qua, đã xác nhận vẽ xong; gamma màn hình chỉ là phần bổ
-  trợ. Lớp này tự ẩn khi Alt-Tab, tự vẽ lại khi quay vào game và được dọn khi
-  tắt/thoát. Mức 70 là mặc định; tăng nếu còn tối, giảm nếu hình quá bạc.
+  `Ctrl+Alt+N`; chỉnh cường độ 0–100 trong Cài đặt. v1.7.2 dùng Windows
+  Magnification để đọc pixel màn hình đang hiển thị và vẽ lại cục bộ với độ
+  tương phản cao hơn; gamma không còn được áp dụng. Cửa sổ native bấm xuyên qua,
+  tự dọn khi Alt-Tab/tắt/thoát và chỉ báo BẬT sau khi đọc ngược đúng cấu hình.
+  Mức 70 là mặc định; tăng nếu còn tối, giảm nếu vùng sáng bị cháy.
 - **Bản đồ lớn**: phóng to/thu nhỏ mượt, 12 lớp bật/tắt được (nước ngọt, nguồn
   nước, mỏ muối, vũng bùn, khu bảo tồn, vùng di cư, vùng tuần tra AI, khu thức
   ăn, động vật với biểu tượng riêng từng loài 🐗🦌🐢, tên vùng, địa điểm, và
@@ -184,14 +185,14 @@ dùng được):
 
 ## Nhẹ cỡ nào?
 
-Ứng viên v1.7.1 và bằng chứng cài/runtime được ghi trong
-[biên bản nghiệm thu](docs/verification/night-boost-v1.7.1.md). Chưa dùng hash
+Ứng viên v1.7.2 và bằng chứng cài/runtime được ghi trong
+[biên bản nghiệm thu](docs/verification/night-boost-v1.7.2.md). Chưa dùng hash
 ứng viên để quảng bá là bản phát hành trước khi nghiệm thu cảnh đêm thật đạt.
 
 | Hạng mục | Dung lượng |
 |---|---|
-| File cài đặt NSIS v1.7.1 candidate | **5.806.573 byte (~5,8 MB)** |
-| File chạy sau khi cài v1.7.1 candidate | **21.370.880 byte (~21,4 MB)** |
+| File cài đặt NSIS v1.7.2 candidate | Ghi sau khi build và băm SHA-256 |
+| File chạy sau khi cài v1.7.2 candidate | Ghi sau khi build và băm SHA-256 |
 | Dữ liệu bản đồ tải lần đầu | 2,9 MB (ảnh nền 2,6 MB + dữ liệu điểm 0,3 MB) |
 
 HUD giới hạn ghi DOM khoảng 30 FPS và chỉ dự đoán khi đang có mẫu chuyển động;
@@ -210,11 +211,13 @@ số tab đang mở và model 3D đã tải, nên fork không công bố một c
 3. **Hướng nhìn ưu tiên yaw server**. Khi server không gửi yaw, app cần ít nhất
    hai mẫu di chuyển hợp lệ để suy ra hướng; dữ liệu quá cũ sẽ chuyển sang
    **MẤT TÍN HIỆU** thay vì tiếp tục chỉ bừa.
-4. **Nhìn đêm v1.7.1 cần Windowed/Borderless** để Windows ghép lớp tăng sáng
-   lên game; Exclusive Fullscreen không hiện được overlay. Nếu hình quá bạc,
+4. **Nhìn đêm v1.7.2 cần Windowed/Borderless** để Windows Magnification ghép
+   ảnh đã tăng tương phản lên game; Exclusive Fullscreen không hiện được overlay. Nếu hình quá sáng,
    giảm cường độ; nếu trạng thái kẹt, bấm `Ctrl+Alt+N` một lần để tắt sạch rồi
-   bật lại. Tính năng không mở tiến trình game, không đọc bộ nhớ, không
-   hook/capture và không giả lập input.
+   bật lại. Tính năng đọc pixel màn hình đang hiển thị ở máy này nhưng không mở
+   tiến trình game, không đọc bộ nhớ game, không inject/hook, không giả lập input,
+   không truy cập mạng và không lưu/gửi ảnh. Việc có được phép dùng hay không vẫn
+   phụ thuộc luật của server.
 5. **Không mở được hai bản cùng lúc** — phím tắt toàn cục mang tính độc quyền,
    hai bản chạy song song sẽ tranh nhau.
 6. **Máy ít RAM**: ẩn bản đồ lớn bằng `Ctrl+Alt+F` khi vào game — app tự giảm

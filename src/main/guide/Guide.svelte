@@ -230,15 +230,15 @@
     <h2>Night Vision</h2>
     <p>
       In dark scenes, click the <strong>NIGHT VISION</strong> button in the top-right or
-      press <strong>Ctrl+Alt+N</strong>. It changes only the display gamma curve on the
-      monitor containing the game; it does not read game memory, capture frames, install
-      hooks, or synthesize input.
+      press <strong>Ctrl+Alt+N</strong>. Windows Magnification locally redraws displayed
+      screen pixels with a verified contrast transform. It does not read game memory,
+      inject or hook code, synthesize input, or send images over the network.
     </p>
     <p>
-      Alt-Tab, switching it off, moving monitors, or quitting restores the original color.
-      If HDR or the display driver rejects gamma control, the button truthfully reports
-      <strong>UNAVAILABLE</strong>. Strength and button visibility are adjustable in
-      Settings.
+      Use <strong>Windowed</strong> or <strong>Borderless Fullscreen</strong>. Alt-Tab,
+      switching it off, or quitting removes the native magnifier. If Windows rejects the
+      requested transform or cleanup cannot be verified, the button truthfully reports
+      <strong>UNAVAILABLE</strong>. Strength and button visibility are adjustable in Settings.
     </p>
 
     <h2>Your Dino (IslePilot)</h2>

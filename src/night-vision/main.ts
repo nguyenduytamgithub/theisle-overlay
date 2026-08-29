@@ -59,8 +59,8 @@ function stateTitle(value: NightVisionState): string {
   }
   if (value.visualBoostApplied && !value.gammaApplied) {
     return language === "vi"
-      ? `Lớp tăng sáng đã bật ở ${value.strength}%. Gamma phụ trợ không được driver nhận.`
-      : `Visual boost is on at ${value.strength}%. Supplemental gamma was not accepted.`;
+      ? `Khuếch đại ảnh native đã xác minh ở ${value.strength}%. Gamma không được dùng theo thiết kế.`
+      : `Native image boost is verified at ${value.strength}%. Gamma is intentionally unused.`;
   }
   return language === "vi"
     ? `Cường độ ${value.strength}%. Bấm hoặc nhấn Ctrl+Alt+N.`

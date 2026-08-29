@@ -8,7 +8,7 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
 
-The current source is the **v1.7.1 Visual Night Boost candidate**; the latest
+The current source is the **v1.7.2 Magnifier Night Boost candidate**; the latest
 public download remains v1.7.0 until the candidate passes a real dark-scene
 acceptance check. Its goal is reliable position, heading, trails, waypoint
 guidance, and useful dark-scene visibility without touching game memory or Easy
@@ -27,7 +27,7 @@ installer with manual fork updates.
 
 ## What does this fork improve?
 
-| While playing | Open-source upstream v1.5.2 | Visual Night Boost v1.7.1 candidate |
+| While playing | Open-source upstream v1.5.2 | Magnifier Night Boost v1.7.2 candidate |
 |---|---|---|
 | IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
 | Motion between server samples | Position jumps on every response | Up to **4 seconds** of bounded visual prediction, then freezes for confirmation; **350 ms** correction blend |
@@ -37,7 +37,7 @@ installer with manual fork updates.
 | In-game guidance | No dedicated navigation HUD | Click-through top-centre HUD with compass, degrees, turn arrow, target name, and distance |
 | Delayed data | Freshness is unclear | Explicit **SERVER / ESTIMATE / STALE** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
-| Scenes too dark to read | No dedicated visibility control | Painted click-through brightness layer plus supplemental gamma; **NIGHT VISION** button + `Ctrl+Alt+N`, strength 0–100, focus-aware hide/reapply |
+| Scenes too dark to read | No dedicated visibility control | Windows Magnification contrast boost from the displayed scene; **NIGHT VISION** button + `Ctrl+Alt+N`, strength 0–100, focus-aware cleanup/reapply |
 
 Smooth motion is a **bounded estimate**, not fake realtime. The server still
 confirms real coordinates every five seconds. Without IslePilot live-map
@@ -61,11 +61,12 @@ support, use `Tab` → **Asset Location** as before.
   arrow, target name, distance, and data freshness; auto-hides on Alt-Tab and
   toggles with `Ctrl+Alt+H`.
 - **Display Night Vision**: a top-right **NIGHT VISION** button plus
-  `Ctrl+Alt+N`, with strength 0–100 in Settings. v1.7.1 uses a static,
-  click-through brightness layer with a painted acknowledgement; display gamma
-  is supplemental. It hides on Alt-Tab, repaints on return, and cleans up on
-  switch-off or exit. Strength 70 is the default; raise it if still dark or
-  lower it if the image looks washed out.
+  `Ctrl+Alt+N`, with strength 0–100 in Settings. v1.7.2 uses Windows
+  Magnification to locally redraw displayed screen pixels with higher contrast;
+  display gamma is no longer applied. The native surface is click-through,
+  cleans up on Alt-Tab/switch-off/exit, and reports ON only after native readback
+  verifies the requested source and transform. Strength 70 is the default;
+  raise it if still dark or lower it if highlights clip.
 - **Full map**: smooth zoom/pan, 12 toggleable layers (fresh water, water, salt licks,
   mud wallows, sanctuaries, migration zones, AI patrol zones, food zones, animals
   with per-species icons 🐗🦌🐢, region names, landmarks, and a live **server
@@ -187,14 +188,14 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-The v1.7.1 candidate identity, installation, and runtime evidence are recorded
-in the [verification record](docs/verification/night-boost-v1.7.1.md). Its hash
+The v1.7.2 candidate identity, installation, and runtime evidence are recorded
+in the [verification record](docs/verification/night-boost-v1.7.2.md). Its hash
 must not be presented as a public release until real dark-scene acceptance.
 
 | Item | Size |
 |---|---|
-| v1.7.1 candidate NSIS installer | **5,806,573 bytes (~5.8 MB)** |
-| v1.7.1 candidate installed executable | **21,370,880 bytes (~21.4 MB)** |
+| v1.7.2 candidate NSIS installer | Recorded after build with SHA-256 |
+| v1.7.2 candidate installed executable | Recorded after build with SHA-256 |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 
 The HUD caps DOM writes at roughly 30 FPS and predicts only while a moving sample
@@ -213,12 +214,12 @@ one fixed RAM claim.
 3. **Heading prefers server yaw**. Without yaw, the app needs at least two valid
    movement samples to infer direction; stale data becomes **STALE** instead of
    continuing to point confidently.
-4. **Night Vision v1.7.1 requires Windowed/Borderless** so Windows can compose
-   its brightness layer over the game; out-of-process overlays cannot appear in
-   Exclusive Fullscreen. Lower strength if the picture looks washed out. If the
-   state ever sticks, press `Ctrl+Alt+N` once to cleanly switch off, then turn it
-   on again. There is no game process handle, memory read, hook/capture, or
-   synthetic input.
+4. **Night Vision v1.7.2 requires Windowed/Borderless** so Windows Magnification
+   can compose the contrast-boosted image over the game; out-of-process overlays
+   cannot appear in Exclusive Fullscreen. It reads displayed screen pixels on
+   this PC, but does not open the game process, read game memory, inject or hook
+   code, synthesize input, access the network, or save/send images. Server rules
+   still decide whether third-party tools are permitted.
 5. **Only one instance can run** — global hotkeys are system-exclusive, so two
    copies would fight over them.
 6. **Low-RAM machines**: hide the full map with `Ctrl+Alt+F` while playing —
