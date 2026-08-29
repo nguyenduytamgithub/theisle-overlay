@@ -11,8 +11,3 @@ body,
   pointer-events: none;
   user-select: none;
 }
-
-#veil {
-  opacity: 0;
-  will-change: opacity;
-}
