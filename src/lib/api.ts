@@ -117,6 +117,11 @@ export interface NightVisionState {
   visualBoostReady: boolean;
   visualBoostApplied: boolean;
   gammaApplied: boolean;
+  renderer: "none" | "gpu_adaptive" | "magnifier_fallback";
+  preset: "balanced" | "clear" | "ultra";
+  forceBright: boolean;
+  sceneLuma: number | null;
+  presentedFps: number | null;
   buildFingerprint: string;
 }
 

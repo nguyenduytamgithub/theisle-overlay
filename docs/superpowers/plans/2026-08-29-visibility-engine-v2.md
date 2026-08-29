@@ -155,33 +155,33 @@ scene_luma: Option<f32>
 presented_fps: Option<f32>
 ```
 
-- [ ] **Step 1: Add failing state/adaptation tests**
+- [x] **Step 1: Add failing state/adaptation tests**
 
 Require 4 Hz sample limiting, fast dark-entry response, slower bright-exit
 response, no overshoot, no NaN, stale-frame rejection after 500 ms, current
 HWND/rectangle/preset matching, and `visualBoostApplied == true` only for a
 recent renderer readback.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-nightboost'
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml night_vision::tests
 ```
 
-- [ ] **Step 3: Implement the model and state shape**
+- [x] **Step 3: Implement the model and state shape**
 
 Add serializable renderer/preset enums, the asymmetric smoother, readback
 validation, and TypeScript mirrors. Preserve all v1.7.4 fields for compatibility.
 
-- [ ] **Step 4: Run focused Rust and frontend checks**
+- [x] **Step 4: Run focused Rust and frontend checks**
 
 ```powershell
 & 'C:\Users\Admin\.cargo\bin\cargo.exe' test --manifest-path src-tauri\Cargo.toml night_vision::tests
 npm run check
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add -- src-tauri/src/night_vision.rs src-tauri/src/night_vision/visibility.rs src/lib/api.ts
