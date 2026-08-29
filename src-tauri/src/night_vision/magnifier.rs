@@ -9,13 +9,15 @@ use windows::Win32::UI::Magnification::{
     MAGTRANSFORM, MW_FILTERMODE_EXCLUDE, WC_MAGNIFIER,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, FindWindowExW, IsWindow, IsWindowVisible, SetWindowPos,
-    SET_WINDOW_POS_FLAGS, WS_CHILD, WS_EX_TRANSPARENT,
+    CreateWindowExW, DestroyWindow, FindWindowExW, IsWindow, IsWindowVisible, KillTimer, SetTimer,
+    SetWindowPos, SET_WINDOW_POS_FLAGS, WS_CHILD, WS_EX_TRANSPARENT,
 };
 
 const CHILD_TITLE: windows::core::PCWSTR = windows::core::w!("Night Boost Magnifier");
 const POSITION_FLAGS: SET_WINDOW_POS_FLAGS = SET_WINDOW_POS_FLAGS(0x0010 | 0x0004);
 const SHOW_FLAGS: SET_WINDOW_POS_FLAGS = SET_WINDOW_POS_FLAGS(0x0010 | 0x0004 | 0x0040);
+const SOURCE_REFRESH_TIMER_ID: usize = 1;
+const SOURCE_REFRESH_INTERVAL_MS: u32 = 16;
 static INITIALIZED: OnceLock<Result<(), String>> = OnceLock::new();
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +27,7 @@ pub(crate) struct MagnifierReadback {
     pub(crate) gain: f32,
     pub(crate) child: isize,
     pub(crate) excluded: Vec<isize>,
+    pub(crate) refresh_interval_ms: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -176,13 +179,44 @@ fn configure_child(
         });
     }
 
+    let refresh_timer = unsafe {
+        SetTimer(
+            Some(child),
+            SOURCE_REFRESH_TIMER_ID,
+            SOURCE_REFRESH_INTERVAL_MS,
+            Some(refresh_source_timer),
+        )
+    };
+    if refresh_timer == 0 {
+        return Err(MagnifierError {
+            operation: "SetTimer(Magnifier source refresh)",
+            detail: windows::core::Error::from_thread().to_string(),
+        });
+    }
+
     Ok(MagnifierReadback {
         host: host.0 as isize,
         source,
         gain: actual_effect.transform[0],
         child: child.0 as isize,
         excluded: excluded_raw,
+        refresh_interval_ms: SOURCE_REFRESH_INTERVAL_MS,
     })
+}
+
+unsafe extern "system" fn refresh_source_timer(
+    child: HWND,
+    _message: u32,
+    timer_id: usize,
+    _time: u32,
+) {
+    if timer_id != SOURCE_REFRESH_TIMER_ID || child.0.is_null() {
+        return;
+    }
+    let mut source = RECT::default();
+    if unsafe { MagGetWindowSource(child, &mut source) }.as_bool() {
+        let _ = unsafe { MagSetWindowSource(child, source) };
+    }
 }
 
 pub(crate) fn destroy(host: isize) -> Result<(), MagnifierError> {
@@ -190,6 +224,7 @@ pub(crate) fn destroy(host: isize) -> Result<(), MagnifierError> {
         return Ok(());
     }
     if let Some(child) = find_child(hwnd(host)) {
+        let _ = unsafe { KillTimer(Some(child), SOURCE_REFRESH_TIMER_ID) };
         unsafe { DestroyWindow(child) }.map_err(|error| MagnifierError {
             operation: "DestroyWindow(Magnifier)",
             detail: error.to_string(),
@@ -310,6 +345,11 @@ mod tests {
             (rect.left, rect.top, rect.right, rect.bottom),
             (10, 20, 310, 420)
         );
+    }
+
+    #[test]
+    fn native_source_refresh_tracks_a_sixty_fps_frame_cadence() {
+        assert!((15..=17).contains(&super::SOURCE_REFRESH_INTERVAL_MS));
     }
 
     #[test]
