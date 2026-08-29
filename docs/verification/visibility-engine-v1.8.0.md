@@ -85,9 +85,26 @@ Candidate artifacts built on this machine:
 These installed/live fields must still be filled from fresh evidence before
 public release:
 
-- Installed executable path/bytes/SHA-256: **PENDING**
-- Installed fingerprint `1.8.0-gpu-visibility-c`: **PENDING**
-- Installed runtime renderer/FPS/luma readback: **PENDING**
+- Installed executable:
+  `C:\Users\Admin\AppData\Local\TheIsle Overlay\theisle-overlay.exe`
+  — 21,597,696 bytes — SHA-256
+  `F13894CACF9B2350792074B3949AB31BDEFDD26F2945AF27026CB93BA36AD779`
+  — Windows file/product version `1.8.0`.
+- NSIS silent install exit: `0`. The installed PE hash is recorded separately
+  from the raw release executable because Tauri patches NSIS bundle metadata.
+- First installed-runtime verification: `gpu_adaptive`, `Ultra`, 68.6 FPS,
+  luma 0.1820, fingerprint `1.8.0-gpu-visibility-c`, source
+  `0,0,1920,1080`.
+- Game PID `19056` and client PID `35752`/HWND `133692` stayed alive and
+  responding across Overlay-only stop/install/start.
+- Pre-install v1.7.4 executable: 21,459,968 bytes, SHA-256
+  `301369E5245AC7959B4BAFCFB0CDEAB24964494FC0098475AE797556324EC793`.
+- Preserved rollback installer: 5,814,158 bytes, SHA-256
+  `9F341680E91BF3D20F74DCD9B3F06271D9C6CD63C85DEBB2EB2AE247E714699C`.
+- `waypoints.json` stayed byte/hash identical. `settings.json` changed only by
+  the expected v1.8 schema migration and requested `Ultra`/Force/GPU-preferred
+  strength-85 configuration. Existing trail files were retained; the active
+  session trail remained append-owned by the running app before the upgrade.
 - Same-scene OFF / game-X-only / X+Ultra images and metrics: **PENDING**
 - User confirms X+Ultra is materially clearer without unusable highlight
   clipping: **PENDING**

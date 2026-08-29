@@ -510,12 +510,12 @@ git commit -m "docs: qualify visibility engine v1.8.0 candidate"
 - Modify: `docs/verification/visibility-engine-v1.8.0.md`
 - Modify release metadata only after PASS
 
-- [ ] **Step 1: Preserve runtime evidence and user data**
+- [x] **Step 1: Preserve runtime evidence and user data**
 
 Record current game PIDs, installed Overlay identity, data-file inventory and
 SHA-256, v1.7.4 installer hash, and free space. Do not stop the game.
 
-- [ ] **Step 2: Install the candidate**
+- [x] **Step 2: Install the candidate**
 
 Stop only TheIsle Overlay, run the v1.8.0 NSIS installer, start the Overlay, and
 verify both original game processes are still responding. Verify token,
