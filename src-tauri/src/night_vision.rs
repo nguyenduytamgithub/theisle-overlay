@@ -1,4 +1,5 @@
 mod curve;
+mod gpu;
 mod magnifier;
 mod recovery;
 pub mod visibility;
@@ -55,6 +56,7 @@ pub struct NightVisionState {
     pub build_fingerprint: &'static str,
 }
 
+#[cfg(test)]
 pub(crate) fn visual_boost_gain(strength: u8) -> f32 {
     1.0 + 4.0 * f32::from(strength.min(100)) / 100.0
 }
@@ -264,6 +266,35 @@ impl NightVisionController {
         inner.state.clone()
     }
 
+    pub(crate) fn refresh_renderer_readback(
+        &self,
+        expected_game_hwnd: isize,
+        expected_source: (i32, i32, i32, i32),
+        readback: RendererReadback,
+        now: Instant,
+        window_visible: bool,
+    ) -> Option<NightVisionState> {
+        let mut inner = self.inner.lock_safe();
+        let verified = readback.is_current_for(
+            VisibilityRenderer::GpuAdaptive,
+            expected_game_hwnd,
+            expected_source,
+            inner.state.preset,
+            now,
+        );
+        if !inner.state.requested
+            || !inner.state.visual_boost_applied
+            || inner.state.renderer != VisibilityRenderer::GpuAdaptive
+            || !verified
+            || !window_visible
+        {
+            return None;
+        }
+        inner.state.scene_luma = Some(readback.scene_luma);
+        inner.state.presented_fps = Some(1000.0 / readback.median_interval_ms);
+        Some(inner.state.clone())
+    }
+
     pub(crate) fn confirm_visual_hidden(&self, error_key: Option<&str>) -> NightVisionState {
         let mut inner = self.inner.lock_safe();
         inner.pending_visual_request = None;
@@ -363,6 +394,7 @@ impl NightVisionController {
 
 pub struct NightVision {
     controller: NightVisionController,
+    gpu_session: Mutex<Option<gpu::GpuVisibilitySession>>,
 }
 
 impl Default for NightVision {
@@ -375,6 +407,7 @@ impl NightVision {
     pub fn new() -> Self {
         Self {
             controller: NightVisionController::new(70),
+            gpu_session: Mutex::new(None),
         }
     }
 }
@@ -515,6 +548,146 @@ fn configure_magnifier(
     result
 }
 
+fn configure_gpu(
+    app: &AppHandle,
+    request_id: u64,
+    game_hwnd: isize,
+    source: (i32, i32, i32, i32),
+    strength: u8,
+) -> Result<RendererReadback, String> {
+    let host = crate::win::vis::hwnd(FILTER_LABEL)
+        .ok_or_else(|| "night vision host HWND is not registered".to_string())?;
+    let night_vision = app.state::<NightVision>();
+    let state = night_vision.controller.state();
+    let output = on_ui_thread(app, "GPU output window create", move || {
+        gpu::create_output_window(host, source).map_err(|error| error.to_string())
+    })?;
+    let config = match gpu::GpuSessionConfig::new(
+        host,
+        output,
+        game_hwnd,
+        source,
+        state.preset,
+        strength,
+        state.force_bright,
+    ) {
+        Ok(config) => config,
+        Err(error) => {
+            let _ = destroy_gpu_output(app, output);
+            return Err(error);
+        }
+    };
+    let generation = night_vision.controller.native_generation();
+    if generation.load(Ordering::SeqCst) != request_id {
+        let _ = destroy_gpu_output(app, output);
+        return Err("GPU visibility request was superseded before startup".to_string());
+    }
+
+    let session = match gpu::GpuVisibilitySession::start(config) {
+        Ok(session) => session,
+        Err(error) => {
+            let _ = destroy_gpu_output(app, output);
+            return Err(error.to_string());
+        }
+    };
+    let deadline = Instant::now() + Duration::from_millis(2_500);
+    loop {
+        if generation.load(Ordering::SeqCst) != request_id {
+            let _ = session.stop();
+            let _ = destroy_gpu_output(app, output);
+            return Err("GPU visibility request was superseded during startup".to_string());
+        }
+        match session.readback() {
+            Err(error) => {
+                let _ = session.stop();
+                let _ = destroy_gpu_output(app, output);
+                return Err(error.to_string());
+            }
+            Ok(Some(readback)) => {
+                *night_vision.gpu_session.lock_safe() = Some(session);
+                return Ok(readback);
+            }
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => {
+                let _ = session.stop();
+                let _ = destroy_gpu_output(app, output);
+                return Err("GPU visibility did not present a frame within 2500ms".to_string());
+            }
+        }
+    }
+}
+
+fn configure_and_accept_magnifier(
+    app: &AppHandle,
+    request_id: u64,
+    source: (i32, i32, i32, i32),
+    strength: u8,
+    excluded: Vec<isize>,
+) -> Result<(NightVisionState, magnifier::MagnifierReadback), String> {
+    let readback = configure_magnifier(app, request_id, source, strength, excluded)?;
+    let visible = crate::win::vis::hwnd(FILTER_LABEL) == Some(readback.host)
+        && crate::win::vis::is_visible(FILTER_LABEL) == Some(true)
+        && current_excluded_windows() == readback.excluded;
+    let state = app.state::<NightVision>().controller.accept_native_visual(
+        request_id,
+        strength,
+        true,
+        visible,
+    );
+    if state.visual_boost_applied {
+        Ok((state, readback))
+    } else {
+        let _ = destroy_magnifier(app);
+        Err("native magnifier readback did not match the active request".to_string())
+    }
+}
+
+fn gpu_readback(app: &AppHandle) -> Result<Option<RendererReadback>, String> {
+    let night_vision = app.state::<NightVision>();
+    let sessions = night_vision.gpu_session.lock_safe();
+    let Some(session) = sessions.as_ref() else {
+        return Ok(None);
+    };
+    session.readback().map_err(|error| error.to_string())
+}
+
+fn has_gpu_session(app: &AppHandle) -> bool {
+    app.state::<NightVision>()
+        .gpu_session
+        .lock_safe()
+        .is_some()
+}
+
+fn destroy_gpu_output(app: &AppHandle, output_hwnd: isize) -> bool {
+    match on_ui_thread(app, "GPU output window destroy", move || {
+        gpu::destroy_output_window(output_hwnd).map_err(|error| error.to_string())
+    }) {
+        Ok(()) => true,
+        Err(error) => {
+            log::warn!("night vision: GPU output cleanup failed: {error}");
+            false
+        }
+    }
+}
+
+fn destroy_gpu(app: &AppHandle) -> bool {
+    let session = app.state::<NightVision>().gpu_session.lock_safe().take();
+    let Some(session) = session else {
+        return true;
+    };
+    let output = session.output_hwnd();
+    match session.stop() {
+        Ok(()) => destroy_gpu_output(app, output),
+        Err(error) => {
+            log::warn!("night vision: GPU cleanup failed: {error}");
+            let _ = destroy_gpu_output(app, output);
+            false
+        }
+    }
+}
+
 fn current_excluded_windows() -> Vec<isize> {
     let mut excluded: Vec<isize> = [FILTER_LABEL, "main", "minimap", "hud", "night-vision"]
         .into_iter()
@@ -628,13 +801,16 @@ fn wait_filter_hidden(timeout_ms: u64) -> bool {
 
 fn hide_filter_window(app: &AppHandle) -> bool {
     let Some(window) = app.get_webview_window(FILTER_LABEL) else {
-        return destroy_magnifier(app) && crate::win::vis::is_visible(FILTER_LABEL) != Some(true);
+        return destroy_gpu(app)
+            && destroy_magnifier(app)
+            && crate::win::vis::is_visible(FILTER_LABEL) != Some(true);
     };
+    let gpu_destroyed = destroy_gpu(app);
     let magnifier_destroyed = destroy_magnifier(app);
     crate::webview_mem::on_hidden(&window);
     let hide_requested = window.hide().is_ok();
     let host_hidden = wait_filter_hidden(250);
-    magnifier_destroyed && hide_requested && host_hidden
+    gpu_destroyed && magnifier_destroyed && hide_requested && host_hidden
 }
 
 fn force_overlay_stack() {
@@ -672,7 +848,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             since_topmost = since_topmost.saturating_add(TICK_MS);
 
             let Some(window) = app.get_webview_window(FILTER_LABEL) else {
-                let state = if destroy_magnifier(&app) {
+                let state = if destroy_gpu(&app) && destroy_magnifier(&app) {
                     app.state::<NightVision>()
                         .controller
                         .confirm_visual_hidden(Some("night_vision.filter_unavailable"));
@@ -744,6 +920,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             if !effective {
                 let cleanup_needed = crate::win::vis::is_visible(FILTER_LABEL) == Some(true)
                     || state.visual_boost_applied
+                    || has_gpu_session(&app)
                     || crate::win::vis::hwnd(FILTER_LABEL).is_some_and(magnifier::is_configured);
                 if cleanup_needed {
                     let hidden = if hide_filter_window(&app) {
@@ -805,7 +982,48 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                 since_apply = APPLY_RETRY_MS;
             }
 
-            let current = app.state::<NightVision>().controller.state();
+            let mut current = app.state::<NightVision>().controller.state();
+            if current.visual_boost_applied
+                && current.renderer == VisibilityRenderer::GpuAdaptive
+            {
+                let visible = crate::win::vis::is_visible(FILTER_LABEL) == Some(true);
+                let refreshed = gpu_readback(&app).ok().flatten().and_then(|readback| {
+                    app.state::<NightVision>()
+                        .controller
+                        .refresh_renderer_readback(
+                            game_hwnd.unwrap_or_default(),
+                            rect,
+                            readback,
+                            Instant::now(),
+                            visible,
+                        )
+                });
+                if let Some(state) = refreshed {
+                    if state.scene_luma != current.scene_luma
+                        || state.presented_fps != current.presented_fps
+                    {
+                        emit_state(&app, &state);
+                    }
+                    current = state;
+                } else {
+                    log::warn!(
+                        "night vision: GPU readback became stale or mismatched; restarting renderer"
+                    );
+                    current = if destroy_gpu(&app) {
+                        app.state::<NightVision>()
+                            .controller
+                            .confirm_visual_hidden(None)
+                    } else {
+                        app.state::<NightVision>()
+                            .controller
+                            .mark_filter_cleanup_failed()
+                    };
+                    emit_state(&app, &current);
+                    last_strength = None;
+                    last_excluded = None;
+                    since_apply = APPLY_RETRY_MS;
+                }
+            }
             let excluded = current_excluded_windows();
             if (!current.visual_boost_applied
                 || last_strength != Some(current.strength)
@@ -813,7 +1031,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                 && since_apply >= APPLY_RETRY_MS
             {
                 since_apply = 0;
-                if !destroy_magnifier(&app) {
+                if !destroy_gpu(&app) || !destroy_magnifier(&app) {
                     let failed = app
                         .state::<NightVision>()
                         .controller
@@ -833,36 +1051,38 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                 if let Some((request_id, request_strength)) =
                     app.state::<NightVision>().controller.begin_visual_request()
                 {
-                    match configure_magnifier(&app, request_id, rect, request_strength, excluded) {
+                    let game = game_hwnd.unwrap_or_default();
+                    match configure_gpu(&app, request_id, game, rect, request_strength) {
                         Ok(readback) => {
-                            let visible = crate::win::vis::hwnd(FILTER_LABEL)
-                                == Some(readback.host)
-                                && crate::win::vis::is_visible(FILTER_LABEL) == Some(true)
-                                && current_excluded_windows() == readback.excluded;
-                            let state = app.state::<NightVision>().controller.accept_native_visual(
+                            let visible = crate::win::vis::is_visible(FILTER_LABEL) == Some(true);
+                            let state = app
+                                .state::<NightVision>()
+                                .controller
+                                .accept_renderer_readback(
                                 request_id,
                                 request_strength,
-                                true,
+                                game,
+                                rect,
+                                readback,
+                                Instant::now(),
                                 visible,
                             );
                             if state.visual_boost_applied {
                                 log::info!(
-                                    "night vision: native magnifier fallback verified request={} strength={} preset={:?} gain={:.2} black_translation={:.3} luma_mix={:.3} child={} source={:?} refresh={}ms fingerprint={}",
+                                    "night vision: adaptive GPU renderer verified request={} strength={} preset={:?} frames={} luma={:.4} fps={:.1} source={:?} fingerprint={}",
                                     request_id,
                                     request_strength,
                                     state.preset,
-                                    readback.gain,
-                                    readback.profile.black_translation,
-                                    readback.profile.cross_channel_luma,
-                                    readback.child,
+                                    readback.presented_frames,
+                                    readback.scene_luma,
+                                    1000.0 / readback.median_interval_ms,
                                     readback.source,
-                                    readback.refresh_interval_ms,
                                     state.build_fingerprint
                                 );
                                 last_strength = Some(request_strength);
-                                last_excluded = Some(readback.excluded.clone());
+                                last_excluded = Some(excluded.clone());
                                 emit_state(&app, &state);
-                            } else if destroy_magnifier(&app) {
+                            } else if destroy_gpu(&app) {
                                 let hidden = app
                                     .state::<NightVision>()
                                     .controller
@@ -877,19 +1097,54 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                             }
                         }
                         Err(error) => {
-                            log::warn!("night vision: native magnifier apply failed: {error}");
-                            let failed = if destroy_magnifier(&app) {
-                                app.state::<NightVision>()
-                                    .controller
-                                    .confirm_visual_hidden(Some("night_vision.filter_unavailable"))
-                            } else {
-                                app.state::<NightVision>()
-                                    .controller
-                                    .mark_filter_cleanup_failed()
-                            };
-                            emit_state(&app, &failed);
-                            last_strength = None;
-                            last_excluded = None;
+                            log::warn!(
+                                "night vision: adaptive GPU renderer unavailable; using truthful magnifier fallback: {error}"
+                            );
+                            match configure_and_accept_magnifier(
+                                &app,
+                                request_id,
+                                rect,
+                                request_strength,
+                                excluded,
+                            ) {
+                                Ok((state, readback)) => {
+                                    log::info!(
+                                        "night vision: native magnifier fallback verified request={} strength={} preset={:?} gain={:.2} black_translation={:.3} luma_mix={:.3} child={} source={:?} refresh={}ms fingerprint={}",
+                                        request_id,
+                                        request_strength,
+                                        state.preset,
+                                        readback.gain,
+                                        readback.profile.black_translation,
+                                        readback.profile.cross_channel_luma,
+                                        readback.child,
+                                        readback.source,
+                                        readback.refresh_interval_ms,
+                                        state.build_fingerprint
+                                    );
+                                    last_strength = Some(request_strength);
+                                    last_excluded = Some(readback.excluded.clone());
+                                    emit_state(&app, &state);
+                                }
+                                Err(fallback_error) => {
+                                    log::warn!(
+                                        "night vision: native magnifier fallback failed: {fallback_error}"
+                                    );
+                                    let failed = if destroy_magnifier(&app) {
+                                        app.state::<NightVision>()
+                                            .controller
+                                            .confirm_visual_hidden(Some(
+                                                "night_vision.filter_unavailable",
+                                            ))
+                                    } else {
+                                        app.state::<NightVision>()
+                                            .controller
+                                            .mark_filter_cleanup_failed()
+                                    };
+                                    emit_state(&app, &failed);
+                                    last_strength = None;
+                                    last_excluded = None;
+                                }
+                            }
                         }
                     }
                 }
@@ -1236,6 +1491,61 @@ pub struct ProbeReport {
 }
 
 #[cfg(feature = "devtools")]
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuProbeReport {
+    renderer: VisibilityRenderer,
+    game_hwnd: isize,
+    source: (i32, i32, i32, i32),
+    preset: VisibilityPreset,
+    presented_frames: u64,
+    median_interval_ms: f32,
+    presented_fps: f32,
+    scene_luma: f32,
+    readback_age_ms: u128,
+}
+
+#[cfg(feature = "devtools")]
+pub fn run_gpu_visibility_probe(
+    game_hwnd: isize,
+    strength: u8,
+    duration_ms: u64,
+) -> Result<GpuProbeReport, String> {
+    let source = crate::win::game_window::client_rect_on_screen(game_hwnd)
+        .filter(|(_, _, width, height)| *width > 0 && *height > 0)
+        .ok_or_else(|| "The Isle client rectangle is unavailable".to_string())?;
+    let readback = gpu::run_machine_probe(
+        game_hwnd,
+        source,
+        VisibilityPreset::Ultra,
+        strength.min(100),
+        Duration::from_millis(duration_ms.max(500)),
+    )
+    .map_err(|error| error.to_string())?;
+    let now = Instant::now();
+    if !readback.is_current_for(
+        VisibilityRenderer::GpuAdaptive,
+        game_hwnd,
+        source,
+        VisibilityPreset::Ultra,
+        now,
+    ) {
+        return Err("GPU probe readback is stale or mismatched".to_string());
+    }
+    Ok(GpuProbeReport {
+        renderer: readback.renderer,
+        game_hwnd: readback.game_hwnd,
+        source: readback.source,
+        preset: readback.preset,
+        presented_frames: readback.presented_frames,
+        median_interval_ms: readback.median_interval_ms,
+        presented_fps: 1000.0 / readback.median_interval_ms,
+        scene_luma: readback.scene_luma,
+        readback_age_ms: now.duration_since(readback.last_presented_at).as_millis(),
+    })
+}
+
+#[cfg(feature = "devtools")]
 pub fn run_machine_probe(
     game_hwnd: isize,
     strength: u8,
@@ -1402,6 +1712,54 @@ mod tests {
         assert_eq!(applied.preset, VisibilityPreset::Ultra);
         assert_eq!(applied.scene_luma, Some(0.03));
         assert_eq!(applied.presented_fps, Some(1000.0 / 16.7));
+    }
+
+    #[test]
+    fn active_gpu_readback_refreshes_metrics_but_rejects_stale_or_wrong_target_frames() {
+        let controller = controller();
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        let (request_id, strength) = controller.begin_visual_request().unwrap();
+        let source = (100, 200, 1920, 1080);
+        let start = Instant::now();
+        let first = RendererReadback {
+            renderer: VisibilityRenderer::GpuAdaptive,
+            game_hwnd: 101,
+            source,
+            preset: VisibilityPreset::Ultra,
+            presented_frames: 2,
+            last_presented_at: start,
+            median_interval_ms: 20.0,
+            scene_luma: 0.04,
+        };
+        assert!(controller
+            .accept_renderer_readback(request_id, strength, 101, source, first, start, true)
+            .applied);
+
+        let now = start + Duration::from_millis(100);
+        let current = RendererReadback {
+            presented_frames: 9,
+            last_presented_at: now,
+            median_interval_ms: 10.0,
+            scene_luma: 0.02,
+            ..first
+        };
+        let refreshed = controller
+            .refresh_renderer_readback(101, source, current, now, true)
+            .expect("current GPU frame must refresh truthful metrics");
+        assert_eq!(refreshed.scene_luma, Some(0.02));
+        assert_eq!(refreshed.presented_fps, Some(100.0));
+
+        let stale = RendererReadback {
+            last_presented_at: now - Duration::from_millis(501),
+            ..current
+        };
+        assert!(controller
+            .refresh_renderer_readback(101, source, stale, now, true)
+            .is_none());
+        assert!(controller
+            .refresh_renderer_readback(999, source, current, now, true)
+            .is_none());
     }
 
     #[test]
