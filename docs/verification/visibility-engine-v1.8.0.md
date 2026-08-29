@@ -102,10 +102,17 @@ Fresh installation evidence for the corrected candidate:
   `301369E5245AC7959B4BAFCFB0CDEAB24964494FC0098475AE797556324EC793`.
 - Preserved rollback installer: 5,814,158 bytes, SHA-256
   `9F341680E91BF3D20F74DCD9B3F06271D9C6CD63C85DEBB2EB2AE247E714699C`.
-- `waypoints.json` stayed byte/hash identical. `settings.json` changed only by
-  the expected v1.8 schema migration and requested `Ultra`/Force/GPU-preferred
-  strength-85 configuration. Existing trail files were retained; the active
-  session trail remained append-owned by the running app before the upgrade.
+- Immediately after installation, `waypoints.json` still had its pre-install
+  452-byte SHA-256
+  `95050455912E54612259B878CD92089254029E579C21247043B2BA0C2EA845A8`.
+  At `17:48:35`, while the game and Overlay remained running, the file gained
+  one waypoint and became 657 bytes with SHA-256
+  `F14B209208BA9B458EA9A2A2CD202B55B06B919EE3C415B04041F01BC3ADB716`.
+  Both prior waypoint IDs remain; one prior Y coordinate differs only by
+  `2.91e-11` serialization noise. No waypoint was restored or overwritten.
+  `settings.json` retained the requested Ultra/Force/GPU-preferred strength-85
+  configuration. Existing trail files were retained; the active session trail
+  remained append-owned by the running app before the upgrade.
 
 ## Washout reproduction and correction
 
