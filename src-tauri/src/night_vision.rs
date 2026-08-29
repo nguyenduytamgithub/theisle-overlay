@@ -1,6 +1,7 @@
 mod curve;
 mod magnifier;
 mod recovery;
+mod visibility;
 mod windows;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
