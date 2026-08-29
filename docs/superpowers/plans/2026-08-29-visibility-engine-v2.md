@@ -538,11 +538,22 @@ from native readback and sample Overlay/game CPU, GPU, memory, and shown FPS.
 - [ ] **Step 4: Enforce the acceptance gate**
 
 Sample 3 must achieve median luma at least 1.6x sample 2 or 0.20 normalized,
-local contrast at least 1.20x, clipping below 15%, median present interval at or
-below 33 ms, correct click-through/z-order/lifecycle, and visibly clearer
-terrain, foliage, and dinosaur silhouette. If any item fails, keep status
-PARTIAL, adjust only bounded preset/shader parameters, repeat RED/GREEN tests,
-rebuild/reinstall, and repeat the same-scene comparison.
+local contrast at least 1.20x, clipping below 15%, P05 no higher than the larger
+of 0.20 or 3x sample 2 P05, median no higher than 0.60, median present interval
+at or below 33 ms, correct click-through/z-order/lifecycle, and visibly clearer
+terrain, foliage, and dinosaur silhouette. The P05 and median ceilings reject a
+grey/white wash even when literal clipping remains low. If any item fails, keep
+status PARTIAL, adjust only bounded preset/shader parameters, repeat RED/GREEN
+tests, rebuild/reinstall, and repeat the same-scene comparison.
+
+The first live attempt failed this washout gate. Commit `8b8421f` adds a RED/GREEN
+bright-scene regression test and scene-aware tone protection. The corrected
+candidate is installed; its same-image projection passes the new washout bounds,
+but Steps 3–5 remain unchecked until the user performs the fresh live comparison.
+The post-change CodeGraph sync indexed 103 files/2,275 nodes; its focused
+two-file audit returned the measured-luma → `preset_parameters` →
+`GpuShaderConstants` path and surfaced no alternate full-exposure bypass in
+that path.
 
 - [ ] **Step 5: Obtain explicit human acceptance**
 
