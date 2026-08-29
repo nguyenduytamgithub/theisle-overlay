@@ -310,6 +310,36 @@ fn visual_filter_is_static_click_through_frontend_with_explicit_capability() {
 }
 
 #[test]
+fn magnifier_fallback_has_bounded_shadow_lift_and_truthful_renderer_label() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let magnifier =
+        fs::read_to_string(manifest.join("src/night_vision/magnifier.rs")).expect("read magnifier");
+    let controller =
+        fs::read_to_string(manifest.join("src/night_vision.rs")).expect("read controller");
+
+    for required in [
+        "struct MagnifierProfile",
+        "fallback_profile",
+        "black_translation",
+        "cross_channel_luma",
+        "VisibilityPreset::Ultra",
+    ] {
+        assert!(
+            magnifier.contains(required),
+            "Magnifier fallback is missing reviewed capability {required}"
+        );
+    }
+    assert!(controller.contains("VisibilityRenderer::MagnifierFallback"));
+    assert_eq!(
+        serde_json::to_string(
+            &theisle_overlay_lib::night_vision::visibility::VisibilityRenderer::MagnifierFallback
+        )
+        .expect("serialize renderer label"),
+        "\"magnifier_fallback\""
+    );
+}
+
+#[test]
 fn alternate_win32_and_manual_ffi_bypass_forms_are_rejected() {
     for bypass in [
         "fn bypass() { windows::Win32::System::Threading::OpenProcess(); }",
