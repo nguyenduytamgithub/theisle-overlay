@@ -118,6 +118,7 @@ struct PresetLimits {
     highlight_knee: f32,
     saturation: f32,
     detail_gain: f32,
+    bright_detail_bonus: f32,
 }
 
 impl VisibilityPreset {
@@ -131,6 +132,7 @@ impl VisibilityPreset {
                 highlight_knee: 0.80,
                 saturation: 1.04,
                 detail_gain: 0.25,
+                bright_detail_bonus: 0.15,
             },
             Self::Clear => PresetLimits {
                 target_luma: 0.26,
@@ -140,6 +142,7 @@ impl VisibilityPreset {
                 highlight_knee: 0.73,
                 saturation: 1.01,
                 detail_gain: 0.60,
+                bright_detail_bonus: 0.35,
             },
             Self::Ultra => PresetLimits {
                 target_luma: 0.36,
@@ -149,6 +152,7 @@ impl VisibilityPreset {
                 highlight_knee: 0.64,
                 saturation: 0.96,
                 detail_gain: 1.05,
+                bright_detail_bonus: 0.60,
             },
         }
     }
@@ -176,18 +180,26 @@ pub(crate) fn preset_parameters(
         0.18
     };
     let requested_exposure = (limits.target_luma / scene_luma).clamp(1.0, limits.max_exposure);
+    // The game's own X-key can turn a night frame into an already day-bright
+    // source. Force mode must not turn that source grey/white: progressively
+    // retire global tone changes above 0.12 luma while retaining bounded local
+    // detail so the feature still improves recognition instead of doing
+    // nothing. Truly dark frames keep the full preset.
+    let dark_scene_weight = 1.0 - smoothstep(0.12, 0.42, scene_luma);
+    let tone_amount = amount * dark_scene_weight;
+    let detail_gain =
+        (limits.detail_gain + limits.bright_detail_bonus * (1.0 - dark_scene_weight)) * amount;
 
     VisibilityParameters {
-        exposure: 1.0 + (requested_exposure - 1.0) * amount,
-        shadow_lift: limits.max_shadow_lift * amount,
-        gamma: 1.0 - (1.0 - limits.min_gamma) * amount,
-        highlight_knee: 0.98 + (limits.highlight_knee - 0.98) * amount,
-        saturation: 1.0 + (limits.saturation - 1.0) * amount,
-        detail_gain: limits.detail_gain * amount,
+        exposure: 1.0 + (requested_exposure - 1.0) * tone_amount,
+        shadow_lift: limits.max_shadow_lift * tone_amount,
+        gamma: 1.0 - (1.0 - limits.min_gamma) * tone_amount,
+        highlight_knee: 0.98 + (limits.highlight_knee - 0.98) * tone_amount,
+        saturation: 1.0 + (limits.saturation - 1.0) * tone_amount,
+        detail_gain: detail_gain.clamp(0.0, 1.5),
     }
 }
 
-#[cfg(test)]
 fn smoothstep(low: f32, high: f32, value: f32) -> f32 {
     let unit = ((value - low) / (high - low)).clamp(0.0, 1.0);
     unit * unit * (3.0 - 2.0 * unit)
@@ -381,6 +393,46 @@ mod tests {
         assert!(
             bright_gain < 0.12,
             "bright fixture changed by {bright_gain}"
+        );
+    }
+
+    #[test]
+    fn bright_scene_ultra_preserves_shadows_without_disabling_local_detail() {
+        let parameters = preset_parameters(VisibilityPreset::Ultra, 85, 0.325);
+        assert!(
+            parameters.exposure <= 1.05,
+            "bright-scene exposure was {}",
+            parameters.exposure
+        );
+        assert!(
+            parameters.shadow_lift <= 0.03,
+            "bright-scene lift was {}",
+            parameters.shadow_lift
+        );
+        assert!(
+            parameters.gamma >= 0.88,
+            "bright-scene gamma was {}",
+            parameters.gamma
+        );
+        assert!(
+            parameters.detail_gain >= 1.20,
+            "bright-scene detail was {}",
+            parameters.detail_gain
+        );
+
+        let shadow = transform_rgb([0.05, 0.06, 0.04], [0.06; 3], parameters);
+        assert!(
+            luma(shadow) < 0.16,
+            "bright-scene shadow floor washed out to {}",
+            luma(shadow)
+        );
+
+        let lower = transform_rgb([0.28; 3], [0.30; 3], parameters);
+        let upper = transform_rgb([0.32; 3], [0.30; 3], parameters);
+        assert!(
+            luma(upper) - luma(lower) > 0.05,
+            "bright-scene local separation was {}",
+            luma(upper) - luma(lower)
         );
     }
 
