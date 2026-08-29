@@ -15,6 +15,12 @@ interface NightVisionState {
   visualBoostReady: boolean;
   visualBoostApplied: boolean;
   gammaApplied: boolean;
+  renderer: "none" | "gpu_adaptive" | "magnifier_fallback";
+  preset: "balanced" | "clear" | "ultra";
+  forceBright: boolean;
+  preferGpu: boolean;
+  sceneLuma: number | null;
+  presentedFps: number | null;
   buildFingerprint: string;
 }
 
@@ -34,6 +40,12 @@ let state: NightVisionState = {
   visualBoostReady: false,
   visualBoostApplied: false,
   gammaApplied: false,
+  renderer: "none",
+  preset: "ultra",
+  forceBright: true,
+  preferGpu: true,
+  sceneLuma: null,
+  presentedFps: null,
   buildFingerprint: "loading",
 };
 
@@ -58,9 +70,16 @@ function stateTitle(value: NightVisionState): string {
       : "Requested; waiting for The Isle to be foreground.";
   }
   if (value.visualBoostApplied && !value.gammaApplied) {
+    if (value.renderer === "gpu_adaptive") {
+      const fps = value.presentedFps?.toFixed(1) ?? "—";
+      const luma = value.sceneLuma?.toFixed(3) ?? "—";
+      return language === "vi"
+        ? `GPU ${value.preset.toUpperCase()} đã xác minh: ${fps} FPS · độ sáng cảnh ${luma} · cường độ ${value.strength}%.`
+        : `Verified GPU ${value.preset.toUpperCase()}: ${fps} FPS · scene luma ${luma} · strength ${value.strength}%.`;
+    }
     return language === "vi"
-      ? `Khuếch đại ảnh native đã xác minh ở ${value.strength}%. Gamma không được dùng theo thiết kế.`
-      : `Native image boost is verified at ${value.strength}%. Gamma is intentionally unused.`;
+      ? `Chế độ dự phòng Magnifier đã xác minh ở ${value.strength}%.`
+      : `Verified Magnifier fallback at ${value.strength}%.`;
   }
   return language === "vi"
     ? `Cường độ ${value.strength}%. Bấm hoặc nhấn Ctrl+Alt+N.`

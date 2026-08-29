@@ -153,8 +153,11 @@ pub fn default_settings() -> Value {
             "min_node_distance_m": 5,
         },
         "night_vision": {
-            "strength": 70,
+            "strength": 85,
             "show_button": true,
+            "preset": "ultra",
+            "force_bright": true,
+            "prefer_gpu": true,
         },
         // Anonymous usage counts + crash reports. No IP is stored (the
         // edge supplies a country code and the address is dropped), no game
@@ -210,9 +213,25 @@ pub fn load_settings() -> Value {
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
     match loaded {
-        Some(over @ Value::Object(_)) => merge(&default_settings(), &over),
+        Some(over @ Value::Object(_)) => merge_loaded_settings(&over),
         _ => default_settings(),
     }
+}
+
+fn merge_loaded_settings(over: &Value) -> Value {
+    let mut merged = merge(&default_settings(), over);
+    let preset = get_path(&merged, &["night_vision", "preset"])
+        .and_then(Value::as_str);
+    if !matches!(preset, Some("balanced" | "clear" | "ultra")) {
+        merged["night_vision"]["preset"] = json!("ultra");
+    }
+    if !merged["night_vision"]["force_bright"].is_boolean() {
+        merged["night_vision"]["force_bright"] = json!(true);
+    }
+    if !merged["night_vision"]["prefer_gpu"].is_boolean() {
+        merged["night_vision"]["prefer_gpu"] = json!(true);
+    }
+    merged
 }
 
 /// Atomic write: write to a temp file then rename over, so a power cut cannot
@@ -316,14 +335,36 @@ mod tests {
         assert_eq!(merged["layers"]["food"], true);
         assert_eq!(merged["number_format"], "eu");
         assert_eq!(merged["language"], "vi", "new key gets its default");
-        assert_eq!(merged["map"]["basemap"], "vulnona", "new key gets its default");
-        assert_eq!(merged["night_vision"]["strength"], 70);
+        assert_eq!(
+            merged["map"]["basemap"], "vulnona",
+            "new key gets its default"
+        );
+        assert_eq!(merged["night_vision"]["strength"], 85);
         assert_eq!(merged["night_vision"]["show_button"], true);
+        assert_eq!(merged["night_vision"]["preset"], "ultra");
+        assert_eq!(merged["night_vision"]["force_bright"], true);
+        assert_eq!(merged["night_vision"]["prefer_gpu"], true);
         assert_eq!(merged["hotkeys"]["toggle_night_vision"], "Ctrl+Alt+N");
         assert_eq!(
             active_source(&merged),
             overlay_core::MapSource::Vulnona,
             "legacy settings resolve to the default imagery"
         );
+    }
+    #[test]
+    fn night_vision_v2_migration_preserves_explicit_strength_and_normalizes_preset() {
+        let legacy = json!({
+            "night_vision": {
+                "strength": 42,
+                "show_button": false,
+                "preset": "unknown-mode"
+            }
+        });
+        let merged = merge_loaded_settings(&legacy);
+        assert_eq!(merged["night_vision"]["strength"], 42);
+        assert_eq!(merged["night_vision"]["show_button"], false);
+        assert_eq!(merged["night_vision"]["preset"], "ultra");
+        assert_eq!(merged["night_vision"]["force_bright"], true);
+        assert_eq!(merged["night_vision"]["prefer_gpu"], true);
     }
 }

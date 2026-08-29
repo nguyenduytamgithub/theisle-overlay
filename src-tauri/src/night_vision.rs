@@ -51,6 +51,7 @@ pub struct NightVisionState {
     pub renderer: VisibilityRenderer,
     pub preset: VisibilityPreset,
     pub force_bright: bool,
+    pub prefer_gpu: bool,
     pub scene_luma: Option<f32>,
     pub presented_fps: Option<f32>,
     pub build_fingerprint: &'static str,
@@ -90,6 +91,7 @@ impl NightVisionController {
                     renderer: VisibilityRenderer::None,
                     preset: VisibilityPreset::Ultra,
                     force_bright: true,
+                    prefer_gpu: true,
                     scene_luma: None,
                     presented_fps: None,
                     build_fingerprint: BUILD_FINGERPRINT,
@@ -153,6 +155,36 @@ impl NightVisionController {
         let strength = strength.min(100);
         if inner.state.strength != strength {
             inner.state.strength = strength;
+            inner.pending_visual_request = None;
+            self.invalidate_native_generation();
+        }
+        inner.state.clone()
+    }
+
+    pub(crate) fn set_preset(&self, preset: VisibilityPreset) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        if inner.state.preset != preset {
+            inner.state.preset = preset;
+            inner.pending_visual_request = None;
+            self.invalidate_native_generation();
+        }
+        inner.state.clone()
+    }
+
+    pub(crate) fn set_force_bright(&self, force_bright: bool) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        if inner.state.force_bright != force_bright {
+            inner.state.force_bright = force_bright;
+            inner.pending_visual_request = None;
+            self.invalidate_native_generation();
+        }
+        inner.state.clone()
+    }
+
+    pub(crate) fn set_prefer_gpu(&self, prefer_gpu: bool) -> NightVisionState {
+        let mut inner = self.inner.lock_safe();
+        if inner.state.prefer_gpu != prefer_gpu {
+            inner.state.prefer_gpu = prefer_gpu;
             inner.pending_visual_request = None;
             self.invalidate_native_generation();
         }
@@ -406,7 +438,7 @@ impl Default for NightVision {
 impl NightVision {
     pub fn new() -> Self {
         Self {
-            controller: NightVisionController::new(70),
+            controller: NightVisionController::new(85),
             gpu_session: Mutex::new(None),
         }
     }
@@ -445,6 +477,38 @@ pub fn set_night_vision_strength(
     state
 }
 
+#[tauri::command]
+pub fn set_night_vision_preset(
+    app: AppHandle,
+    night_vision: State<'_, NightVision>,
+    preset: VisibilityPreset,
+) -> NightVisionState {
+    crate::commands::apply_settings_patch(
+        &app,
+        serde_json::json!({ "night_vision": { "preset": preset } }),
+    );
+    night_vision.controller.set_preset(preset);
+    let state = night_vision.controller.reconcile(active_game_target());
+    emit_state(&app, &state);
+    state
+}
+
+#[tauri::command]
+pub fn set_night_vision_force_bright(
+    app: AppHandle,
+    night_vision: State<'_, NightVision>,
+    force_bright: bool,
+) -> NightVisionState {
+    crate::commands::apply_settings_patch(
+        &app,
+        serde_json::json!({ "night_vision": { "force_bright": force_bright } }),
+    );
+    night_vision.controller.set_force_bright(force_bright);
+    let state = night_vision.controller.reconcile(active_game_target());
+    emit_state(&app, &state);
+    state
+}
+
 pub fn toggle_from_app(app: &AppHandle) {
     let night_vision = app.state::<NightVision>();
     night_vision.controller.toggle_requested();
@@ -454,14 +518,34 @@ pub fn toggle_from_app(app: &AppHandle) {
 
 pub fn initialize(app: &AppHandle) {
     let night_vision = app.state::<NightVision>();
-    let strength = {
+    let (strength, preset, force_bright, prefer_gpu) = {
         let app_state = app.state::<AppState>();
         let settings = app_state.settings.lock_safe();
-        crate::settings::get_f64(&settings, &["night_vision", "strength"], 70.0)
+        let strength = crate::settings::get_f64(&settings, &["night_vision", "strength"], 85.0)
             .round()
-            .clamp(0.0, 100.0) as u8
+            .clamp(0.0, 100.0) as u8;
+        let preset = match crate::settings::get_str(
+            &settings,
+            &["night_vision", "preset"],
+            "ultra",
+        ) {
+            "balanced" => VisibilityPreset::Balanced,
+            "clear" => VisibilityPreset::Clear,
+            _ => VisibilityPreset::Ultra,
+        };
+        let force_bright = crate::settings::get_bool(
+            &settings,
+            &["night_vision", "force_bright"],
+            true,
+        );
+        let prefer_gpu =
+            crate::settings::get_bool(&settings, &["night_vision", "prefer_gpu"], true);
+        (strength, preset, force_bright, prefer_gpu)
     };
     night_vision.controller.set_strength(strength);
+    night_vision.controller.set_preset(preset);
+    night_vision.controller.set_force_bright(force_bright);
+    night_vision.controller.set_prefer_gpu(prefer_gpu);
 
     match windows::restore_recovery_record(&crate::settings::night_vision_recovery_path()) {
         Ok(true) => log::info!("night vision: restored gamma from crash recovery record"),
@@ -838,6 +922,7 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
         let mut effective_previous = false;
         let mut last_rect = None;
         let mut last_strength = None;
+        let mut last_mode: Option<(VisibilityPreset, bool, bool)> = None;
         let mut last_excluded: Option<Vec<isize>> = None;
 
         loop {
@@ -1027,6 +1112,8 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
             let excluded = current_excluded_windows();
             if (!current.visual_boost_applied
                 || last_strength != Some(current.strength)
+                || last_mode
+                    != Some((current.preset, current.force_bright, current.prefer_gpu))
                 || last_excluded.as_ref() != Some(&excluded))
                 && since_apply >= APPLY_RETRY_MS
             {
@@ -1052,7 +1139,12 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                     app.state::<NightVision>().controller.begin_visual_request()
                 {
                     let game = game_hwnd.unwrap_or_default();
-                    match configure_gpu(&app, request_id, game, rect, request_strength) {
+                    let gpu_result = if current.prefer_gpu {
+                        configure_gpu(&app, request_id, game, rect, request_strength)
+                    } else {
+                        Err("GPU renderer disabled by user setting".to_string())
+                    };
+                    match gpu_result {
                         Ok(readback) => {
                             let visible = crate::win::vis::is_visible(FILTER_LABEL) == Some(true);
                             let state = app
@@ -1080,6 +1172,11 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                                     state.build_fingerprint
                                 );
                                 last_strength = Some(request_strength);
+                                last_mode = Some((
+                                    state.preset,
+                                    state.force_bright,
+                                    state.prefer_gpu,
+                                ));
                                 last_excluded = Some(excluded.clone());
                                 emit_state(&app, &state);
                             } else if destroy_gpu(&app) {
@@ -1122,6 +1219,11 @@ fn spawn_filter_supervisor(app: AppHandle, health: Arc<WindowHealth>) {
                                         state.build_fingerprint
                                     );
                                     last_strength = Some(request_strength);
+                                    last_mode = Some((
+                                        state.preset,
+                                        state.force_bright,
+                                        state.prefer_gpu,
+                                    ));
                                     last_excluded = Some(readback.excluded.clone());
                                     emit_state(&app, &state);
                                 }
@@ -1911,6 +2013,27 @@ mod tests {
         assert!(reapplied.applied);
         assert_eq!(reapplied.strength, 100);
         assert!(!reapplied.gamma_applied);
+    }
+
+    #[test]
+    fn visibility_mode_changes_cancel_pending_work_and_preserve_truth_until_cleanup() {
+        use std::sync::atomic::Ordering;
+
+        let controller = controller();
+        controller.toggle_requested();
+        controller.mark_filter_ready();
+        let (request_id, _) = controller.begin_visual_request().unwrap();
+        assert_eq!(controller.native_generation.load(Ordering::SeqCst), request_id);
+
+        let preset = controller.set_preset(VisibilityPreset::Clear);
+        assert_eq!(preset.preset, VisibilityPreset::Clear);
+        assert_eq!(controller.native_generation.load(Ordering::SeqCst), 0);
+
+        let force = controller.set_force_bright(false);
+        assert!(!force.force_bright);
+        let gpu = controller.set_prefer_gpu(false);
+        assert!(!gpu.prefer_gpu);
+        assert!(controller.begin_visual_request().is_some());
     }
 
     #[test]

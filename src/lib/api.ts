@@ -50,6 +50,9 @@ export type Settings = Record<string, unknown> & {
   night_vision: {
     strength: number;
     show_button: boolean;
+    preset: VisibilityPreset;
+    force_bright: boolean;
+    prefer_gpu: boolean;
   };
   number_format: "auto" | "us" | "eu";
   language: "vi" | "en";
@@ -79,6 +82,9 @@ export const onSettingsChanged = (
   cb: (s: Settings) => void,
 ): Promise<UnlistenFn> => listen<Settings>("settings://changed", (e) => cb(e.payload));
 
+export type VisibilityPreset = "balanced" | "clear" | "ultra";
+export type VisibilityRenderer = "none" | "gpu_adaptive" | "magnifier_fallback";
+
 export interface NightVisionState {
   requested: boolean;
   applied: boolean;
@@ -88,9 +94,10 @@ export interface NightVisionState {
   visualBoostReady: boolean;
   visualBoostApplied: boolean;
   gammaApplied: boolean;
-  renderer: "none" | "gpu_adaptive" | "magnifier_fallback";
-  preset: "balanced" | "clear" | "ultra";
+  renderer: VisibilityRenderer;
+  preset: VisibilityPreset;
   forceBright: boolean;
+  preferGpu: boolean;
   sceneLuma: number | null;
   presentedFps: number | null;
   buildFingerprint: string;
@@ -166,6 +173,10 @@ export const toggleNightVision = () =>
   invoke<NightVisionState>("toggle_night_vision");
 export const setNightVisionStrength = (strength: number) =>
   invoke<NightVisionState>("set_night_vision_strength", { strength });
+export const setNightVisionPreset = (preset: VisibilityPreset) =>
+  invoke<NightVisionState>("set_night_vision_preset", { preset });
+export const setNightVisionForceBright = (forceBright: boolean) =>
+  invoke<NightVisionState>("set_night_vision_force_bright", { forceBright });
 export const prepareNightVisionExit = () =>
   invoke<NightVisionState>("prepare_night_vision_exit");
 
