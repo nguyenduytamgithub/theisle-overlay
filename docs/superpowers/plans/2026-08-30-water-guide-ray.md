@@ -252,12 +252,13 @@ git commit -m "feat: lock water routes behind Ctrl Alt W"
 **Files:**
 - Create: `src/lib/navigation/water-guide.ts`
 - Create: `src/lib/navigation/water-guide.test.mjs`
+- Modify: `tsconfig.json` (permit explicit `.ts` imports for Node tests in this no-emit Vite project)
 
 **Interfaces:**
 - Consumes: projected navigation position/course/freshness and locked route fields.
 - Produces: `projectToSegment`, `waterGuideFrame`, and `WaterGuideFrame`.
 
-- [ ] **Step 1: Write failing literal geometry tests**
+- [x] **Step 1: Write failing literal geometry tests**
 
 Cover: 100 m off-route yields an 80 m-ahead catch-up point, 180 degrees yields U-turn, stale/headingless input hides the ray, on-route, 15 m/150 m/25 m boundaries, segment endpoints, zero-length route, north wraparound, left/right sign, and arrows pointing away from origin.
 
@@ -273,11 +274,11 @@ assert.deepEqual(frame.steeringTargetCm, [28_000, 0]);
 assert.equal(frame.state, "off-route");
 ~~~
 
-- [ ] **Step 2: Run `node --test src/lib/navigation/water-guide.test.mjs` and verify RED**
+- [x] **Step 2: Run `node --test src/lib/navigation/water-guide.test.mjs` and verify RED**
 
 Expected: module-not-found.
 
-- [ ] **Step 3: Implement minimal pure guidance**
+- [x] **Step 3: Implement minimal pure guidance**
 
 ~~~typescript
 export const WATER_GUIDE = {
@@ -302,11 +303,11 @@ export interface WaterGuideFrame {
 
 Use existing `bearingTo` and `relativeBearing`. If cross-track exceeds 15 m, advance 8,000 cm from the clamped projection toward B; otherwise steer directly to B. Never emit a ray for stale, headingless, invalid, or arrived states.
 
-- [ ] **Step 4: Verify GREEN and mutation check**
+- [x] **Step 4: Verify GREEN and mutation check**
 
 Run focused then all navigation tests. Temporarily change look-ahead to 79, confirm the literal test fails, restore 80, and confirm green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~powershell
 git add -- src/lib/navigation/water-guide.ts src/lib/navigation/water-guide.test.mjs
