@@ -21,6 +21,7 @@ pub mod store;
 pub mod telemetry;
 pub mod translate;
 pub mod tray;
+pub mod water_guide;
 pub mod webview_mem;
 pub mod win;
 

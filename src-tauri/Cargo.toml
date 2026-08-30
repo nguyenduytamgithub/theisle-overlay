@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 # Dev-only tools (verify_data). Not part of the shipped app.
-devtools = ["dep:image"]
+devtools = []
 
 [[bin]]
 name = "verify_data"
@@ -53,7 +53,7 @@ scraper = "0.20"
 # separate windows-core 0.61 (only used inside webview_mem.rs).
 webview2-com = "0.38"
 windows-core = "0.61"
-image = { version = "0.25", optional = true, default-features = false, features = ["webp", "png"] }
+image = { version = "0.25", default-features = false, features = ["webp", "png"] }
 serde_json = "1"
 log = "0.4"
 chrono = "0.4"
