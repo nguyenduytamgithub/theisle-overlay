@@ -89,6 +89,7 @@ export const en: Record<MsgKey, string> = {
 
   "hotkey.toggle_minimap": "Show/hide minimap",
   "hotkey.toggle_hud": "Show/hide compass HUD",
+  "hotkey.toggle_water_guide": "Toggle Water Guide",
   "hotkey.toggle_night_vision": "Toggle Night Vision",
   "hotkey.toggle_fullmap": "Open/close full map",
   "hotkey.toggle_click_through": "Toggle click-through",

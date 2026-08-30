@@ -384,27 +384,27 @@ Run focused Rust window tests, all navigation tests, `npm run check`, and `npm r
 - Consumes: the settings action and Water Guide state transitions.
 - Produces: discoverable rebinding, concise usage/recovery instructions, safe diagnostics, and a live evidence record.
 
-- [ ] **Step 1: Add the action and translations**
+- [x] **Step 1: Add the action and translations**
 
 Place `toggle_water_guide` after `toggle_hud` in both action arrays. Add Vietnamese `Bật/tắt chỉ đường tới nước` and English `Toggle Water Guide` labels.
 
-- [ ] **Step 2: Add concise help**
+- [x] **Step 2: Add concise help**
 
 Explain: press Ctrl+Alt+W, follow blue arrows, yellow QUAY ĐẦU means reverse, off/on locks a new nearest freshwater route, and the feature does not avoid terrain or drive the character.
 
-- [ ] **Step 3: Add safe diagnostics**
+- [x] **Step 3: Add safe diagnostics**
 
 Log only requested/result/error key, target label, rounded initial distance, candidate count, mask dimensions/hash, and map version. Never log Steam tokens, cookies, authenticated URLs, session payloads, or continuous coordinate history.
 
-- [ ] **Step 4: Add public docs and evidence table**
+- [x] **Step 4: Add public docs and evidence table**
 
 Document the improvement, use, data/freshness limitations, upstream attribution, and EAC-safe boundary. Create evidence rows for commit, executable/data hashes, selected label/pixel/world coordinate, toggle, game screenshot, Alt-Tab hide, U-turn/heading state, and user-controlled drinking confirmation.
 
-- [ ] **Step 5: Synchronize version 1.9.0**
+- [x] **Step 5: Synchronize version 1.9.0**
 
 Set `version` to `1.9.0` in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. Run `npm install --package-lock-only --ignore-scripts` and `cargo metadata --manifest-path src-tauri/Cargo.toml --no-deps` to prove both lock ecosystems resolve the same application version.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run frontend check/build, `git diff --check`, a red-flag marker scan, and credential-like string scan. Commit UX/docs/version files with `docs: explain safe water guide controls`.
 

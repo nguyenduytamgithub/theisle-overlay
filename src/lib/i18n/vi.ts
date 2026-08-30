@@ -100,6 +100,7 @@ export const vi = {
   // --- phím tắt (tên hành động) ---
   "hotkey.toggle_minimap": "Hiện/ẩn bản đồ nhỏ",
   "hotkey.toggle_hud": "Hiện/ẩn HUD la bàn",
+  "hotkey.toggle_water_guide": "Bật/tắt chỉ đường tới nước",
   "hotkey.toggle_night_vision": "Bật/tắt nhìn đêm",
   "hotkey.toggle_fullmap": "Mở/đóng bản đồ lớn",
   "hotkey.toggle_click_through": "Bật/tắt chế độ bấm được",

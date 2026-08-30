@@ -23,6 +23,7 @@
   const ACTIONS = [
     "toggle_minimap",
     "toggle_hud",
+    "toggle_water_guide",
     "toggle_night_vision",
     "toggle_fullmap",
     "toggle_click_through",
@@ -93,6 +94,18 @@
       <strong>Lưu ý:</strong> lớp phủ không thể hiện đè lên chế độ
       <strong>Toàn màn hình độc quyền</strong>. Đây là giới hạn của Windows. Dùng Cửa sổ hoặc
       Toàn màn hình không viền.
+    </p>
+
+    <h2>Chỉ đường tới nước</h2>
+    <p>
+      Trong game, nhấn <strong>Ctrl+Alt+W</strong>. Đi theo tia xanh và các mũi tên hướng ra
+      xa nhân vật. Nếu hiện <strong>QUAY ĐẦU</strong> màu vàng thì bạn đang đi ngược hướng.
+      Tắt rồi bật lại để khóa một tuyến mới tới nguồn nước ngọt gần vị trí mới nhất.
+    </p>
+    <p>
+      Tuyến xanh chỉ hướng tới nước ngọt đã xác minh gần bờ; nó không tự lái, không né cây/đá
+      và không đọc bộ nhớ game. Khi hiện <strong>CHỜ SERVER</strong>, hãy chờ vị trí mới thay vì
+      tin vào một hướng đoán.
     </p>
 
     <h2>Nhìn đêm</h2>
@@ -225,6 +238,18 @@
       <strong>Note:</strong> no overlay can draw over
       <strong>exclusive Fullscreen</strong> — a Windows limitation. Use Windowed or
       Borderless Fullscreen.
+    </p>
+
+    <h2>Water Guide</h2>
+    <p>
+      In game, press <strong>Ctrl+Alt+W</strong>. Follow the blue ray and its outward arrows.
+      A yellow <strong>TURN AROUND</strong> means you are travelling the opposite way. Toggle
+      off and on to lock a new route from the latest position to the nearest verified fresh water.
+    </p>
+    <p>
+      The ray does not drive the character, avoid terrain, or read game memory. When it says
+      <strong>WAITING FOR SERVER</strong>, wait for fresh position evidence instead of trusting
+      a guessed direction.
     </p>
 
     <h2>Night Vision</h2>

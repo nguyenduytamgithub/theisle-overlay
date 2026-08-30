@@ -1,4 +1,4 @@
-# TheIsle Overlay — Navigation HUD + Night Vision Community Fork
+# TheIsle Overlay — Water Guide + Navigation HUD + Night Vision
 
 [Tiếng Việt](README.md) · **English**
 
@@ -8,8 +8,8 @@
 > [`toantranct/theisle-overlay` v1.5.2](https://github.com/toantranct/theisle-overlay/tree/v1.5.2)
 > code at commit `f628a18`. Original project and author: **Trần Quốc Toản**.
 
-The current source is the integrated **v1.8.0 Navigation + Adaptive GPU
-Visibility candidate**. Its goal is reliable position, heading, trails, waypoint
+The current source is the integrated **v1.9.0 Water Guide + Navigation + Adaptive
+GPU Visibility candidate**. Its goal is reliable position, heading, trails, waypoint
 guidance, and useful dark-scene visibility without touching game memory or Easy
 Anti-Cheat. A public release is gated on real in-game dark-scene and navigation
 acceptance.
@@ -27,7 +27,7 @@ installer with manual fork updates.
 
 ## What does this fork improve?
 
-| While playing | Open-source upstream v1.5.2 | Integrated v1.8.0 candidate |
+| While playing | Open-source upstream v1.5.2 | Integrated v1.9.0 candidate |
 |---|---|---|
 | IslePilot position polling | 10-second default | **5-second** default; existing custom values remain unchanged |
 | Motion between server samples | Position jumps on every response | Linear for 4 seconds, decays through 12 seconds, then holds; **300/650 ms** correction based on distance |
@@ -35,6 +35,7 @@ installer with manual fork updates.
 | Travel course | Mainly inferred from travelled path | Separates server facing from motion course, switches source after 1 stable second, and crosses 0° without full spins |
 | Waypoints | Rim arrow points to the nearest waypoint | Pick one explicit destination shared by the full map, minimap, and HUD |
 | In-game guidance | No dedicated navigation HUD | Stable north-up target arrow plus **GO STRAIGHT / BEAR / TURN / TURN AROUND** and cardinal course text |
+| Low on water and unsure where to go | Manually inspect the map | `Ctrl+Alt+W` locks the nearest verified shallow fresh water; a blue ray and repeated arrows show **TURN AROUND / OFF ROUTE / WAITING FOR SERVER** directly over the game |
 | Delayed data | Freshness is unclear | Explicit **TRACKING / ESTIMATING / WAITING FOR SERVER** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
 | Scenes too dark to read | No dedicated visibility control | Windows Graphics Capture targets only the game window and a GPU shader lifts shadows/protects highlights; **NIGHT VISION** + `Ctrl+Alt+N`, Ultra/Auto/Force, truthful Magnifier fallback |
@@ -61,6 +62,12 @@ support, use `Tab` → **Asset Location** as before.
   up, N/E/S/W travel-course text, plain maneuver instructions, target name,
   distance, and data freshness; auto-hides on Alt-Tab and toggles with
   `Ctrl+Alt+H`.
+- **Beginner Water Guide**: press `Ctrl+Alt+W` to lock a straight route from the
+  latest confirmed position to the nearest verified shallow freshwater pixel.
+  A blue in-game ray uses outward arrows, shows a yellow **TURN AROUND** when
+  reversed, and guides back to the original line when off route. The target
+  never silently changes during one activation; toggle off/on for a new route.
+  It excludes ocean/deep-centre targets and never drives or avoids terrain.
 - **Display Night Vision**: a top-right **NIGHT VISION** button plus
   `Ctrl+Alt+N`, with strength 0–100, Balanced/Clear/Ultra, and Auto/Force in
   Settings. v1.8.0 uses Windows Graphics Capture on the exact The Isle HWND;
@@ -100,8 +107,8 @@ support, use `Tab` → **Asset Location** as before.
 - **Garage (Gacha) with 3D preview**: each parked dino is a card with an
   orbitable **3D model in its own skin colours** + growth + Park/Restore/
   Rename/Sell; models download once and open instantly (and offline) after.
-- **Global hotkeys** rebindable in-app, bilingual UI, plus `Ctrl+Alt+H` and a
-  HUD opacity control in Settings.
+- **Global hotkeys** rebindable in-app, bilingual UI, with `Ctrl+Alt+W` for
+  Water Guide, `Ctrl+Alt+H` for HUD, and a HUD opacity control in Settings.
 
 ## Quick install
 
@@ -137,6 +144,7 @@ want to keep Navigation HUD; install future builds from this fork's Releases.
 | Key | Action |
 |---|---|
 | `Ctrl+Alt+H` | Toggle Navigation HUD |
+| `Ctrl+Alt+W` | Toggle Water Guide to nearest verified fresh water |
 | `Ctrl+Alt+N` | Toggle Night Vision |
 | `Ctrl+Alt+M` | Toggle minimap |
 | `Ctrl+Alt+F` | Show/hide the full map |
@@ -197,15 +205,16 @@ map disabled the option locks itself off.
 
 ## How light is it?
 
-The integrated v1.8.0 candidate identity, installation, and runtime evidence are
-recorded in the [verification record](docs/verification/visibility-engine-v1.8.0.md).
+The v1.9.0 candidate inherits the v1.8.0 Night Vision evidence in the
+[Visibility record](docs/verification/visibility-engine-v1.8.0.md) and records
+Water Guide evidence separately in `docs/verification/water-guide-ray-live.md`.
 It must not be presented as a public release until real dark-scene and
 navigation acceptance.
 
 | Item | Size |
 |---|---|
-| v1.8.0 candidate NSIS installer | Size and SHA-256 are finalized in the record after build |
-| v1.8.0 candidate installed executable | Size and SHA-256 are finalized in the record after install |
+| v1.9.0 candidate NSIS installer | Size and SHA-256 are finalized in the record after build |
+| v1.9.0 candidate installed executable | Size and SHA-256 are finalized in the record after install |
 | Map data downloaded on first run | 2.9 MB (2.6 MB basemap + 0.3 MB point data) |
 
 The HUD and maps cap local presentation at roughly 30 FPS, run linearly for four

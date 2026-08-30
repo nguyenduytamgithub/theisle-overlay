@@ -336,6 +336,15 @@ fn refresh_cache(cache: &mut FreshwaterCache) -> Result<(), WaterGuideError> {
     validate_poi_map(&pois)?;
     nearest_water_label(&pois, 0.0, 0.0)?;
 
+    log::info!(
+        "water guide data: map={} mask={}x{} sha256={} candidates={}",
+        fetch::MAP_VERSION,
+        mask.width(),
+        mask.height(),
+        mask_identity.sha256,
+        candidates.len(),
+    );
+
     cache.mask_identity = Some(mask_identity);
     cache.pois_identity = Some(pois_identity);
     cache.candidates = candidates;
@@ -395,10 +404,14 @@ fn toggle_runtime(state: &AppState) -> WaterGuideSnapshot {
 fn publish(app: &AppHandle, snapshot: WaterGuideSnapshot) -> WaterGuideSnapshot {
     if let Some(route) = &snapshot.route {
         log::info!(
-            "water guide: requested={} result=route label={} distance_m={:.0}",
+            "water guide: requested={} result=route label={} distance_m={:.0} target_cm={:.0},{:.0} mask_px={},{}",
             snapshot.requested,
             route.label,
             route.initial_distance_m,
+            route.target_x_cm,
+            route.target_y_cm,
+            route.target_mask_px[0],
+            route.target_mask_px[1],
         );
     } else {
         log::info!(

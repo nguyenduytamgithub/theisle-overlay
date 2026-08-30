@@ -16,6 +16,7 @@
   const ACTIONS = [
     "toggle_minimap",
     "toggle_hud",
+    "toggle_water_guide",
     "toggle_night_vision",
     "toggle_fullmap",
     "toggle_click_through",
