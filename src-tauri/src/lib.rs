@@ -22,6 +22,7 @@ pub mod telemetry;
 pub mod translate;
 pub mod tray;
 pub mod water_guide;
+pub mod water_guide_window;
 pub mod webview_mem;
 pub mod win;
 
@@ -205,6 +206,7 @@ pub fn run(replay_file: Option<PathBuf>) {
             }
             minimap::create(app.handle())?;
             hud::create(app.handle())?;
+            water_guide_window::create(app.handle())?;
             night_vision::create_filter(app.handle())?;
             night_vision::create_button(app.handle())?;
             tray::create(app.handle())?;

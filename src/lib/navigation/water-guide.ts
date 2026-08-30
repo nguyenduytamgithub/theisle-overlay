@@ -53,6 +53,51 @@ export interface SegmentProjection {
   crossTrackM: number;
 }
 
+export type WaterGuideLanguage = "vi" | "en";
+
+const INSTRUCTIONS: Record<WaterGuideLanguage, Record<WaterGuideState, string>> = {
+  vi: {
+    "on-route": "THEO TIA XANH",
+    "off-route": "LỆCH ĐƯỜNG · QUAY LẠI TIA XANH",
+    lost: "LẠC XA · THEO TIA XANH ĐỂ TRỞ LẠI",
+    waiting: "CHỜ SERVER",
+    "heading-unknown": "XOAY / ĐI VÀI BƯỚC ĐỂ XÁC ĐỊNH HƯỚNG",
+    arrived: "ĐÃ TỚI NGUỒN NƯỚC",
+    invalid: "KHÔNG XÁC MINH ĐƯỢC NƯỚC UỐNG",
+  },
+  en: {
+    "on-route": "FOLLOW THE BLUE RAY",
+    "off-route": "OFF ROUTE · RETURN TO THE BLUE RAY",
+    lost: "FAR OFF ROUTE · FOLLOW THE BLUE RAY BACK",
+    waiting: "WAITING FOR SERVER",
+    "heading-unknown": "TURN / WALK A FEW STEPS TO FIND DIRECTION",
+    arrived: "FRESH WATER REACHED",
+    invalid: "DRINKABLE WATER COULD NOT BE VERIFIED",
+  },
+};
+
+export function instructionFor(
+  frame: WaterGuideFrame,
+  language: WaterGuideLanguage,
+): string {
+  if (frame.turn === "uturn" && frame.rayVisible) {
+    return language === "vi" ? "QUAY ĐẦU" : "TURN AROUND";
+  }
+  return INSTRUCTIONS[language][frame.state];
+}
+
+export function advanceScreenAngle(
+  currentDeg: number,
+  targetDeg: number,
+  elapsedS: number,
+  maxRateDegS = 180,
+): number {
+  const delta = targetDeg - currentDeg;
+  const step = Math.sign(delta)
+    * Math.min(Math.abs(delta), Math.max(0, elapsedS) * maxRateDegS);
+  return stable(currentDeg + step);
+}
+
 const stable = (value: number): number =>
   Math.round(value * 1_000_000) / 1_000_000;
 

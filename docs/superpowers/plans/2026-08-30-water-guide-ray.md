@@ -329,23 +329,23 @@ git commit -m "feat: derive stable fixed-route water guidance"
 - Consumes: state command/event, position/quality/settings events, `NavigationEstimator`, and `waterGuideFrame`.
 - Produces: `water-guide://ready` and a transparent window labelled `water-guide` covering the game client rectangle.
 
-- [ ] **Step 1: Write failing window-policy tests**
+- [x] **Step 1: Write failing window-policy tests**
 
 Test `should_show(requested, game_active, main_in_front)`, exact client rectangle placement/sizing, one-recreate/then-supervise recovery, and capability membership for `water-guide`.
 
-- [ ] **Step 2: Run focused Rust tests and verify RED**
+- [x] **Step 2: Run focused Rust tests and verify RED**
 
 Expected: missing module/functions/capability.
 
-- [ ] **Step 3: Implement the supervised window**
+- [x] **Step 3: Implement the supervised window**
 
 Build `water-guide.html` as transparent, decorationless, shadowless, topmost, taskbar-skipped, non-resizable, unfocused, non-focusable, initially hidden, and `set_ignore_cursor_events(true)`. Copy the proven HUD lifecycle: 250 ms supervisor, two-observation game debounce, hide on Alt-Tab or main-window foreground, resize/reposition to `client_rect_on_screen`, topmost repair, resync on show, and one ready recreation.
 
-- [ ] **Step 4: Add Vite entry and renderer wiring**
+- [x] **Step 4: Add Vite entry and renderer wiring**
 
 Add the Vite input and capability. Feed `NavigationEstimator` from real position events, invalidate on quality reset, update state from `water-guide://changed`, invoke initial state/position, paint at 30 FPS, and emit `water-guide://ready`. Compute `waterGuideFrame` and set CSS variables for a bottom-centre ray; never display the ray when `rayVisible=false`.
 
-- [ ] **Step 5: Implement Vietnamese-first visuals**
+- [x] **Step 5: Implement Vietnamese-first visuals**
 
 Render a cyan line/glow with repeated outward chevrons, compact destination/distance pill, and exact instructions:
 
@@ -360,7 +360,7 @@ Render a cyan line/glow with repeated outward chevrons, compact destination/dist
 
 Map error keys locally and never display raw backend errors.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run focused Rust window tests, all navigation tests, `npm run check`, and `npm run build`. Require `dist/water-guide.html`. Commit window/config/renderer files with message `feat: render water guidance over the game`.
 

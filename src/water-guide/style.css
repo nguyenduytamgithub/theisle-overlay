@@ -1,0 +1,177 @@
+:root {
+  --ray-angle: 0deg;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #f8fbff;
+  background: transparent;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+  user-select: none;
+}
+
+.water-guide {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.water-guide.requested {
+  opacity: 1;
+}
+
+.status-stack {
+  position: absolute;
+  z-index: 3;
+  top: clamp(54px, 7vh, 92px);
+  left: 50%;
+  display: flex;
+  min-width: min(680px, 76vw);
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 22px 10px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(82, 207, 255, 0.7);
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgba(5, 16, 25, 0.82), rgba(2, 9, 15, 0.62));
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.48), inset 0 0 16px rgba(0, 174, 255, 0.1);
+  text-align: center;
+  text-shadow: 0 2px 4px #000, 0 0 9px #000;
+}
+
+.destination {
+  max-width: 72vw;
+  overflow: hidden;
+  color: #bdefff;
+  font-size: clamp(14px, 1.7vw, 23px);
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instruction {
+  color: #ffffff;
+  font-size: clamp(12px, 1.35vw, 19px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.water-guide[data-state="waiting"] .status-stack,
+.water-guide[data-state="heading-unknown"] .status-stack,
+.water-guide[data-state="error"] .status-stack {
+  border-color: rgba(255, 190, 73, 0.8);
+}
+
+.water-guide[data-state="arrived"] .status-stack {
+  border-color: rgba(98, 255, 161, 0.82);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.48), 0 0 26px rgba(65, 255, 151, 0.25);
+}
+
+.ray {
+  position: absolute;
+  z-index: 2;
+  bottom: 5.5vh;
+  left: 50%;
+  width: 44px;
+  height: clamp(260px, 62vh, 760px);
+  transform: translateX(-50%) rotate(var(--ray-angle));
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 7px rgba(37, 199, 255, 0.95));
+  will-change: transform;
+}
+
+.ray-line {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 5px;
+  height: 100%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(
+    to top,
+    rgba(54, 207, 255, 0.95),
+    rgba(54, 207, 255, 0.82) 68%,
+    rgba(54, 207, 255, 0.12)
+  );
+  box-shadow: 0 0 10px #00bfff, 0 0 24px rgba(0, 174, 255, 0.74);
+}
+
+.ray i {
+  position: absolute;
+  bottom: calc(var(--i) * 11% - 3%);
+  left: 50%;
+  width: 30px;
+  height: 20px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #d8f8ff, #19c6ff 58%, rgba(0, 140, 255, 0.7));
+  clip-path: polygon(50% 0, 100% 100%, 72% 100%, 50% 47%, 28% 100%, 0 100%);
+  filter: drop-shadow(0 0 5px rgba(0, 197, 255, 0.95));
+  animation: guide-pulse 1.15s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -90ms);
+}
+
+.uturn {
+  position: absolute;
+  z-index: 4;
+  top: clamp(150px, 20vh, 240px);
+  left: 50%;
+  padding: 8px 22px 10px;
+  transform: translateX(-50%);
+  border: 2px solid rgba(255, 221, 80, 0.9);
+  border-radius: 14px;
+  color: #ffe450;
+  background: rgba(34, 24, 0, 0.8);
+  box-shadow: 0 0 26px rgba(255, 202, 20, 0.36);
+  font-size: clamp(22px, 3vw, 42px);
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 4px #000;
+}
+
+.water-guide[data-state="off-route"] .ray-line,
+.water-guide[data-state="lost"] .ray-line {
+  background: linear-gradient(to top, #52d7ff, rgba(0, 171, 255, 0.82), rgba(0, 102, 255, 0.12));
+}
+
+.hidden {
+  display: none !important;
+}
+
+@keyframes guide-pulse {
+  0%,
+  100% {
+    opacity: 0.56;
+    transform: translateX(-50%) scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+@media (max-height: 520px) {
+  .status-stack {
+    top: 22px;
+  }
+
+  .uturn {
+    top: 108px;
+  }
+
+  .ray {
+    bottom: 18px;
+    height: 52vh;
+  }
+}
+

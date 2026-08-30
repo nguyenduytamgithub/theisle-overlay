@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  advanceScreenAngle,
+  instructionFor,
   projectToSegment,
   waterGuideFrame,
 } from "./water-guide.ts";
@@ -123,4 +125,20 @@ test("zero-length or non-finite route fails closed", () => {
   assert.equal(zero.rayVisible, false);
   assert.equal(invalid.state, "invalid");
   assert.equal(invalid.rayVisible, false);
+});
+
+test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
+  const uturn = waterGuideFrame(route(), view({ guidanceCourseDeg: 180 }));
+  const offRoute = waterGuideFrame(route(), view({ yCm: 2_000 }));
+  const stale = waterGuideFrame(route(), view({ freshness: "waiting" }));
+
+  assert.equal(instructionFor(uturn, "vi"), "QUAY ĐẦU");
+  assert.equal(instructionFor(offRoute, "vi"), "LỆCH ĐƯỜNG · QUAY LẠI TIA XANH");
+  assert.equal(instructionFor(stale, "vi"), "CHỜ SERVER");
+});
+
+test("screen ray turns at a bounded rate instead of snapping", () => {
+  assert.equal(advanceScreenAngle(0, 75, 1 / 30), 6);
+  assert.equal(advanceScreenAngle(70, 75, 1), 75);
+  assert.equal(advanceScreenAngle(-70, -75, 1), -75);
 });
