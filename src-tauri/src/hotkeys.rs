@@ -272,6 +272,9 @@ fn dispatch(app: &AppHandle, action: &str) {
     match action {
         "toggle_minimap" => toggle_setting(app, "visible"),
         "toggle_hud" => toggle_navigation_setting(app, "hud_visible"),
+        "toggle_water_guide" => {
+            crate::water_guide::toggle_from_app(app);
+        }
         "toggle_night_vision" => crate::night_vision::toggle_from_app(app),
         "toggle_click_through" => toggle_setting(app, "click_through"),
         // Lives under "islepilot", not "minimap", so toggle_setting can't
@@ -339,7 +342,7 @@ fn dispatch(app: &AppHandle, action: &str) {
         // clicks, and a reload rebuilds the page (state comes back through
         // get_current_position/resync).
         "reload_ui" => {
-            for label in ["main", "minimap", "hud", "night-vision"] {
+            for label in ["main", "minimap", "hud", "water-guide", "night-vision"] {
                 if let Some(window) = app.get_webview_window(label) {
                     crate::webview_mem::on_shown(&window);
                     let _ = window.eval("location.reload()");

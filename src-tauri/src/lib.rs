@@ -104,6 +104,8 @@ pub fn run(replay_file: Option<PathBuf>) {
             commands::get_map_info,
             commands::check_hotkey_available,
             commands::apply_hotkeys,
+            water_guide::get_water_guide_state,
+            water_guide::toggle_water_guide,
             commands::open_trails_folder,
             commands::fetch_data,
             commands::islepilot_login,

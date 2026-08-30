@@ -115,6 +115,7 @@ pub fn default_settings() -> Value {
         "hotkeys": {
             "toggle_minimap": "Ctrl+Alt+M",
             "toggle_hud": "Ctrl+Alt+H",
+            "toggle_water_guide": "Ctrl+Alt+W",
             "toggle_night_vision": "Ctrl+Alt+N",
             "toggle_fullmap": "Ctrl+Alt+F",
             "toggle_click_through": "Ctrl+Alt+C",
@@ -391,6 +392,7 @@ mod tests {
         assert_eq!(merged["navigation"]["hud_visible"], true);
         assert_eq!(merged["navigation"]["hud_opacity"], 0.92);
         assert_eq!(merged["hotkeys"]["toggle_hud"], "Ctrl+Alt+H");
+        assert_eq!(merged["hotkeys"]["toggle_water_guide"], "Ctrl+Alt+W");
         assert_eq!(merged["night_vision"]["strength"], 85);
         assert_eq!(merged["night_vision"]["show_button"], true);
         assert_eq!(merged["night_vision"]["preset"], "ultra");

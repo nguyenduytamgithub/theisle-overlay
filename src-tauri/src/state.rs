@@ -41,6 +41,7 @@ pub struct AppState {
     pub previous_trail_path: Mutex<Option<PathBuf>>,
     /// Last `get_pois_render` result; see the cache's own doc for the key.
     pub pois_cache: Mutex<Option<crate::commands::PoisCache>>,
+    pub water_guide: Mutex<crate::water_guide::WaterGuideRuntime>,
     started: Instant,
     save_debouncer: SettingsDebouncer,
 }
@@ -79,6 +80,7 @@ impl AppState {
             waypoints: Mutex::new(store::load_waypoints()),
             previous_trail_path: Mutex::new(store::latest_trail_path()),
             pois_cache: Mutex::new(None),
+            water_guide: Mutex::new(crate::water_guide::WaterGuideRuntime::default()),
             settings: Mutex::new(settings),
             started: Instant::now(),
             save_debouncer: SettingsDebouncer::new(),

@@ -11,8 +11,11 @@ use overlay_core::{distance_m, pixel_to_world, Calibration};
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use tauri::{AppHandle, Manager, State};
 
-use crate::{fetch, settings};
+use crate::events::PositionUpdate;
+use crate::state::{AppState, LockExt};
+use crate::{events, fetch, pipeline, settings};
 
 const WATER_ALPHA_MIN: u8 = 128;
 const NEIGHBOURS: [(i32, i32); 8] = [
@@ -76,6 +79,26 @@ pub struct FreshwaterTarget {
     pub distance_m: f64,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WaterGuideRoute {
+    pub start_x_cm: f64,
+    pub start_y_cm: f64,
+    pub target_x_cm: f64,
+    pub target_y_cm: f64,
+    pub target_mask_px: [u32; 2],
+    pub label: String,
+    pub initial_distance_m: f64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WaterGuideSnapshot {
+    pub requested: bool,
+    pub route: Option<WaterGuideRoute>,
+    pub error_key: Option<String>,
+}
+
 #[derive(Debug, Default)]
 pub struct FreshwaterCache {
     mask_identity: Option<AssetIdentity>,
@@ -83,6 +106,63 @@ pub struct FreshwaterCache {
     candidates: Vec<(u32, u32)>,
     pois: Option<Value>,
     dimensions: Option<(u32, u32)>,
+}
+
+#[derive(Debug, Default)]
+pub struct WaterGuideRuntime {
+    requested: bool,
+    route: Option<WaterGuideRoute>,
+    error_key: Option<String>,
+    cache: FreshwaterCache,
+}
+
+impl WaterGuideRuntime {
+    pub fn snapshot(&self) -> WaterGuideSnapshot {
+        WaterGuideSnapshot {
+            requested: self.requested,
+            route: self.route.clone(),
+            error_key: self.error_key.clone(),
+        }
+    }
+
+    fn toggle_with_position<F>(
+        &mut self,
+        position: Option<(f64, f64)>,
+        selector: F,
+    ) -> WaterGuideSnapshot
+    where
+        F: FnOnce(&mut FreshwaterCache, f64, f64) -> Result<FreshwaterTarget, WaterGuideError>,
+    {
+        if self.requested {
+            self.requested = false;
+            self.route = None;
+            self.error_key = None;
+            return self.snapshot();
+        }
+
+        self.requested = true;
+        self.route = None;
+        self.error_key = None;
+        let Some((start_x_cm, start_y_cm)) = position else {
+            self.error_key = Some(WaterGuideError::WaitingForPosition.key().into());
+            return self.snapshot();
+        };
+        match selector(&mut self.cache, start_x_cm, start_y_cm) {
+            Ok(target) => {
+                self.route = Some(WaterGuideRoute {
+                    start_x_cm,
+                    start_y_cm,
+                    target_x_cm: target.x_cm,
+                    target_y_cm: target.y_cm,
+                    target_mask_px: target.mask_px,
+                    label: target.label,
+                    initial_distance_m: target.distance_m,
+                });
+            }
+            Err(error) => self.error_key = Some(error.key().into()),
+        }
+        self.snapshot()
+    }
 }
 
 fn is_water(mask: &RgbaImage, x: i32, y: i32) -> bool {
@@ -288,10 +368,107 @@ pub fn select_freshwater_target(
     })
 }
 
+fn position_for_activation(
+    position: Option<&PositionUpdate>,
+    now_ms: i64,
+) -> Result<(f64, f64), WaterGuideError> {
+    let position = position.ok_or(WaterGuideError::WaitingForPosition)?;
+    let age_ms = now_ms.saturating_sub(position.confirmed_at_ms);
+    if !position.in_bounds
+        || !position.x_cm.is_finite()
+        || !position.y_cm.is_finite()
+        || age_ms > 30_000
+    {
+        return Err(WaterGuideError::WaitingForPosition);
+    }
+    Ok((position.x_cm, position.y_cm))
+}
+
+fn toggle_runtime(state: &AppState) -> WaterGuideSnapshot {
+    let current = pipeline::current_payload(state);
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let position = position_for_activation(current.as_ref(), now_ms).ok();
+    let mut runtime = state.water_guide.lock_safe();
+    runtime.toggle_with_position(position, select_freshwater_target)
+}
+
+fn publish(app: &AppHandle, snapshot: WaterGuideSnapshot) -> WaterGuideSnapshot {
+    if let Some(route) = &snapshot.route {
+        log::info!(
+            "water guide: requested={} result=route label={} distance_m={:.0}",
+            snapshot.requested,
+            route.label,
+            route.initial_distance_m,
+        );
+    } else {
+        log::info!(
+            "water guide: requested={} result={}",
+            snapshot.requested,
+            snapshot.error_key.as_deref().unwrap_or("off"),
+        );
+    }
+    events::emit_all(app, "water-guide://changed", snapshot.clone());
+    snapshot
+}
+
+#[tauri::command]
+pub fn get_water_guide_state(state: State<'_, AppState>) -> WaterGuideSnapshot {
+    state.water_guide.lock_safe().snapshot()
+}
+
+#[tauri::command]
+pub fn toggle_water_guide(app: AppHandle, state: State<'_, AppState>) -> WaterGuideSnapshot {
+    publish(&app, toggle_runtime(&state))
+}
+
+pub fn toggle_from_app(app: &AppHandle) -> WaterGuideSnapshot {
+    let state = app.state::<AppState>();
+    publish(app, toggle_runtime(&state))
+}
+
+pub fn is_requested(app: &AppHandle) -> bool {
+    app.state::<AppState>().water_guide.lock_safe().requested
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use overlay_core::Calibration;
+
+    fn target(label: &str, x_cm: f64, y_cm: f64) -> FreshwaterTarget {
+        FreshwaterTarget {
+            label: label.into(),
+            x_cm,
+            y_cm,
+            mask_px: [10, 20],
+            distance_m: 100.0,
+        }
+    }
+
+    fn position(confirmed_at_ms: i64, in_bounds: bool) -> crate::events::PositionUpdate {
+        crate::events::PositionUpdate {
+            x_cm: 1_000.0,
+            y_cm: 2_000.0,
+            z_cm: 0.0,
+            px: 1.0,
+            py: 2.0,
+            heading_deg: None,
+            heading_source: None,
+            compass_key: None,
+            server_facing_deg: None,
+            motion_course_deg: None,
+            velocity_x_cm_s: None,
+            velocity_y_cm_s: None,
+            velocity_px_x_s: None,
+            velocity_px_y_s: None,
+            confirmed_at_ms,
+            prediction_horizon_s: 4.0,
+            stale_after_s: 12.0,
+            relocated: false,
+            refreshed_only: false,
+            in_bounds,
+        }
+    }
 
     fn square_mask(size: u32, min: u32, max: u32) -> image::RgbaImage {
         let mut mask = image::RgbaImage::new(size, size);
@@ -394,6 +571,59 @@ mod tests {
         assert_eq!(
             nearest_water_label(&pois, 0.0, 0.0),
             Err(WaterGuideError::MissingWaterLabels),
+        );
+    }
+
+    #[test]
+    fn route_endpoints_stay_locked_until_off_then_on() {
+        let mut runtime = WaterGuideRuntime::default();
+
+        runtime.toggle_with_position(Some((1_000.0, 2_000.0)), |_, _, _| {
+            Ok(target("Lake", 9_000.0, 8_000.0))
+        });
+        let first = runtime.snapshot().route.unwrap();
+        assert_eq!(runtime.snapshot().route.unwrap(), first);
+
+        runtime.toggle_with_position(Some((5_000.0, 6_000.0)), |_, _, _| unreachable!());
+        assert!(!runtime.snapshot().requested);
+
+        runtime.toggle_with_position(Some((5_000.0, 6_000.0)), |_, _, _| {
+            Ok(target("Lake", 9_000.0, 8_000.0))
+        });
+        let second = runtime.snapshot().route.unwrap();
+        assert_eq!((second.start_x_cm, second.start_y_cm), (5_000.0, 6_000.0));
+        assert_eq!((second.target_x_cm, second.target_y_cm), (9_000.0, 8_000.0));
+    }
+
+    #[test]
+    fn missing_position_keeps_request_visible_but_draws_no_route() {
+        let mut runtime = WaterGuideRuntime::default();
+
+        runtime.toggle_with_position(None, |_, _, _| unreachable!());
+
+        assert_eq!(
+            runtime.snapshot(),
+            WaterGuideSnapshot {
+                requested: true,
+                route: None,
+                error_key: Some("waiting_for_position".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn activation_rejects_stale_or_out_of_bounds_position() {
+        assert_eq!(
+            position_for_activation(Some(&position(69_999, true)), 100_000),
+            Err(WaterGuideError::WaitingForPosition),
+        );
+        assert_eq!(
+            position_for_activation(Some(&position(90_000, false)), 100_000),
+            Err(WaterGuideError::WaitingForPosition),
+        );
+        assert_eq!(
+            position_for_activation(Some(&position(90_000, true)), 100_000),
+            Ok((1_000.0, 2_000.0)),
         );
     }
 }

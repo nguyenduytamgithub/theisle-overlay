@@ -45,7 +45,7 @@
 - Consumes: `settings::islemaps_dir()`, `settings::pois_path()`, `fetch::MAP_VERSION`, and `overlay_core::{pixel_to_world, distance_m, Calibration}`.
 - Produces: `FreshwaterTarget`, `FreshwaterCache`, `WaterGuideError`, and `select_freshwater_target`.
 
-- [ ] **Step 1: Write failing synthetic-mask tests**
+- [x] **Step 1: Write failing synthetic-mask tests**
 
 Add tests inside `water_guide.rs` before production functions. They construct real `image::RgbaImage` values without mocks:
 
@@ -75,7 +75,7 @@ fn boundary_moves_one_pixel_toward_denser_freshwater() {
 
 Also add a hand-derived nearest-world-distance test using a 10 x 10 calibration over world ranges 0..10, candidates `[(1,1), (8,8)]`, player `(1_500 cm, 1_200 cm)`, and expected candidate `(1,1)`.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -86,7 +86,7 @@ cargo test --manifest-path src-tauri/Cargo.toml water_guide --lib
 
 Expected: compilation fails because the module/functions and shipped `image` dependency do not exist.
 
-- [ ] **Step 3: Add the shipped image dependency and minimal mask geometry**
+- [x] **Step 3: Add the shipped image dependency and minimal mask geometry**
 
 Change:
 
@@ -115,11 +115,11 @@ pub(crate) fn nearest_candidate(
 
 Find water pixels adjacent to non-water/out-of-bounds, move each to the adjacent water pixel with greatest neighbour count when denser, deduplicate with `BTreeSet`, and keep deterministic ordering.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Expected: all Water Guide geometry tests pass with no warnings.
 
-- [ ] **Step 5: Write failing data-validation and POI-label tests**
+- [x] **Step 5: Write failing data-validation and POI-label tests**
 
 Use a literal JSON fixture:
 
@@ -139,11 +139,11 @@ fn poi_label_does_not_replace_the_mask_destination() {
 
 Add tests rejecting the wrong map version, image-size mismatch, an empty mask, and missing labels.
 
-- [ ] **Step 6: Run tests and verify RED**
+- [x] **Step 6: Run tests and verify RED**
 
 Expected: missing `nearest_water_label`, asset identity/cache, and selector failures.
 
-- [ ] **Step 7: Implement validation, caching, and selection**
+- [x] **Step 7: Implement validation, caching, and selection**
 
 Use these contracts:
 
@@ -170,11 +170,11 @@ pub fn select_freshwater_target(
 
 Require dimensions equal `Calibration::islemaps()`, hash with existing `sha2`, require POI `map == fetch::MAP_VERSION`, convert candidates through `pixel_to_world`, select by world-centimetre distance, and attach only the nearest `layers.water.items[].label`. Stable errors: `missing_freshwater`, `invalid_freshwater`, `unsupported_map`, `empty_freshwater`, `missing_water_labels`.
 
-- [ ] **Step 8: Verify focused and complete Rust tests**
+- [x] **Step 8: Verify focused and complete Rust tests**
 
 Run focused Water Guide tests followed by `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets`. Expected: zero failures.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ~~~powershell
 git add -- src-tauri/src/water_guide.rs src-tauri/src/lib.rs src-tauri/Cargo.toml Cargo.lock
@@ -194,7 +194,7 @@ git commit -m "feat: select verified shallow freshwater targets"
 - Consumes: `pipeline::current_payload(&AppState)`, `events::emit_all`, and existing hotkey registration/debounce.
 - Produces: `WaterGuideSnapshot`, `WaterGuideRoute`, commands `get_water_guide_state` and `toggle_water_guide`, event `water-guide://changed`, and `toggle_from_app`.
 
-- [ ] **Step 1: Write failing route-lock and settings tests**
+- [x] **Step 1: Write failing route-lock and settings tests**
 
 Test a pure runtime with an injected selector closure: first on stores A/B; reading snapshots cannot change them; off clears; next on locks from the newer supplied position. Add a test that missing, out-of-bounds, or older-than-30-seconds position evidence leaves `requested=true`, `route=None`, and `errorKey=waiting_for_position`. Extend `merge_real_legacy_settings_loses_nothing` with:
 
@@ -202,11 +202,11 @@ Test a pure runtime with an injected selector closure: first on stores A/B; read
 assert_eq!(merged["hotkeys"]["toggle_water_guide"], "Ctrl+Alt+W");
 ~~~
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run focused Water Guide and legacy-settings tests. Expected: missing state/contracts/default binding.
 
-- [ ] **Step 3: Implement route state and commands**
+- [x] **Step 3: Implement route state and commands**
 
 Use exact serialized contracts:
 
@@ -234,11 +234,11 @@ pub struct WaterGuideSnapshot {
 
 Add `pub water_guide: Mutex<WaterGuideRuntime>` to `AppState`. On off, clear requested/route/error. On enable, keep `requested=true`; lock one route when valid or retain `route=None` with a stable error key so no ray is drawn. Both hotkey and command call one internal toggle and emit the same snapshot.
 
-- [ ] **Step 4: Add default and dispatch**
+- [x] **Step 4: Add default and dispatch**
 
 Add `toggle_water_guide: Ctrl+Alt+W` to defaults. Dispatch through `crate::water_guide::toggle_from_app(app)` and add `water-guide` to recovery reload labels. It remains non-repeatable under the existing 350 ms debounce.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run focused tests, Cargo fmt check, and full workspace tests; then commit:
 
