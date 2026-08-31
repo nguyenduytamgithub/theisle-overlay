@@ -28,6 +28,7 @@ Hashes identify this installed snapshot; a newer valid map must be revalidated, 
 | Freshwater geometry RED/GREEN | Missing module/functions failed first; then 7 selector/validation tests passed | `PASS` |
 | Route lock RED/GREEN | Missing runtime/state failed first; then 10 Water Guide Rust tests passed | `PASS` |
 | Waiting auto-lock RED/GREEN | The new test first failed because `lock_waiting_with_position` did not exist; `waiting_request_locks_once_when_first_valid_position_arrives` now passes | `PASS` |
+| Independent code review | Initial review found the activation freshness mismatch; follow-up commit `2c12516` uses payload `staleAfterS`, proves the exact boundary, rejects malformed thresholds, and the re-review returned no remaining findings | `READY` |
 | Full Rust regression after waiting auto-lock | `203 passed, 9 ignored, 0 failed` across the workspace/all targets | `PASS` |
 | Fixed-route geometry RED/GREEN | Missing module failed first; 80 m mutation produced 27,900 cm instead of 28,000 cm; restored suite passed | `PASS` |
 | Navigation regression | `46 passed, 0 failed` | `PASS` |

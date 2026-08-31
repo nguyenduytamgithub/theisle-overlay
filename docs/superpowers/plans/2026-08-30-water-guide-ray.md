@@ -461,10 +461,12 @@ For every observed defect, first add a failing regression, observe the expected 
 
 Reproduced/fixed: a request made before the first valid position remained waiting forever. The new failing-then-passing regression proves the first accepted position locks exactly one route and later positions do not retarget it.
 
-- [ ] **Step 8: Finalize evidence and Git state**
+- [x] **Step 8: Finalize evidence and Git state**
 
 Populate evidence with timestamps, hashes, test counts, screenshots, and honest PASS/PARTIAL/BLOCKED per criterion. Commit evidence; require empty `git status --short` and record feature history.
 
 - [ ] **Step 9: Publish verified work**
 
 After live visual evidence, push `codex/water-guide-ray-v1` to the user's GitHub remote, preserve the upstream source attribution, and hand over exact use/install/rollback steps. Never force-push or rewrite unrelated history.
+
+The public candidate branch may be pushed with an explicit `PARTIAL` live-visual record; it must not be described as live-ray accepted or merged until the remaining real-game screenshot/controlled-walk gate is completed.
