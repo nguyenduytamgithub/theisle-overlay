@@ -166,11 +166,11 @@ git commit -m "feat: render north-up XY board over game"
 - Consumes: verified source branch, existing NSIS build path, and the active The Isle session.
 - Produces: independently reviewed commit, installer/EXE hashes, two live captures, and a clean Git candidate.
 
-- [ ] **Step 1: Synchronize CodeGraph and review blast radius**
+- [x] **Step 1: Synchronize CodeGraph and review blast radius**
 
 Run the user-scope ensure script and one `codegraph explore --max-files 2` query for Water Guide renderer consumers. Confirm no camera, mouse, character-control, memory, hook, or packet source entered the feature.
 
-- [ ] **Step 2: Run complete automated verification**
+- [x] **Step 2: Run complete automated verification**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-water-guide-target'
@@ -184,11 +184,11 @@ git diff --check
 
 Expected: zero failures or warnings other than the existing Vite chunk-size notice.
 
-- [ ] **Step 3: Obtain independent code review**
+- [x] **Step 3: Obtain independent code review**
 
 Review pure geometry, absolute-bearing rendering, no-camera contract, stale/arrival behavior, and HUD/minimap suppression. Fix any finding with a new failing regression before proceeding. Require `READY`.
 
-- [ ] **Step 4: Build and install only Overlay**
+- [x] **Step 4: Build and install only Overlay**
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-water-guide-target'
@@ -201,6 +201,8 @@ Record installer and installed EXE SHA-256. Back up the installed EXE under `D:\
 
 With Water Guide requested, capture two 1920 x 1080 desktop frames after the user changes only the camera angle. Require the same target/movement needle angles when no new confirmed XY sample arrived; require no minimap/ordinary heading HUD and visible on-screen cardinal labels. Do not send input to the game.
 
-- [ ] **Step 6: Finalize docs and Git**
+Handoff note: active-game and Night Vision visual captures passed, but the mouse-only camera pair was not executed because no synthetic game input is allowed and the user requested handoff without reopening the game. Absolute-XY/no-camera behavior passed source inspection and deterministic regressions.
+
+- [x] **Step 6: Finalize docs and Git**
 
 Record screenshot paths/hashes, installer/EXE hashes, test counts, live `PASS/PARTIAL/BLOCKED`, and running PIDs. Mark this plan complete only after live acceptance. Commit docs, require clean status, inspect worktree ancestry, then merge/push without force and without touching other worktrees.

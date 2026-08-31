@@ -1,5 +1,51 @@
 # Water Guide Ray v1.9.0 — Verification Record
 
+## North-up XY board closeout — 2026-09-01 (supersedes the camera-glued ray)
+
+- Final reviewed source: `codex/water-guide-ray-v1` at `123c072`.
+- Delivery status: `PASS` for installation, active-game rendering, absolute XY guidance, Night Vision coexistence, and process preservation.
+- Manual mouse-rotation acceptance: `NOT EXECUTED`; no input was sent to the game. The no-camera contract is covered by source inspection and deterministic tests, and the user requested handoff without reopening the game.
+- Control: `Ctrl+Alt+W` toggles Water Guide. The installed app was left with Water Guide and Night Vision off.
+
+### What is now rendered
+
+The dedicated full-game click-through Water Guide window displays a lower-middle north-up board directly over the game, not inside the minimap or big map. `BẮC` is fixed at the top, `ĐÔNG` at the right, `NAM` at the bottom, and `TÂY` at the left. The cyan needle is the absolute current-XY-to-water bearing. The white needle is the confirmed XY movement course after at least 500 cm of travel; it turns green when aligned. Neither needle consumes mouse, camera, head, facing, memory, packet, or input data.
+
+### Final automated and review evidence
+
+| Gate | Evidence | Result |
+|---|---|---|
+| Navigation/frontend tests | `60 passed, 0 failed` | `PASS` |
+| Svelte/TypeScript | `0 errors, 0 warnings` | `PASS` |
+| Vite production build | Emitted `dist/water-guide.html` and dedicated JS/CSS assets | `PASS` |
+| Rust library | `146 passed, 9 ignored, 0 failed` | `PASS` |
+| Clippy | `--all-targets -- -D warnings` | `PASS` |
+| Source safety scan | No prohibited source in Water Guide implementation: process memory, hooks, packet capture, synthetic input, camera/view matrix, or head bone | `PASS` |
+| Startup race regressions | Newer `water-guide://changed`, `position://update`, or `position://quality` events always outrank initial snapshots; older confirmed timestamps are rejected | `PASS` |
+| Independent re-review | Initial two race findings were fixed with failing regressions; final review returned `READY` with no findings | `READY` |
+| CodeGraph | Index synchronized at final source; target and movement needles derive from absolute XY only | `PASS` |
+
+### Final package and running installation
+
+| Artifact/evidence | Value | Result |
+|---|---|---|
+| NSIS installer | `D:\CodexBuild\theisle-overlay-water-guide-target\release\bundle\nsis\TheIsle Overlay_1.9.0_x64-setup.exe`; 6,014,213 bytes; SHA-256 `1F73A28810215548F2B1ED3D10846394D5C13E855ED375EA632B8DAE9E8FFA09` | `PASS` |
+| Installed executable | `%LOCALAPPDATA%\TheIsle Overlay\theisle-overlay.exe`; 22,163,456 bytes; SHA-256 `95CA7618258E0BDC946D139DB04DE8D0A17D70F098C430A1D1AD8CF288095D1C` | `PASS` |
+| Recoverable previous executable | `D:\CodexBuild\theisle-overlay-pre-xy-board-20260901-0056\theisle-overlay.exe`; SHA-256 `392FA72493B4B31A4C22452731F1B928995D52FDD1E0C58BA55CE50A5806F77D` | `PASS` |
+| Overlay restart | New Overlay PID `30184`; silent installer exit `0` | `PASS` |
+| Game preservation during install | `TheIsleClient-Win64-Shipping` PID `36256`, start `2026-08-31 18:49:24`, unchanged before/after installation | `PASS` |
+| Activated freshwater route | Runtime selected `Gorge River`, target `[229264,-196464]` cm, freshwater mask pixel `[736,1716]`; mask SHA-256 `6C416181C818C46912C8345C0E183990915B6E7489FDDD06D22D71A79130E05A` | `PASS` |
+
+### Final live visual evidence
+
+| Evidence | SHA-256 | What it proves |
+|---|---|---|
+| `D:\CodexBuild\theisle-overlay-water-guide-evidence-20260901\xy-board-gameplay-visible.png` | `CECFE71C5544EA03B0430890CA2BB457FC7380CFB2516D19685DF9E982B4E4BC` | Active gameplay at 1920 x 1080: the large BẮC/ĐÔNG/NAM/TÂY board is directly on the game screen; cyan target points northeast, white movement points west, and the banner truthfully requests `QUAY ĐẦU 165°`. The minimap and ordinary heading HUD are absent. |
+| `D:\CodexBuild\theisle-overlay-water-guide-evidence-20260901\xy-board-live-1.png` | `57FC5DD34902A9F9E35669962CCEEFC62FCABC63E495D1557F5E60CC31D0045C` | In-server Status Report with Night Vision off: target `Gorge River · 548 m`, fixed cardinal board, and both XY needles remain visible over the game rather than inside a map. |
+| `D:\CodexBuild\theisle-overlay-water-guide-evidence-20260901\xy-board-night-vision-live.png` | `5A0921C1D9873F028449CD43B555769449CD4F1A712A9F50F79AA83A0BEF007` | Same in-server game UI with `NHÌN ĐÊM: BẬT`; the Water Guide remains visible and readable. |
+
+The live session later returned to the game title screen while unattended. No game input was sent and the game process did not restart. Per the user's instruction, no server was reopened; only Overlay state was returned to off before handoff.
+
 - Feature branch: `codex/water-guide-ray-v1`
 - Design commit: `af0b015`
 - Plan commit: `2a25f28`
