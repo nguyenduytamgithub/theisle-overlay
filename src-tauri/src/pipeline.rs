@@ -111,7 +111,8 @@ pub fn ingest_sample_with_heading(
         now_s,
         cal,
     );
-    emit_all(app, POSITION_UPDATE, payload);
+    emit_all(app, POSITION_UPDATE, payload.clone());
+    crate::water_guide::lock_waiting_from_position(app, &payload);
     if let Some(trail) = trail {
         emit_all(app, TRAIL_CHANGED, trail);
     }

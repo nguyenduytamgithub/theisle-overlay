@@ -163,6 +163,40 @@ impl WaterGuideRuntime {
         }
         self.snapshot()
     }
+
+    fn lock_waiting_with_position<F>(
+        &mut self,
+        position: Option<(f64, f64)>,
+        selector: F,
+    ) -> Option<WaterGuideSnapshot>
+    where
+        F: FnOnce(&mut FreshwaterCache, f64, f64) -> Result<FreshwaterTarget, WaterGuideError>,
+    {
+        if !self.requested
+            || self.route.is_some()
+            || self.error_key.as_deref() != Some(WaterGuideError::WaitingForPosition.key())
+        {
+            return None;
+        }
+
+        let (start_x_cm, start_y_cm) = position?;
+        match selector(&mut self.cache, start_x_cm, start_y_cm) {
+            Ok(target) => {
+                self.route = Some(WaterGuideRoute {
+                    start_x_cm,
+                    start_y_cm,
+                    target_x_cm: target.x_cm,
+                    target_y_cm: target.y_cm,
+                    target_mask_px: target.mask_px,
+                    label: target.label,
+                    initial_distance_m: target.distance_m,
+                });
+                self.error_key = None;
+            }
+            Err(error) => self.error_key = Some(error.key().into()),
+        }
+        Some(self.snapshot())
+    }
 }
 
 fn is_water(mask: &RgbaImage, x: i32, y: i32) -> bool {
@@ -439,6 +473,20 @@ pub fn toggle_from_app(app: &AppHandle) -> WaterGuideSnapshot {
     publish(app, toggle_runtime(&state))
 }
 
+pub fn lock_waiting_from_position(
+    app: &AppHandle,
+    position: &PositionUpdate,
+) -> Option<WaterGuideSnapshot> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let valid_position = position_for_activation(Some(position), now_ms).ok()?;
+    let state = app.state::<AppState>();
+    let snapshot = state
+        .water_guide
+        .lock_safe()
+        .lock_waiting_with_position(Some(valid_position), select_freshwater_target)?;
+    Some(publish(app, snapshot))
+}
+
 pub fn is_requested(app: &AppHandle) -> bool {
     app.state::<AppState>().water_guide.lock_safe().requested
 }
@@ -621,6 +669,30 @@ mod tests {
                 route: None,
                 error_key: Some("waiting_for_position".into()),
             }
+        );
+    }
+
+    #[test]
+    fn waiting_request_locks_once_when_first_valid_position_arrives() {
+        let mut runtime = WaterGuideRuntime::default();
+
+        runtime.toggle_with_position(None, |_, _, _| unreachable!());
+        let locked = runtime
+            .lock_waiting_with_position(Some((3_000.0, 4_000.0)), |_, _, _| {
+                Ok(target("River", 9_000.0, 8_000.0))
+            })
+            .expect("waiting request should transition to a locked route");
+
+        let route = locked.route.expect("route should be present");
+        assert_eq!((route.start_x_cm, route.start_y_cm), (3_000.0, 4_000.0));
+        assert_eq!((route.target_x_cm, route.target_y_cm), (9_000.0, 8_000.0));
+        assert_eq!(locked.error_key, None);
+
+        assert_eq!(
+            runtime.lock_waiting_with_position(Some((5_000.0, 6_000.0)), |_, _, _| {
+                unreachable!("an already locked request must not select another target")
+            }),
+            None,
         );
     }
 

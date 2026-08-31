@@ -418,11 +418,11 @@ Run frontend check/build, `git diff --check`, a red-flag marker scan, and creden
 - Consumes: complete branch and installed POI/freshwater assets.
 - Produces: fresh automated evidence, NSIS installer, installed executable, live screenshots, independent target cross-check, and a clean published branch.
 
-- [ ] **Step 1: Synchronize CodeGraph and inspect final blast radius**
+- [x] **Step 1: Synchronize CodeGraph and inspect final blast radius**
 
 Run the user-scope ensure script, then one focused `codegraph_explore` with `maxFiles: 2` for Water Guide state/hotkey/window consumers. Confirm no unexpected path owns character input or game memory.
 
-- [ ] **Step 2: Run the full verification matrix**
+- [x] **Step 2: Run the full verification matrix**
 
 ~~~powershell
 $env:CARGO_TARGET_DIR='D:\CodexBuild\theisle-overlay-water-guide-target'
@@ -437,11 +437,13 @@ git diff --check
 
 Scan tracked source for process-memory access, injection/hooks, packet capture, `SendInput`/key simulation, low-level keyboard hooks, and character-control loops. Manually review safe `RegisterHotKey` and boundary-document matches.
 
-- [ ] **Step 3: Build the NSIS installer**
+Final run: 46/46 Node tests, Svelte 0 errors/0 warnings, Vite build, targeted rustfmt for the changed Rust files, 203 Rust tests passed with 9 ignored, clippy `-D warnings`, and `git diff --check`. The repository-wide format command remains unsuitable because of unrelated pre-existing formatting outside this feature; only changed Rust files were required clean.
+
+- [x] **Step 3: Build the NSIS installer**
 
 Run `npm run tauri build -- --bundles nsis` with the dedicated Cargo target. Record installer path, size, SHA-256, and executable SHA-256. Build success alone is packaging evidence.
 
-- [ ] **Step 4: Install without interrupting The Isle**
+- [x] **Step 4: Install without interrupting The Isle**
 
 Record The Isle and Overlay PIDs. Back up the installed Overlay/version under `D:\CodexBuild`. Stop only `theisle-overlay.exe`, install the current-user NSIS package, restart Overlay, and verify The Isle PID remained running.
 
@@ -453,9 +455,11 @@ Record current map version, image dimensions, and POI/mask hashes. After a real 
 
 With The Isle foreground, toggle through normal user-level interaction, capture the actual game window showing the ray/status, observe correct direction/U-turn/waiting when available, and verify Alt-Tab hides it. Do not synthesize continuous character movement or bypass anti-cheat.
 
-- [ ] **Step 7: Fix reproduced defects through TDD**
+- [x] **Step 7: Fix reproduced defects through TDD**
 
 For every observed defect, first add a failing regression, observe the expected failure, implement the smallest fix, rerun focused and complete verification, then commit once.
+
+Reproduced/fixed: a request made before the first valid position remained waiting forever. The new failing-then-passing regression proves the first accepted position locks exactly one route and later positions do not retarget it.
 
 - [ ] **Step 8: Finalize evidence and Git state**
 
