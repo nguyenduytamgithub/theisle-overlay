@@ -237,13 +237,20 @@ async function init() {
 
   const stateRevisionBeforeSnapshot = waterGuideStateRevision;
   const initialState = await invoke<WaterGuideSnapshot>("get_water_guide_state");
-  if (waterGuideStateRevision === stateRevisionBeforeSnapshot) {
+  if (
+    stateRevisionBeforeSnapshot === 0
+    && waterGuideStateRevision === stateRevisionBeforeSnapshot
+  ) {
     state = initialState;
   }
 
   const positionRevisionBeforeSnapshot = positionRevision;
   const current = await invoke<PositionUpdate | null>("get_current_position");
-  if (positionRevision === positionRevisionBeforeSnapshot && current) {
+  if (
+    positionRevisionBeforeSnapshot === 0
+    && positionRevision === positionRevisionBeforeSnapshot
+    && current
+  ) {
     acceptPosition(current);
   } else {
     paintNow();

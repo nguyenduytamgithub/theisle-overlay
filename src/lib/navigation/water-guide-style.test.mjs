@@ -73,9 +73,12 @@ test("initial snapshots cannot overwrite newer Water Guide or XY events", () => 
   );
   assert.match(
     main,
-    /waterGuideStateRevision === stateRevisionBeforeSnapshot/,
+    /stateRevisionBeforeSnapshot === 0\s*&&\s*waterGuideStateRevision === stateRevisionBeforeSnapshot/,
   );
-  assert.match(main, /positionRevision === positionRevisionBeforeSnapshot/);
+  assert.match(
+    main,
+    /positionRevisionBeforeSnapshot === 0\s*&&\s*positionRevision === positionRevisionBeforeSnapshot/,
+  );
   assert.match(
     main,
     /position\.confirmedAtMs < latestConfirmedPosition\.confirmedAtMs/,
