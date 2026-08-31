@@ -447,11 +447,11 @@ Run `npm run tauri build -- --bundles nsis` with the dedicated Cargo target. Rec
 
 Record The Isle and Overlay PIDs. Back up the installed Overlay/version under `D:\CodexBuild`. Stop only `theisle-overlay.exe`, install the current-user NSIS package, restart Overlay, and verify The Isle PID remained running.
 
-- [ ] **Step 5: Verify target independently**
+- [x] **Step 5: Verify target independently**
 
 Record current map version, image dimensions, and POI/mask hashes. After a real activation, independently confirm `targetMaskPx` has alpha >= 128, lies near a freshwater boundary, round-trips to the route world coordinate, and uses the nearest water POI label—not ocean/non-water.
 
-- [ ] **Step 6: Capture live game proof**
+- [x] **Step 6: Capture live game proof**
 
 With The Isle foreground, toggle through normal user-level interaction, capture the actual game window showing the ray/status, observe correct direction/U-turn/waiting when available, and verify Alt-Tab hides it. Do not synthesize continuous character movement or bypass anti-cheat.
 
@@ -469,4 +469,4 @@ Populate evidence with timestamps, hashes, test counts, screenshots, and honest 
 
 After live visual evidence, push `codex/water-guide-ray-v1` to the user's GitHub remote, preserve the upstream source attribution, and hand over exact use/install/rollback steps. Never force-push or rewrite unrelated history.
 
-The public candidate branch may be pushed with an explicit `PARTIAL` live-visual record; it must not be described as live-ray accepted or merged until the remaining real-game screenshot/controlled-walk gate is completed.
+The fixed-center closeout captured live route/ray screenshots with Night Vision enabled, independently verified the selected freshwater mask pixel, and suppressed the camera-relative heading HUD/minimap while Water Guide is active. Two different live camera angles keep the XY ray at the same screen centre. Publishing and merging remain gated only on the final Git integration checks.
