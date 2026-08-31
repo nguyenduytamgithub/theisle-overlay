@@ -180,7 +180,7 @@ test("stale coordinates freeze the ray while missing movement stays fixed and ho
   assert.equal(stale.screenAngleDeg, 0);
   assert.equal(
     steeringPromptFor(stale, false, "vi"),
-    "CHỜ TỌA ĐỘ MỚI · TIA GIỮ NGUYÊN",
+    "CHỜ TỌA ĐỘ MỚI · KIM GIỮ NGUYÊN",
   );
   assert.equal(motionless.state, "movement-unknown");
   assert.equal(motionless.rayVisible, true);
@@ -189,7 +189,7 @@ test("stale coordinates freeze the ray while missing movement stays fixed and ho
   assert.equal(nextAlignmentLocked(false, motionless), false);
   assert.equal(
     steeringPromptFor(motionless, false, "vi"),
-    "ĐI VÀI BƯỚC · CHỈ DÙNG TỌA ĐỘ XY",
+    "ĐI ÍT NHẤT 5 M ĐỂ LẤY HƯỚNG",
   );
 });
 
@@ -214,16 +214,16 @@ test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
 
   assert.equal(
     instructionFor(onRoute, "vi"),
-    "TIA CỐ ĐỊNH · LÀM THEO MŨI TÊN",
+    "BẢNG XY BẮC CỐ ĐỊNH · SO HAI KIM",
   );
   assert.equal(instructionFor(uturn, "vi"), "QUAY ĐẦU");
   assert.equal(
     instructionFor(redrawn, "vi"),
-    "TIA CỐ ĐỊNH · LÀM THEO MŨI TÊN",
+    "BẢNG XY BẮC CỐ ĐỊNH · SO HAI KIM",
   );
   assert.equal(
     instructionFor(stale, "vi"),
-    "CHỜ TỌA ĐỘ MỚI · TIA GIỮ NGUYÊN",
+    "CHỜ TỌA ĐỘ MỚI · KIM GIỮ NGUYÊN",
   );
 });
 

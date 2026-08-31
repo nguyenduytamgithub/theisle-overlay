@@ -16,17 +16,27 @@
         XOAY NHÂN VẬT
       </div>
 
-      <div id="ray" class="ray hidden" aria-hidden="true">
-        <div class="ray-line"></div>
-        <i style="--i: 1"></i>
-        <i style="--i: 2"></i>
-        <i style="--i: 3"></i>
-        <i style="--i: 4"></i>
-        <i style="--i: 5"></i>
-        <i style="--i: 6"></i>
-        <i style="--i: 7"></i>
-        <i style="--i: 8"></i>
-      </div>
+      <section id="board" class="nav-board hidden" aria-hidden="true">
+        <div class="compass-disc">
+          <span class="cardinal cardinal-north">BẮC</span>
+          <span class="cardinal cardinal-east">ĐÔNG</span>
+          <span class="cardinal cardinal-south">NAM</span>
+          <span class="cardinal cardinal-west">TÂY</span>
+          <div class="axis axis-north-south"></div>
+          <div class="axis axis-east-west"></div>
+          <div id="target-needle" class="needle target-needle hidden">
+            <span>ĐÍCH</span>
+          </div>
+          <div id="movement-needle" class="needle movement-needle hidden">
+            <span>ĐANG ĐI</span>
+          </div>
+          <div class="compass-centre"></div>
+        </div>
+        <div class="board-legend">
+          <span class="legend-target">◆ KIM ĐÍCH</span>
+          <span class="legend-movement">◆ KIM ĐANG ĐI</span>
+        </div>
+      </section>
     </main>
     <script type="module" src="/src/water-guide/main.ts"></script>
   </body>

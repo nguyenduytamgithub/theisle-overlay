@@ -101,7 +101,7 @@ git commit -m "feat: derive north-up water guide needles"
 - Consumes: `waterGuideBoardNeedles`, existing route/position events, and the existing full-game Water Guide window.
 - Produces: fixed compass board DOM elements `board`, `target-needle`, and `movement-needle`; CSS variables `--target-bearing` and `--movement-bearing`.
 
-- [ ] **Step 1: Write the failing renderer contract tests**
+- [x] **Step 1: Write the failing renderer contract tests**
 
 Read the renderer source, stylesheet, and HTML in `water-guide-style.test.mjs`. Assert:
 
@@ -117,7 +117,7 @@ assert.doesNotMatch(css, /animation\s*:|@keyframes|transition\s*:[^;]*transform/
 assert.doesNotMatch(html, /id="ray"/);
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 node --test src/lib/navigation/water-guide-style.test.mjs
@@ -125,19 +125,19 @@ node --test src/lib/navigation/water-guide-style.test.mjs
 
 Expected: fails because the old ray DOM exists and the board DOM/variables do not.
 
-- [ ] **Step 3: Replace the HTML with the board**
+- [x] **Step 3: Replace the HTML with the board**
 
 Create one lower-middle navigation panel containing a 300 px compass disc, four full Vietnamese cardinal labels, a cyan target needle, a white/green movement needle, centre dot, and short legend. Remove the vertical ray and eight chevrons.
 
-- [ ] **Step 4: Wire absolute bearings in the renderer**
+- [x] **Step 4: Wire absolute bearings in the renderer**
 
 Call `waterGuideBoardNeedles(frame, movementCourseDeg)`. Set `--target-bearing` and `--movement-bearing` only from its returned absolute XY values. Toggle needle visibility separately and keep stale state through `data-state`. Never read pointer/mouse/camera/heading fields.
 
-- [ ] **Step 5: Style the non-animated full-game board**
+- [x] **Step 5: Style the non-animated full-game board**
 
 Use a translucent lower-middle disc that does not cover the top destination/status row. Rotate each needle around the board centre from `transform-origin: 50% 100%`; do not add animation or transform transitions. Use cyan for the target, white for movement, green for aligned movement, and amber text for corrections.
 
-- [ ] **Step 6: Run GREEN and frontend gates**
+- [x] **Step 6: Run GREEN and frontend gates**
 
 ```powershell
 node --test src/lib/navigation/water-guide-style.test.mjs
@@ -149,7 +149,7 @@ git diff --check
 
 Expected: all tests pass, Svelte has 0 errors/0 warnings, and Vite emits `dist/water-guide.html`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add -- water-guide.html src/water-guide/main.ts src/water-guide/style.css src/lib/navigation/water-guide-style.test.mjs

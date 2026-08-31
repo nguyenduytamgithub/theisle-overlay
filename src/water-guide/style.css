@@ -29,8 +29,8 @@ body {
 
 .status-stack {
   position: absolute;
-  z-index: 3;
-  top: clamp(54px, 7vh, 92px);
+  z-index: 5;
+  top: clamp(48px, 6vh, 78px);
   left: 50%;
   display: flex;
   min-width: min(680px, 76vw);
@@ -40,10 +40,10 @@ body {
   gap: 5px;
   padding: 9px 22px 10px;
   transform: translateX(-50%);
-  border: 1px solid rgba(82, 207, 255, 0.7);
+  border: 1px solid rgba(82, 207, 255, 0.72);
   border-radius: 15px;
-  background: linear-gradient(180deg, rgba(5, 16, 25, 0.82), rgba(2, 9, 15, 0.62));
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.48), inset 0 0 16px rgba(0, 174, 255, 0.1);
+  background: linear-gradient(180deg, rgba(5, 16, 25, 0.88), rgba(2, 9, 15, 0.7));
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5), inset 0 0 16px rgba(0, 174, 255, 0.12);
   text-align: center;
   text-shadow: 0 2px 4px #000, 0 0 9px #000;
 }
@@ -65,122 +65,215 @@ body {
   letter-spacing: 0.08em;
 }
 
-.water-guide[data-state="waiting"] .status-stack,
-.water-guide[data-state="heading-unknown"] .status-stack,
-.water-guide[data-state="error"] .status-stack {
-  border-color: rgba(255, 190, 73, 0.8);
-}
-
-.water-guide[data-state="arrived"] .status-stack {
-  border-color: rgba(98, 255, 161, 0.82);
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.48), 0 0 26px rgba(65, 255, 151, 0.25);
-}
-
-.ray {
-  position: absolute;
-  z-index: 2;
-  bottom: 5.5vh;
-  left: 50%;
-  width: 44px;
-  height: clamp(260px, 62vh, 760px);
-  transform: translateX(-50%);
-  filter: drop-shadow(0 0 7px rgba(37, 199, 255, 0.95));
-}
-
-.ray-line {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  width: 5px;
-  height: 100%;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: linear-gradient(
-    to top,
-    rgba(54, 207, 255, 0.95),
-    rgba(54, 207, 255, 0.82) 68%,
-    rgba(54, 207, 255, 0.12)
-  );
-  box-shadow: 0 0 10px #00bfff, 0 0 24px rgba(0, 174, 255, 0.74);
-}
-
-.ray i {
-  position: absolute;
-  bottom: calc(var(--i) * 11% - 3%);
-  left: 50%;
-  width: 30px;
-  height: 20px;
-  transform: translateX(-50%);
-  background: linear-gradient(180deg, #d8f8ff, #19c6ff 58%, rgba(0, 140, 255, 0.7));
-  clip-path: polygon(50% 0, 100% 100%, 72% 100%, 50% 47%, 28% 100%, 0 100%);
-  filter: drop-shadow(0 0 5px rgba(0, 197, 255, 0.95));
-  opacity: 0.9;
-}
-
 .maneuver {
   position: absolute;
-  z-index: 4;
-  top: clamp(150px, 20vh, 240px);
+  z-index: 5;
+  top: clamp(132px, 16vh, 184px);
   left: 50%;
-  padding: 8px 22px 10px;
+  padding: 7px 20px 9px;
   transform: translateX(-50%);
-  border: 2px solid rgba(255, 221, 80, 0.9);
+  border: 2px solid rgba(255, 221, 80, 0.92);
   border-radius: 14px;
   color: #ffe450;
-  background: rgba(34, 24, 0, 0.8);
-  box-shadow: 0 0 26px rgba(255, 202, 20, 0.36);
-  font-size: clamp(22px, 3vw, 42px);
+  background: rgba(34, 24, 0, 0.84);
+  box-shadow: 0 0 24px rgba(255, 202, 20, 0.34);
+  font-size: clamp(20px, 2.35vw, 34px);
   font-weight: 1000;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.075em;
   text-shadow: 0 2px 4px #000;
 }
 
-.water-guide[data-aligned="true"] .ray {
-  filter: drop-shadow(0 0 9px rgba(69, 255, 145, 0.98));
+.nav-board {
+  --target-bearing: 0deg;
+  --movement-bearing: 0deg;
+  position: absolute;
+  z-index: 4;
+  bottom: clamp(18px, 3.2vh, 42px);
+  left: 50%;
+  width: clamp(252px, 25vw, 330px);
+  box-sizing: border-box;
+  padding: 10px 12px 8px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(151, 227, 255, 0.62);
+  border-radius: 26px;
+  background: rgba(2, 10, 17, 0.55);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.52), inset 0 0 24px rgba(21, 177, 235, 0.09);
+  backdrop-filter: blur(2px);
 }
 
-.water-guide[data-state="off-route"] .ray-line,
-.water-guide[data-state="lost"] .ray-line {
-  background: linear-gradient(to top, #52d7ff, rgba(0, 171, 255, 0.82), rgba(0, 102, 255, 0.12));
+.compass-disc {
+  position: relative;
+  width: min(100%, 300px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border: 3px solid rgba(169, 232, 255, 0.88);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(12, 35, 49, 0.5) 0 17%, transparent 18%),
+    radial-gradient(circle at center, rgba(2, 12, 19, 0.74) 0 70%, rgba(2, 9, 14, 0.9) 100%);
+  box-shadow: 0 0 18px rgba(55, 201, 255, 0.34), inset 0 0 24px rgba(45, 182, 233, 0.18);
 }
 
-.water-guide[data-aligned="true"] .ray-line {
-  background: linear-gradient(
-    to top,
-    rgba(78, 255, 151, 1),
-    rgba(42, 238, 126, 0.86) 68%,
-    rgba(42, 238, 126, 0.14)
-  );
-  box-shadow: 0 0 12px #39ff91, 0 0 28px rgba(48, 255, 137, 0.78);
+.axis {
+  position: absolute;
+  z-index: 0;
+  background: rgba(189, 239, 255, 0.16);
 }
 
-.water-guide[data-aligned="true"] .ray i {
-  background: linear-gradient(180deg, #eafff1, #42f58f 58%, rgba(20, 184, 100, 0.75));
-  filter: drop-shadow(0 0 6px rgba(55, 255, 143, 0.98));
+.axis-north-south {
+  top: 7%;
+  bottom: 7%;
+  left: calc(50% - 1px);
+  width: 2px;
+}
+
+.axis-east-west {
+  top: calc(50% - 1px);
+  right: 7%;
+  left: 7%;
+  height: 2px;
+}
+
+.cardinal {
+  position: absolute;
+  z-index: 3;
+  color: #f4fbff;
+  font-size: clamp(11px, 1.05vw, 15px);
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 4px #000, 0 0 8px #000;
+}
+
+.cardinal-north {
+  top: 4%;
+  left: 50%;
+  color: #ffe45c;
+  transform: translateX(-50%);
+}
+
+.cardinal-east {
+  top: 50%;
+  right: 3%;
+  transform: translateY(-50%);
+}
+
+.cardinal-south {
+  bottom: 3%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.cardinal-west {
+  top: 50%;
+  left: 3%;
+  transform: translateY(-50%);
+}
+
+.needle {
+  position: absolute;
+  z-index: 2;
+  bottom: 50%;
+  transform-origin: 50% 100%;
+  clip-path: polygon(50% 0, 100% 18%, 67% 18%, 67% 100%, 33% 100%, 33% 18%, 0 18%);
+}
+
+.needle span {
+  display: none;
+}
+
+.target-needle {
+  left: calc(50% - 9px);
+  width: 18px;
+  height: 41%;
+  transform: rotate(var(--target-bearing));
+  background: linear-gradient(to top, rgba(0, 133, 210, 0.82), #19c6ff 64%, #d8f8ff);
+  filter: drop-shadow(0 0 7px #00bfff);
+}
+
+.movement-needle {
+  left: calc(50% - 6px);
+  width: 12px;
+  height: 32%;
+  transform: rotate(var(--movement-bearing));
+  background: linear-gradient(to top, rgba(223, 239, 247, 0.72), #ffffff 62%, #ffffff);
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.96));
+}
+
+.compass-centre {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: 19px;
+  height: 19px;
+  transform: translate(-50%, -50%);
+  border: 3px solid #071018;
+  border-radius: 50%;
+  background: #f3fbff;
+  box-shadow: 0 0 10px rgba(121, 225, 255, 0.82);
+}
+
+.board-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding-top: 7px;
+  font-size: clamp(10px, 0.92vw, 13px);
+  font-weight: 900;
+  letter-spacing: 0.055em;
+  text-shadow: 0 2px 4px #000;
+}
+
+.legend-target {
+  color: #52d7ff;
+}
+
+.legend-movement {
+  color: #ffffff;
+}
+
+.water-guide[data-state="waiting"] .status-stack,
+.water-guide[data-state="movement-unknown"] .status-stack,
+.water-guide[data-state="error"] .status-stack {
+  border-color: rgba(255, 190, 73, 0.82);
+}
+
+.water-guide[data-state="waiting"] .movement-needle {
+  opacity: 0.42;
+}
+
+.water-guide[data-state="arrived"] .status-stack {
+  border-color: rgba(98, 255, 161, 0.86);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.48), 0 0 26px rgba(65, 255, 151, 0.26);
+}
+
+.water-guide[data-aligned="true"] .movement-needle {
+  background: linear-gradient(to top, rgba(20, 184, 100, 0.8), #42f58f 62%, #eafff1);
+  filter: drop-shadow(0 0 7px rgba(55, 255, 143, 0.98));
 }
 
 .water-guide[data-aligned="true"] .maneuver {
   border-color: rgba(82, 255, 153, 0.94);
   color: #79ffae;
-  background: rgba(0, 35, 17, 0.84);
-  box-shadow: 0 0 30px rgba(55, 255, 143, 0.42);
+  background: rgba(0, 35, 17, 0.86);
+  box-shadow: 0 0 28px rgba(55, 255, 143, 0.42);
 }
 
 .hidden {
   display: none !important;
 }
 
-@media (max-height: 520px) {
+@media (max-height: 720px) {
   .status-stack {
     top: 22px;
   }
 
   .maneuver {
-    top: 108px;
+    top: 104px;
   }
 
-  .ray {
-    bottom: 18px;
-    height: 52vh;
+  .nav-board {
+    bottom: 12px;
+    width: 230px;
   }
 }

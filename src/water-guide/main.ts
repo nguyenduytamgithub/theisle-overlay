@@ -12,6 +12,7 @@ import {
   movementCourseBetween,
   nextAlignmentLocked,
   steeringPromptFor,
+  waterGuideBoardNeedles,
   waterGuideFrame,
   type WaterGuideLanguage,
   type WaterGuideRoute,
@@ -36,7 +37,9 @@ const FRAME_MS = 1_000 / 30;
 const root = document.getElementById("water-guide")!;
 const destinationEl = document.getElementById("destination")!;
 const instructionEl = document.getElementById("instruction")!;
-const rayEl = document.getElementById("ray")!;
+const boardEl = document.getElementById("board")!;
+const targetNeedleEl = document.getElementById("target-needle")!;
+const movementNeedleEl = document.getElementById("movement-needle")!;
 const maneuverEl = document.getElementById("maneuver")!;
 
 let state: WaterGuideSnapshot = { requested: false, route: null, errorKey: null };
@@ -74,15 +77,17 @@ function applySettings(settings: Record<string, unknown>) {
   document.documentElement.lang = language;
 }
 
-function hideRay() {
+function hideBoard() {
   alignmentLocked = false;
   root.dataset.aligned = "false";
-  rayEl.classList.add("hidden");
+  boardEl.classList.add("hidden");
+  targetNeedleEl.classList.add("hidden");
+  movementNeedleEl.classList.add("hidden");
   maneuverEl.classList.add("hidden");
 }
 
 function paintError(errorKey: string | null) {
-  hideRay();
+  hideBoard();
   root.dataset.state = "error";
   destinationEl.textContent = "WATER GUIDE";
   instructionEl.textContent = ERROR_COPY[language][errorKey ?? ""]
@@ -104,6 +109,7 @@ function paintView(freshness: NavigationFreshness) {
     movementCourseDeg,
     freshness,
   });
+  const needles = waterGuideBoardNeedles(frame, movementCourseDeg);
   alignmentLocked = nextAlignmentLocked(alignmentLocked, frame);
   const prompt = steeringPromptFor(frame, alignmentLocked, language);
 
@@ -116,9 +122,23 @@ function paintView(freshness: NavigationFreshness) {
     ? prompt
     : instructionFor(frame, language);
 
-  rayEl.classList.toggle("hidden", !frame.rayVisible);
-  maneuverEl.classList.toggle("hidden", !frame.rayVisible);
-  if (frame.rayVisible) {
+  boardEl.classList.toggle("hidden", !needles.targetVisible);
+  targetNeedleEl.classList.toggle("hidden", !needles.targetVisible);
+  movementNeedleEl.classList.toggle("hidden", !needles.movementVisible);
+  if (needles.targetBearingDeg !== null) {
+    boardEl.style.setProperty(
+      "--target-bearing",
+      `${needles.targetBearingDeg}deg`,
+    );
+  }
+  if (needles.movementBearingDeg !== null) {
+    boardEl.style.setProperty(
+      "--movement-bearing",
+      `${needles.movementBearingDeg}deg`,
+    );
+  }
+  maneuverEl.classList.toggle("hidden", !needles.targetVisible);
+  if (needles.targetVisible) {
     maneuverEl.textContent = prompt;
   }
 }
@@ -127,7 +147,7 @@ function paint() {
   paintTimer = null;
   root.classList.toggle("requested", state.requested);
   if (!state.requested) {
-    hideRay();
+    hideBoard();
     return;
   }
   if (!state.route) {
@@ -191,7 +211,7 @@ async function init() {
   });
   await listen("position://quality", () => {
     positionQualityValid = false;
-    resetMovementCourse();
+    alignmentLocked = false;
     paintNow();
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", ({ payload }) => {
