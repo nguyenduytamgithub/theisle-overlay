@@ -27,4 +27,3 @@ The route, target selection, server-position estimator, and EAC-safe boundary do
 - Between 8 and 18 degrees an existing lock remains stable.
 - Above 18 degrees the UI unlocks and gives an explicit left/right instruction.
 - Navigation, Rust, Svelte, Vite, Clippy, installer, and live Night Vision coexistence checks pass.
-

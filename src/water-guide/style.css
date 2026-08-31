@@ -143,6 +143,11 @@ body {
   filter: drop-shadow(0 0 9px rgba(69, 255, 145, 0.98));
 }
 
+.water-guide[data-state="off-route"] .ray-line,
+.water-guide[data-state="lost"] .ray-line {
+  background: linear-gradient(to top, #52d7ff, rgba(0, 171, 255, 0.82), rgba(0, 102, 255, 0.12));
+}
+
 .water-guide[data-aligned="true"] .ray-line {
   background: linear-gradient(
     to top,
@@ -163,11 +168,6 @@ body {
   color: #79ffae;
   background: rgba(0, 35, 17, 0.84);
   box-shadow: 0 0 30px rgba(55, 255, 143, 0.42);
-}
-
-.water-guide[data-state="off-route"] .ray-line,
-.water-guide[data-state="lost"] .ray-line {
-  background: linear-gradient(to top, #52d7ff, rgba(0, 171, 255, 0.82), rgba(0, 102, 255, 0.12));
 }
 
 .hidden {
