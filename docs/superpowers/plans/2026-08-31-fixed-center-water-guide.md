@@ -6,6 +6,8 @@
 
 **Architecture:** Pure TypeScript navigation helpers define the fixed ray, 8/18-degree hysteresis, and localized prompts. The Water Guide webview stores one alignment bit and renders a fixed center beam plus a separate maneuver banner.
 
+**Final XY-only amendment:** `guidanceCourseDeg` is not a Water Guide input. The webview derives a course only from displacement between accepted confirmed XY samples, while the fixed center ray remains visible even before movement is known. Head/facing and mouse/camera rotation never enter the Water Guide calculation.
+
 **Tech Stack:** TypeScript, Node test runner, Tauri 2, HTML/CSS, Rust verification, NSIS.
 
 ## Global Constraints
@@ -28,10 +30,10 @@
 - Produces: `steeringPromptFor(frame: WaterGuideFrame, aligned: boolean, language: WaterGuideLanguage): string`
 - Changes: every visible `WaterGuideFrame.screenAngleDeg` is `0`
 
-- [ ] **Step 1: Write failing tests** for a vertical ray under left/right/U-turn headings, 8/18-degree lock hysteresis, and Vietnamese left/right/locked prompts.
-- [ ] **Step 2: Verify RED** with `node --experimental-strip-types --test src/lib/navigation/water-guide.test.mjs`.
-- [ ] **Step 3: Implement the pure helpers** using `alignEnterDeg: 8` and `alignExitDeg: 18`, with rounded degree copy.
-- [ ] **Step 4: Verify GREEN** with the same targeted Node command.
+- [x] **Step 1: Write failing tests** for a vertical ray under left/right/U-turn headings, 8/18-degree lock hysteresis, and Vietnamese left/right/locked prompts.
+- [x] **Step 2: Verify RED** with `node --experimental-strip-types --test src/lib/navigation/water-guide.test.mjs`.
+- [x] **Step 3: Implement the pure helpers** using `alignEnterDeg: 8` and `alignExitDeg: 18`, with rounded degree copy.
+- [x] **Step 4: Verify GREEN** with the same targeted Node command.
 
 ### Task 2: Fixed-center renderer and green lock
 
@@ -44,10 +46,10 @@
 - Consumes: `nextAlignmentLocked` and `steeringPromptFor`
 - Maintains: one module-level `alignmentLocked` boolean, reset whenever the ray is hidden
 
-- [ ] **Step 1: Remove rotational paint state** and always set `--ray-angle` to `0deg`.
-- [ ] **Step 2: Render maneuver state** into `#maneuver`, set `data-aligned`, and reset the lock on hidden/error states.
-- [ ] **Step 3: Add locked styling** so the center ray and maneuver banner become green only while aligned.
-- [ ] **Step 4: Run frontend gates**: all navigation tests, `npm run check`, and `npm run build`.
+- [x] **Step 1: Remove rotational paint state** and always set `--ray-angle` to `0deg`.
+- [x] **Step 2: Render maneuver state** into `#maneuver`, set `data-aligned`, and reset the lock on hidden/error states.
+- [x] **Step 3: Add locked styling** so the center ray and maneuver banner become green only while aligned.
+- [x] **Step 4: Run frontend gates**: all navigation tests, `npm run check`, and `npm run build`.
 
 ### Task 3: Package, live acceptance, and integration
 
@@ -58,8 +60,8 @@
 **Interfaces:**
 - Produces: installed v1.9.0 executable and NSIS hashes plus live screenshot evidence
 
-- [ ] **Step 1: Run Rust gates**: `cargo test --manifest-path src-tauri/Cargo.toml --lib` and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`.
-- [ ] **Step 2: Build NSIS** with `CARGO_TARGET_DIR=D:\CodexBuild\theisle-overlay-water-guide-target`.
-- [ ] **Step 3: Install while preserving the game PID**, then verify the installed executable hash.
-- [ ] **Step 4: Live-check** fixed ray, left/right prompt, green lock, and Night Vision stacking; capture evidence.
+- [x] **Step 1: Run Rust gates**: `cargo test --manifest-path src-tauri/Cargo.toml --lib` and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`.
+- [x] **Step 2: Build NSIS** with `CARGO_TARGET_DIR=D:\CodexBuild\theisle-overlay-water-guide-target`.
+- [x] **Step 3: Install while preserving the game PID**, then verify the installed executable hash.
+- [x] **Step 4: Live-check** fixed ray, left/right prompt, green lock, and Night Vision stacking; capture evidence.
 - [ ] **Step 5: Update evidence docs, commit, push, and merge** into the verified base branch selected from Git history/remotes.

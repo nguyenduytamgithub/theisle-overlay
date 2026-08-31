@@ -27,3 +27,14 @@ The route, target selection, server-position estimator, and EAC-safe boundary do
 - Between 8 and 18 degrees an existing lock remains stable.
 - Above 18 degrees the UI unlocks and gives an explicit left/right instruction.
 - Navigation, Rust, Svelte, Vite, Clippy, installer, and live Night Vision coexistence checks pass.
+
+## XY-only correction (final owner decision)
+
+- Water Guide must never consume server facing, head direction, or camera/mouse rotation.
+- The ray is pinned vertically to the screen center. Mouse movement cannot move or rotate it.
+- Every accepted server coordinate recomputes the direct vector from the latest confirmed `(xCm, yCm)` to the locked freshwater target.
+- Turn/alignment truth comes only from displacement between confirmed XY samples. A sample must move at least 1 metre from the retained anchor before it may define a movement course.
+- Before a valid movement course exists, keep the ray visible and say to walk a few steps; do not claim a direction or green lock.
+- When the coordinate becomes stale, freeze the last XY ray visibly and label it as waiting; do not hide, rotate, or advance it locally.
+- Reset the XY course anchor on relocation, rejected position quality, route replacement, or guide deactivation.
+- Left/right copy must identify `QUỸ ĐẠO XY`; it must not claim to read the character's head.

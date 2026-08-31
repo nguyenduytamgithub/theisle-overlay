@@ -5,10 +5,10 @@ export const WATER_GUIDE = {
   onRouteM: 15,
   lostM: 150,
   arrivalM: 25,
-  lookAheadM: 80,
   alignEnterDeg: 8,
   alignExitDeg: 18,
   uturnDeg: 110,
+  movementMinCm: 100,
 } as const;
 
 export interface WaterGuideRoute {
@@ -24,7 +24,7 @@ export interface WaterGuideRoute {
 export interface WaterGuideView {
   xCm: number;
   yCm: number;
-  guidanceCourseDeg: number | null;
+  movementCourseDeg: number | null;
   freshness: NavigationFreshness;
 }
 
@@ -33,7 +33,7 @@ export type WaterGuideState =
   | "off-route"
   | "lost"
   | "waiting"
-  | "heading-unknown"
+  | "movement-unknown"
   | "arrived"
   | "invalid";
 
@@ -62,8 +62,8 @@ const INSTRUCTIONS: Record<WaterGuideLanguage, Record<WaterGuideState, string>> 
     "on-route": "TIA CỐ ĐỊNH · LÀM THEO MŨI TÊN",
     "off-route": "LỆCH ĐƯỜNG · LÀM THEO MŨI TÊN",
     lost: "LẠC XA · LÀM THEO MŨI TÊN",
-    waiting: "CHỜ SERVER",
-    "heading-unknown": "XOAY / ĐI VÀI BƯỚC ĐỂ XÁC ĐỊNH HƯỚNG",
+    waiting: "CHỜ TỌA ĐỘ MỚI · TIA GIỮ NGUYÊN",
+    "movement-unknown": "ĐI VÀI BƯỚC · CHỈ DÙNG TỌA ĐỘ XY",
     arrived: "ĐÃ TỚI NGUỒN NƯỚC",
     invalid: "KHÔNG XÁC MINH ĐƯỢC NƯỚC UỐNG",
   },
@@ -71,8 +71,8 @@ const INSTRUCTIONS: Record<WaterGuideLanguage, Record<WaterGuideState, string>> 
     "on-route": "FIXED RAY · FOLLOW THE TURN ARROW",
     "off-route": "OFF ROUTE · FOLLOW THE TURN ARROW",
     lost: "FAR OFF ROUTE · FOLLOW THE TURN ARROW",
-    waiting: "WAITING FOR SERVER",
-    "heading-unknown": "TURN / WALK A FEW STEPS TO FIND DIRECTION",
+    waiting: "WAITING FOR NEW COORDINATES · RAY FROZEN",
+    "movement-unknown": "WALK A FEW STEPS · XY POSITION ONLY",
     arrived: "FRESH WATER REACHED",
     invalid: "DRINKABLE WATER COULD NOT BE VERIFIED",
   },
@@ -92,7 +92,9 @@ export function nextAlignmentLocked(
   previous: boolean,
   frame: WaterGuideFrame,
 ): boolean {
-  if (!frame.rayVisible || !Number.isFinite(frame.relativeDeg)) {
+  if (frame.turn === "none"
+      || !frame.rayVisible
+      || !Number.isFinite(frame.relativeDeg)) {
     return false;
   }
   const limit = previous ? WATER_GUIDE.alignExitDeg : WATER_GUIDE.alignEnterDeg;
@@ -105,6 +107,9 @@ export function steeringPromptFor(
   language: WaterGuideLanguage,
 ): string {
   if (!frame.rayVisible) {
+    return instructionFor(frame, language);
+  }
+  if (frame.turn === "none") {
     return instructionFor(frame, language);
   }
   if (aligned || Math.abs(frame.relativeDeg) <= WATER_GUIDE.alignEnterDeg) {
@@ -123,8 +128,8 @@ export function steeringPromptFor(
   }
   if (language === "vi") {
     return left
-      ? `← XOAY NHÂN VẬT TRÁI ${degrees}°`
-      : `XOAY NHÂN VẬT PHẢI ${degrees}° →`;
+      ? `← QUỸ ĐẠO XY: RẼ TRÁI ${degrees}°`
+      : `QUỸ ĐẠO XY: RẼ PHẢI ${degrees}° →`;
   }
   return left
     ? `← TURN CHARACTER LEFT ${degrees}°`
@@ -138,6 +143,34 @@ const finite = (...values: number[]): boolean => values.every(Number.isFinite);
 
 const distanceM = (from: [number, number], to: [number, number]): number =>
   Math.hypot(to[0] - from[0], to[1] - from[1]) / 100;
+
+export interface XYPoint {
+  xCm: number;
+  yCm: number;
+}
+
+/** A course derived only from confirmed coordinate displacement. */
+export function movementCourseBetween(
+  anchor: XYPoint,
+  current: XYPoint,
+): number | null {
+  if (!finite(anchor.xCm, anchor.yCm, current.xCm, current.yCm)) {
+    return null;
+  }
+  const movedCm = Math.hypot(
+    current.xCm - anchor.xCm,
+    current.yCm - anchor.yCm,
+  );
+  if (movedCm < WATER_GUIDE.movementMinCm) {
+    return null;
+  }
+  return stable(bearingTo(
+    anchor.xCm,
+    anchor.yCm,
+    current.xCm,
+    current.yCm,
+  ));
+}
 
 export function projectToSegment(
   pointCm: [number, number],
@@ -188,40 +221,39 @@ export function waterGuideFrame(
   }
 
   const remainingM = stable(distanceM(point, target));
-  if (view.freshness === "waiting") {
-    return emptyFrame("waiting", remainingM);
-  }
   if (remainingM <= WATER_GUIDE.arrivalM) {
     return emptyFrame("arrived", remainingM);
   }
-  if (view.guidanceCourseDeg === null || !Number.isFinite(view.guidanceCourseDeg)) {
-    return emptyFrame("heading-unknown", remainingM);
-  }
-
-  const projection = projectToSegment(point, start, target);
-  const routeLengthCm = Math.hypot(target[0] - start[0], target[1] - start[1]);
-  const state: WaterGuideState = projection.crossTrackM > WATER_GUIDE.lostM
-    ? "lost"
-    : projection.crossTrackM > WATER_GUIDE.onRouteM ? "off-route" : "on-route";
-  const steeringTargetCm: [number, number] = state === "on-route"
-    ? target
-    : (() => {
-        const lookAheadT = Math.min(
-          1,
-          projection.t + (WATER_GUIDE.lookAheadM * 100) / routeLengthCm,
-        );
-        return [
-          stable(start[0] + (target[0] - start[0]) * lookAheadT),
-          stable(start[1] + (target[1] - start[1]) * lookAheadT),
-        ];
-      })();
+  // Owner decision: never pull the ray toward the old route. Every accepted
+  // XY sample creates a fresh straight segment to the locked water target, so
+  // an old cross-track distance can never label the new direct line as lost.
+  const state: WaterGuideState = "on-route";
+  const steeringTargetCm: [number, number] = target;
   const desiredBearingDeg = bearingTo(
     point[0],
     point[1],
     steeringTargetCm[0],
     steeringTargetCm[1],
   );
-  const relativeDeg = stable(relativeBearing(view.guidanceCourseDeg, desiredBearingDeg));
+  const fixedUnknownFrame = (state: "waiting" | "movement-unknown"): WaterGuideFrame => ({
+    state,
+    rayVisible: true,
+    steeringTargetCm,
+    remainingM,
+    crossTrackM: 0,
+    desiredBearingDeg,
+    relativeDeg: 0,
+    screenAngleDeg: 0,
+    turn: "none",
+  });
+  if (view.freshness === "waiting") {
+    return fixedUnknownFrame("waiting");
+  }
+  if (view.movementCourseDeg === null
+      || !Number.isFinite(view.movementCourseDeg)) {
+    return fixedUnknownFrame("movement-unknown");
+  }
+  const relativeDeg = stable(relativeBearing(view.movementCourseDeg, desiredBearingDeg));
   const magnitude = Math.abs(relativeDeg);
   const turn = magnitude > WATER_GUIDE.uturnDeg
     ? "uturn"
@@ -232,7 +264,7 @@ export function waterGuideFrame(
     rayVisible: true,
     steeringTargetCm,
     remainingM,
-    crossTrackM: projection.crossTrackM,
+    crossTrackM: 0,
     desiredBearingDeg,
     relativeDeg,
     screenAngleDeg: 0,

@@ -9,6 +9,7 @@ import {
 } from "../lib/navigation/estimator";
 import {
   instructionFor,
+  movementCourseBetween,
   nextAlignmentLocked,
   steeringPromptFor,
   waterGuideFrame,
@@ -51,6 +52,9 @@ let state: WaterGuideSnapshot = { requested: false, route: null, errorKey: null 
 let language: WaterGuideLanguage = "vi";
 let paintTimer: number | null = null;
 let alignmentLocked = false;
+let latestConfirmedPosition: PositionUpdate | null = null;
+let movementAnchor: PositionUpdate | null = null;
+let movementCourseDeg: number | null = null;
 
 const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   vi: {
@@ -97,15 +101,15 @@ function paintError(errorKey: string | null) {
 
 function paintView(view: NavigationSnapshot) {
   const route = state.route;
-  if (!route) {
+  if (!route || !latestConfirmedPosition) {
     paintError(state.errorKey);
     return;
   }
 
   const frame = waterGuideFrame(route, {
-    xCm: view.xCm,
-    yCm: view.yCm,
-    guidanceCourseDeg: view.guidanceCourseDeg,
+    xCm: latestConfirmedPosition.xCm,
+    yCm: latestConfirmedPosition.yCm,
+    movementCourseDeg,
     freshness: view.freshness,
   });
   alignmentLocked = nextAlignmentLocked(alignmentLocked, frame);
@@ -165,7 +169,24 @@ function paintNow() {
 
 function acceptPosition(position: PositionUpdate) {
   estimator.accept(position);
+  if (position.relocated || movementAnchor === null) {
+    movementAnchor = position;
+    movementCourseDeg = null;
+  } else {
+    const course = movementCourseBetween(movementAnchor, position);
+    if (course !== null) {
+      movementCourseDeg = course;
+      movementAnchor = position;
+    }
+  }
+  latestConfirmedPosition = position;
   paintNow();
+}
+
+function resetMovementCourse() {
+  movementCourseDeg = null;
+  movementAnchor = latestConfirmedPosition;
+  alignmentLocked = false;
 }
 
 async function init() {
@@ -176,11 +197,12 @@ async function init() {
   });
   await listen("position://quality", () => {
     estimator.invalidatePrediction();
+    resetMovementCourse();
     paintNow();
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", ({ payload }) => {
     state = payload;
-    alignmentLocked = false;
+    resetMovementCourse();
     paintNow();
   });
   await listen<Record<string, unknown>>("settings://changed", ({ payload }) => {

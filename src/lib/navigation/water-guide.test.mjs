@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   instructionFor,
+  movementCourseBetween,
   nextAlignmentLocked,
   projectToSegment,
   steeringPromptFor,
@@ -23,7 +24,7 @@ const route = (overrides = {}) => ({
 const view = (overrides = {}) => ({
   xCm: 0,
   yCm: 0,
-  guidanceCourseDeg: 0,
+  movementCourseDeg: 0,
   freshness: "tracking",
   ...overrides,
 });
@@ -39,31 +40,36 @@ test("projection clamps to the fixed segment endpoints", () => {
   );
 });
 
-test("off-route player is guided eighty metres ahead on the original line", () => {
+test("every XY update draws directly from the current position to the locked target", () => {
   const frame = waterGuideFrame(
     route({ startXCm: 0, startYCm: 0, targetXCm: 100_000, targetYCm: 0 }),
     view({ xCm: 20_000, yCm: 10_000 }),
   );
 
-  assert.equal(Math.round(frame.crossTrackM), 100);
-  assert.deepEqual(frame.steeringTargetCm, [28_000, 0]);
-  assert.equal(frame.state, "off-route");
+  assert.equal(frame.crossTrackM, 0);
+  assert.deepEqual(frame.steeringTargetCm, [100_000, 0]);
+  assert.equal(frame.state, "on-route");
 });
 
-test("fifteen metres is on-route while just beyond is off-route", () => {
+test("deviation from the old route starts a new direct line instead of off-route", () => {
   const exactly = waterGuideFrame(route(), view({ yCm: 1_500 }));
   const beyond = waterGuideFrame(route(), view({ yCm: 1_501 }));
 
   assert.equal(exactly.state, "on-route");
-  assert.equal(beyond.state, "off-route");
+  assert.equal(beyond.state, "on-route");
+  assert.equal(exactly.crossTrackM, 0);
+  assert.equal(beyond.crossTrackM, 0);
 });
 
-test("one-hundred-fifty metres is off-route while just beyond is lost", () => {
-  const exactly = waterGuideFrame(route(), view({ yCm: 15_000 }));
-  const beyond = waterGuideFrame(route(), view({ yCm: 15_001 }));
+test("a changed XY point recalculates the direct target bearing", () => {
+  const first = waterGuideFrame(route(), view({ xCm: 0, yCm: 15_000 }));
+  const next = waterGuideFrame(route(), view({ xCm: -20_000, yCm: 15_000 }));
 
-  assert.equal(exactly.state, "off-route");
-  assert.equal(beyond.state, "lost");
+  assert.deepEqual(first.steeringTargetCm, [-100_000, 0]);
+  assert.deepEqual(next.steeringTargetCm, [-100_000, 0]);
+  assert.notEqual(first.desiredBearingDeg, next.desiredBearingDeg);
+  assert.equal(first.state, "on-route");
+  assert.equal(next.state, "on-route");
 });
 
 test("twenty-five-metre arrival hides the ray", () => {
@@ -75,7 +81,7 @@ test("twenty-five-metre arrival hides the ray", () => {
 });
 
 test("one-hundred-eighty-degree error requests a U-turn", () => {
-  const frame = waterGuideFrame(route(), view({ guidanceCourseDeg: 180 }));
+  const frame = waterGuideFrame(route(), view({ movementCourseDeg: 180 }));
 
   assert.equal(frame.turn, "uturn");
   assert.equal(Math.abs(frame.relativeDeg), 180);
@@ -83,7 +89,7 @@ test("one-hundred-eighty-degree error requests a U-turn", () => {
 });
 
 test("shortest turn crosses north without spinning", () => {
-  const frame = waterGuideFrame(route(), view({ guidanceCourseDeg: 350 }));
+  const frame = waterGuideFrame(route(), view({ movementCourseDeg: 350 }));
 
   assert.equal(frame.relativeDeg, 10);
   assert.equal(frame.turn, "straight");
@@ -92,11 +98,11 @@ test("shortest turn crosses north without spinning", () => {
 test("the center ray stays vertical for left and right turns", () => {
   const east = waterGuideFrame(
     route({ targetXCm: 0, targetYCm: 100_000 }),
-    view({ guidanceCourseDeg: 0 }),
+    view({ movementCourseDeg: 0 }),
   );
   const west = waterGuideFrame(
     route({ targetXCm: 0, targetYCm: -100_000 }),
-    view({ guidanceCourseDeg: 0 }),
+    view({ movementCourseDeg: 0 }),
   );
 
   assert.equal(east.turn, "right");
@@ -106,10 +112,10 @@ test("the center ray stays vertical for left and right turns", () => {
 });
 
 test("alignment enters at eight degrees and holds until beyond eighteen", () => {
-  const eight = waterGuideFrame(route(), view({ guidanceCourseDeg: 352 }));
-  const nine = waterGuideFrame(route(), view({ guidanceCourseDeg: 351 }));
-  const eighteen = waterGuideFrame(route(), view({ guidanceCourseDeg: 342 }));
-  const beyond = waterGuideFrame(route(), view({ guidanceCourseDeg: 341.9 }));
+  const eight = waterGuideFrame(route(), view({ movementCourseDeg: 352 }));
+  const nine = waterGuideFrame(route(), view({ movementCourseDeg: 351 }));
+  const eighteen = waterGuideFrame(route(), view({ movementCourseDeg: 342 }));
+  const beyond = waterGuideFrame(route(), view({ movementCourseDeg: 341.9 }));
 
   assert.equal(nextAlignmentLocked(false, eight), true);
   assert.equal(nextAlignmentLocked(false, nine), false);
@@ -118,9 +124,9 @@ test("alignment enters at eight degrees and holds until beyond eighteen", () => 
 });
 
 test("steering prompt makes the stop point and turn direction explicit", () => {
-  const aligned = waterGuideFrame(route(), view({ guidanceCourseDeg: 355 }));
-  const right = waterGuideFrame(route(), view({ guidanceCourseDeg: 325 }));
-  const left = waterGuideFrame(route(), view({ guidanceCourseDeg: 35 }));
+  const aligned = waterGuideFrame(route(), view({ movementCourseDeg: 355 }));
+  const right = waterGuideFrame(route(), view({ movementCourseDeg: 325 }));
+  const left = waterGuideFrame(route(), view({ movementCourseDeg: 35 }));
 
   assert.equal(
     steeringPromptFor(aligned, true, "vi"),
@@ -128,22 +134,50 @@ test("steering prompt makes the stop point and turn direction explicit", () => {
   );
   assert.equal(
     steeringPromptFor(right, false, "vi"),
-    "XOAY NHÂN VẬT PHẢI 35° →",
+    "QUỸ ĐẠO XY: RẼ PHẢI 35° →",
   );
   assert.equal(
     steeringPromptFor(left, false, "vi"),
-    "← XOAY NHÂN VẬT TRÁI 35°",
+    "← QUỸ ĐẠO XY: RẼ TRÁI 35°",
   );
 });
 
-test("stale or headingless evidence never emits a confident ray", () => {
+test("movement course is derived only from confirmed XY displacement", () => {
+  assert.equal(
+    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: 0, yCm: 99 }),
+    null,
+  );
+  assert.equal(
+    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: -100, yCm: 0 }),
+    0,
+  );
+  assert.equal(
+    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: 0, yCm: 100 }),
+    90,
+  );
+});
+
+test("stale coordinates freeze the ray while missing movement stays fixed and honest", () => {
   const stale = waterGuideFrame(route(), view({ freshness: "waiting" }));
-  const headingless = waterGuideFrame(route(), view({ guidanceCourseDeg: null }));
+  const motionless = waterGuideFrame(route(), view({ movementCourseDeg: null }));
 
   assert.equal(stale.state, "waiting");
-  assert.equal(stale.rayVisible, false);
-  assert.equal(headingless.state, "heading-unknown");
-  assert.equal(headingless.rayVisible, false);
+  assert.equal(stale.rayVisible, true);
+  assert.equal(stale.turn, "none");
+  assert.equal(stale.screenAngleDeg, 0);
+  assert.equal(
+    steeringPromptFor(stale, false, "vi"),
+    "CHỜ TỌA ĐỘ MỚI · TIA GIỮ NGUYÊN",
+  );
+  assert.equal(motionless.state, "movement-unknown");
+  assert.equal(motionless.rayVisible, true);
+  assert.equal(motionless.screenAngleDeg, 0);
+  assert.equal(motionless.turn, "none");
+  assert.equal(nextAlignmentLocked(false, motionless), false);
+  assert.equal(
+    steeringPromptFor(motionless, false, "vi"),
+    "ĐI VÀI BƯỚC · CHỈ DÙNG TỌA ĐỘ XY",
+  );
 });
 
 test("zero-length or non-finite route fails closed", () => {
@@ -161,8 +195,8 @@ test("zero-length or non-finite route fails closed", () => {
 
 test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
   const onRoute = waterGuideFrame(route(), view());
-  const uturn = waterGuideFrame(route(), view({ guidanceCourseDeg: 180 }));
-  const offRoute = waterGuideFrame(route(), view({ yCm: 2_000 }));
+  const uturn = waterGuideFrame(route(), view({ movementCourseDeg: 180 }));
+  const redrawn = waterGuideFrame(route(), view({ yCm: 2_000 }));
   const stale = waterGuideFrame(route(), view({ freshness: "waiting" }));
 
   assert.equal(
@@ -171,8 +205,11 @@ test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
   );
   assert.equal(instructionFor(uturn, "vi"), "QUAY ĐẦU");
   assert.equal(
-    instructionFor(offRoute, "vi"),
-    "LỆCH ĐƯỜNG · LÀM THEO MŨI TÊN",
+    instructionFor(redrawn, "vi"),
+    "TIA CỐ ĐỊNH · LÀM THEO MŨI TÊN",
   );
-  assert.equal(instructionFor(stale, "vi"), "CHỜ SERVER");
+  assert.equal(
+    instructionFor(stale, "vi"),
+    "CHỜ TỌA ĐỘ MỚI · TIA GIỮ NGUYÊN",
+  );
 });
