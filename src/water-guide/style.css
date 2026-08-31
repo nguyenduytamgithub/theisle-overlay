@@ -121,7 +121,7 @@ body {
   animation-delay: calc(var(--i) * -90ms);
 }
 
-.uturn {
+.maneuver {
   position: absolute;
   z-index: 4;
   top: clamp(150px, 20vh, 240px);
@@ -137,6 +137,32 @@ body {
   font-weight: 1000;
   letter-spacing: 0.08em;
   text-shadow: 0 2px 4px #000;
+}
+
+.water-guide[data-aligned="true"] .ray {
+  filter: drop-shadow(0 0 9px rgba(69, 255, 145, 0.98));
+}
+
+.water-guide[data-aligned="true"] .ray-line {
+  background: linear-gradient(
+    to top,
+    rgba(78, 255, 151, 1),
+    rgba(42, 238, 126, 0.86) 68%,
+    rgba(42, 238, 126, 0.14)
+  );
+  box-shadow: 0 0 12px #39ff91, 0 0 28px rgba(48, 255, 137, 0.78);
+}
+
+.water-guide[data-aligned="true"] .ray i {
+  background: linear-gradient(180deg, #eafff1, #42f58f 58%, rgba(20, 184, 100, 0.75));
+  filter: drop-shadow(0 0 6px rgba(55, 255, 143, 0.98));
+}
+
+.water-guide[data-aligned="true"] .maneuver {
+  border-color: rgba(82, 255, 153, 0.94);
+  color: #79ffae;
+  background: rgba(0, 35, 17, 0.84);
+  box-shadow: 0 0 30px rgba(55, 255, 143, 0.42);
 }
 
 .water-guide[data-state="off-route"] .ray-line,
@@ -165,7 +191,7 @@ body {
     top: 22px;
   }
 
-  .uturn {
+  .maneuver {
     top: 108px;
   }
 

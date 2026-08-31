@@ -8,8 +8,9 @@ import {
   type NavigationSnapshot,
 } from "../lib/navigation/estimator";
 import {
-  advanceScreenAngle,
   instructionFor,
+  nextAlignmentLocked,
+  steeringPromptFor,
   waterGuideFrame,
   type WaterGuideLanguage,
   type WaterGuideRoute,
@@ -44,13 +45,12 @@ const root = document.getElementById("water-guide")!;
 const destinationEl = document.getElementById("destination")!;
 const instructionEl = document.getElementById("instruction")!;
 const rayEl = document.getElementById("ray")!;
-const uturnEl = document.getElementById("uturn")!;
+const maneuverEl = document.getElementById("maneuver")!;
 
 let state: WaterGuideSnapshot = { requested: false, route: null, errorKey: null };
 let language: WaterGuideLanguage = "vi";
 let paintTimer: number | null = null;
-let displayedAngleDeg = 0;
-let lastPaintAt = performance.now();
+let alignmentLocked = false;
 
 const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   vi: {
@@ -79,8 +79,10 @@ function applySettings(settings: Record<string, unknown>) {
 }
 
 function hideRay() {
+  alignmentLocked = false;
+  root.dataset.aligned = "false";
   rayEl.classList.add("hidden");
-  uturnEl.classList.add("hidden");
+  maneuverEl.classList.add("hidden");
 }
 
 function paintError(errorKey: string | null) {
@@ -106,28 +108,23 @@ function paintView(view: NavigationSnapshot) {
     guidanceCourseDeg: view.guidanceCourseDeg,
     freshness: view.freshness,
   });
-  const now = performance.now();
-  displayedAngleDeg = advanceScreenAngle(
-    displayedAngleDeg,
-    frame.screenAngleDeg,
-    Math.min(0.1, Math.max(0, (now - lastPaintAt) / 1_000)),
-  );
-  lastPaintAt = now;
+  alignmentLocked = nextAlignmentLocked(alignmentLocked, frame);
+  const prompt = steeringPromptFor(frame, alignmentLocked, language);
 
   root.dataset.state = frame.state;
   root.dataset.turn = frame.turn;
+  root.dataset.aligned = String(alignmentLocked);
   destinationEl.textContent = (language === "vi" ? "NƯỚC: " : "WATER: ")
     + route.label + " · " + Math.round(frame.remainingM) + " m";
-  instructionEl.textContent = instructionFor(frame, language);
+  instructionEl.textContent = alignmentLocked
+    ? prompt
+    : instructionFor(frame, language);
 
   rayEl.classList.toggle("hidden", !frame.rayVisible);
-  rayEl.style.setProperty("--ray-angle", String(displayedAngleDeg) + "deg");
-  const uturn = frame.turn === "uturn" && frame.rayVisible;
-  uturnEl.classList.toggle("hidden", !uturn);
-  if (uturn) {
-    const left = frame.relativeDeg <= 0;
-    uturnEl.textContent = (left ? "↶ " : "↷ ")
-      + (language === "vi" ? "QUAY ĐẦU" : "TURN AROUND");
+  rayEl.style.setProperty("--ray-angle", "0deg");
+  maneuverEl.classList.toggle("hidden", !frame.rayVisible);
+  if (frame.rayVisible) {
+    maneuverEl.textContent = prompt;
   }
 }
 
@@ -183,7 +180,7 @@ async function init() {
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", ({ payload }) => {
     state = payload;
-    displayedAngleDeg = 0;
+    alignmentLocked = false;
     paintNow();
   });
   await listen<Record<string, unknown>>("settings://changed", ({ payload }) => {

@@ -59,18 +59,18 @@ export type WaterGuideLanguage = "vi" | "en";
 
 const INSTRUCTIONS: Record<WaterGuideLanguage, Record<WaterGuideState, string>> = {
   vi: {
-    "on-route": "XOAY NHÂN VẬT ĐỂ TIA THẲNG LÊN · GIỮ W",
-    "off-route": "LỆCH ĐƯỜNG · XOAY NHÂN VẬT VỀ TIA",
-    lost: "LẠC XA · XOAY NHÂN VẬT VỀ TIA",
+    "on-route": "TIA CỐ ĐỊNH · LÀM THEO MŨI TÊN",
+    "off-route": "LỆCH ĐƯỜNG · LÀM THEO MŨI TÊN",
+    lost: "LẠC XA · LÀM THEO MŨI TÊN",
     waiting: "CHỜ SERVER",
     "heading-unknown": "XOAY / ĐI VÀI BƯỚC ĐỂ XÁC ĐỊNH HƯỚNG",
     arrived: "ĐÃ TỚI NGUỒN NƯỚC",
     invalid: "KHÔNG XÁC MINH ĐƯỢC NƯỚC UỐNG",
   },
   en: {
-    "on-route": "TURN THE CHARACTER UNTIL THE RAY POINTS UP · HOLD W",
-    "off-route": "OFF ROUTE · TURN THE CHARACTER BACK TO THE RAY",
-    lost: "FAR OFF ROUTE · TURN THE CHARACTER BACK TO THE RAY",
+    "on-route": "FIXED RAY · FOLLOW THE TURN ARROW",
+    "off-route": "OFF ROUTE · FOLLOW THE TURN ARROW",
+    lost: "FAR OFF ROUTE · FOLLOW THE TURN ARROW",
     waiting: "WAITING FOR SERVER",
     "heading-unknown": "TURN / WALK A FEW STEPS TO FIND DIRECTION",
     arrived: "FRESH WATER REACHED",
@@ -129,18 +129,6 @@ export function steeringPromptFor(
   return left
     ? `← TURN CHARACTER LEFT ${degrees}°`
     : `TURN CHARACTER RIGHT ${degrees}° →`;
-}
-
-export function advanceScreenAngle(
-  currentDeg: number,
-  targetDeg: number,
-  elapsedS: number,
-  maxRateDegS = 180,
-): number {
-  const delta = targetDeg - currentDeg;
-  const step = Math.sign(delta)
-    * Math.min(Math.abs(delta), Math.max(0, elapsedS) * maxRateDegS);
-  return stable(currentDeg + step);
 }
 
 const stable = (value: number): number =>

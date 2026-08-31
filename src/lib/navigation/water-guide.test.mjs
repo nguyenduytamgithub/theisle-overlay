@@ -167,12 +167,12 @@ test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
 
   assert.equal(
     instructionFor(onRoute, "vi"),
-    "XOAY NHÂN VẬT ĐỂ TIA THẲNG LÊN · GIỮ W",
+    "TIA CỐ ĐỊNH · LÀM THEO MŨI TÊN",
   );
   assert.equal(instructionFor(uturn, "vi"), "QUAY ĐẦU");
   assert.equal(
     instructionFor(offRoute, "vi"),
-    "LỆCH ĐƯỜNG · XOAY NHÂN VẬT VỀ TIA",
+    "LỆCH ĐƯỜNG · LÀM THEO MŨI TÊN",
   );
   assert.equal(instructionFor(stale, "vi"), "CHỜ SERVER");
 });
