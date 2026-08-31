@@ -33,7 +33,7 @@
 - Consumes: `WaterGuideFrame`, current `movementCourseDeg`, existing `desiredBearingDeg`, and `rayVisible` state.
 - Produces: `WaterGuideBoardNeedles` and `waterGuideBoardNeedles(frame, movementCourseDeg)`.
 
-- [ ] **Step 1: Write the failing needle tests**
+- [x] **Step 1: Write the failing needle tests**
 
 Add tests proving north/east/south/west target bearings map to 0/90/180/270, movement unknown hides only the movement needle, waiting preserves both known absolute bearings, and arrived/invalid hides both needles.
 
@@ -45,7 +45,7 @@ assert.equal(board.targetVisible, true);
 assert.equal(board.movementVisible, true);
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -55,7 +55,7 @@ node --test src/lib/navigation/water-guide.test.mjs
 
 Expected: module import or function assertions fail because `waterGuideBoardNeedles` does not exist.
 
-- [ ] **Step 3: Implement the minimal pure board contract**
+- [x] **Step 3: Implement the minimal pure board contract**
 
 ```typescript
 export interface WaterGuideBoardNeedles {
@@ -73,7 +73,7 @@ export function waterGuideBoardNeedles(
 
 Normalize both finite bearings into `[0, 360)`. Target visibility follows a valid visible guide frame. Movement visibility additionally requires a finite movement course. Arrival and invalid states hide both.
 
-- [ ] **Step 4: Run GREEN and the complete navigation suite**
+- [x] **Step 4: Run GREEN and the complete navigation suite**
 
 ```powershell
 node --test src/lib/navigation/water-guide.test.mjs
@@ -82,7 +82,7 @@ node --test src/lib/navigation/*.test.mjs
 
 Expected: zero failures.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add -- src/lib/navigation/water-guide.ts src/lib/navigation/water-guide.test.mjs

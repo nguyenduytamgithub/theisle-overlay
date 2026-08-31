@@ -7,6 +7,7 @@ import {
   nextAlignmentLocked,
   projectToSegment,
   steeringPromptFor,
+  waterGuideBoardNeedles,
   waterGuideFrame,
 } from "./water-guide.ts";
 
@@ -224,4 +225,60 @@ test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
     instructionFor(stale, "vi"),
     "CHỜ TỌA ĐỘ MỚI · TIA GIỮ NGUYÊN",
   );
+});
+
+test("north-up board maps absolute XY bearings to fixed cardinal angles", () => {
+  const north = waterGuideFrame(route(), view());
+  const east = waterGuideFrame(
+    route({ targetXCm: 0, targetYCm: 100_000 }),
+    view(),
+  );
+  const south = waterGuideFrame(
+    route({ targetXCm: 100_000, targetYCm: 0 }),
+    view(),
+  );
+  const west = waterGuideFrame(
+    route({ targetXCm: 0, targetYCm: -100_000 }),
+    view(),
+  );
+
+  assert.equal(waterGuideBoardNeedles(north, 270).targetBearingDeg, 0);
+  assert.equal(waterGuideBoardNeedles(east, 270).targetBearingDeg, 90);
+  assert.equal(waterGuideBoardNeedles(south, 270).targetBearingDeg, 180);
+  assert.equal(waterGuideBoardNeedles(west, 270).targetBearingDeg, 270);
+  assert.equal(waterGuideBoardNeedles(east, 270).movementBearingDeg, 270);
+});
+
+test("north-up board hides only the movement needle before a course exists", () => {
+  const frame = waterGuideFrame(route(), view({ movementCourseDeg: null }));
+  const board = waterGuideBoardNeedles(frame, null);
+
+  assert.equal(board.targetVisible, true);
+  assert.equal(board.targetBearingDeg, 0);
+  assert.equal(board.movementVisible, false);
+  assert.equal(board.movementBearingDeg, null);
+});
+
+test("north-up board freezes known bearings while waiting for fresh XY", () => {
+  const frame = waterGuideFrame(route(), view({ freshness: "waiting" }));
+  const board = waterGuideBoardNeedles(frame, 90);
+
+  assert.equal(frame.state, "waiting");
+  assert.equal(board.targetVisible, true);
+  assert.equal(board.targetBearingDeg, 0);
+  assert.equal(board.movementVisible, true);
+  assert.equal(board.movementBearingDeg, 90);
+});
+
+test("north-up board hides both needles after arrival or invalid data", () => {
+  const arrived = waterGuideFrame(route(), view({ xCm: -97_500 }));
+  const invalid = waterGuideFrame(route({ targetXCm: Number.NaN }), view());
+
+  for (const frame of [arrived, invalid]) {
+    const board = waterGuideBoardNeedles(frame, 180);
+    assert.equal(board.targetVisible, false);
+    assert.equal(board.targetBearingDeg, null);
+    assert.equal(board.movementVisible, false);
+    assert.equal(board.movementBearingDeg, null);
+  }
 });

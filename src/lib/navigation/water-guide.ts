@@ -1,4 +1,4 @@
-import { bearingTo, relativeBearing } from "./guidance.ts";
+import { bearingTo, normalizeBearing, relativeBearing } from "./guidance.ts";
 import type { NavigationFreshness } from "./estimator.ts";
 
 export const WATER_GUIDE = {
@@ -47,6 +47,36 @@ export interface WaterGuideFrame {
   relativeDeg: number;
   screenAngleDeg: number;
   turn: "left" | "right" | "straight" | "uturn" | "none";
+}
+
+export interface WaterGuideBoardNeedles {
+  targetBearingDeg: number | null;
+  movementBearingDeg: number | null;
+  targetVisible: boolean;
+  movementVisible: boolean;
+}
+
+export function waterGuideBoardNeedles(
+  frame: WaterGuideFrame,
+  movementCourseDeg: number | null,
+): WaterGuideBoardNeedles {
+  const targetVisible = frame.rayVisible
+    && frame.desiredBearingDeg !== null
+    && Number.isFinite(frame.desiredBearingDeg);
+  const movementVisible = targetVisible
+    && movementCourseDeg !== null
+    && Number.isFinite(movementCourseDeg);
+
+  return {
+    targetBearingDeg: targetVisible
+      ? normalizeBearing(frame.desiredBearingDeg as number)
+      : null,
+    movementBearingDeg: movementVisible
+      ? normalizeBearing(movementCourseDeg as number)
+      : null,
+    targetVisible,
+    movementVisible,
+  };
 }
 
 export interface SegmentProjection {
