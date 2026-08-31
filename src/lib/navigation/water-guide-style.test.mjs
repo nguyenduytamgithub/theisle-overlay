@@ -59,3 +59,25 @@ test("position-quality loss freezes the last XY needles instead of clearing cour
   assert.doesNotMatch(listener[0], /resetMovementCourse/);
   assert.match(listener[0], /positionQualityValid = false/);
 });
+
+test("initial snapshots cannot overwrite newer Water Guide or XY events", () => {
+  assert.match(main, /let waterGuideStateRevision = 0/);
+  assert.match(main, /let positionRevision = 0/);
+  assert.match(
+    main,
+    /listen<PositionUpdate>\("position:\/\/update",[\s\S]*?positionRevision \+= 1/,
+  );
+  assert.match(
+    main,
+    /listen<WaterGuideSnapshot>\("water-guide:\/\/changed",[\s\S]*?waterGuideStateRevision \+= 1/,
+  );
+  assert.match(
+    main,
+    /waterGuideStateRevision === stateRevisionBeforeSnapshot/,
+  );
+  assert.match(main, /positionRevision === positionRevisionBeforeSnapshot/);
+  assert.match(
+    main,
+    /position\.confirmedAtMs < latestConfirmedPosition\.confirmedAtMs/,
+  );
+});

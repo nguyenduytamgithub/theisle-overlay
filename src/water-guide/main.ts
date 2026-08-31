@@ -50,6 +50,8 @@ let latestConfirmedPosition: PositionUpdate | null = null;
 let movementAnchor: PositionUpdate | null = null;
 let movementCourseDeg: number | null = null;
 let positionQualityValid = true;
+let waterGuideStateRevision = 0;
+let positionRevision = 0;
 
 const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   vi: {
@@ -182,6 +184,12 @@ function paintNow() {
 }
 
 function acceptPosition(position: PositionUpdate) {
+  if (
+    latestConfirmedPosition
+    && position.confirmedAtMs < latestConfirmedPosition.confirmedAtMs
+  ) {
+    return;
+  }
   positionQualityValid = true;
   if (position.relocated || movementAnchor === null) {
     movementAnchor = position;
@@ -207,14 +215,17 @@ async function init() {
   applySettings(await invoke<Record<string, unknown>>("get_settings"));
 
   await listen<PositionUpdate>("position://update", ({ payload }) => {
+    positionRevision += 1;
     acceptPosition(payload);
   });
   await listen("position://quality", () => {
+    positionRevision += 1;
     positionQualityValid = false;
     alignmentLocked = false;
     paintNow();
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", ({ payload }) => {
+    waterGuideStateRevision += 1;
     state = payload;
     resetMovementCourse();
     paintNow();
@@ -224,10 +235,19 @@ async function init() {
     paintNow();
   });
 
-  state = await invoke<WaterGuideSnapshot>("get_water_guide_state");
+  const stateRevisionBeforeSnapshot = waterGuideStateRevision;
+  const initialState = await invoke<WaterGuideSnapshot>("get_water_guide_state");
+  if (waterGuideStateRevision === stateRevisionBeforeSnapshot) {
+    state = initialState;
+  }
+
+  const positionRevisionBeforeSnapshot = positionRevision;
   const current = await invoke<PositionUpdate | null>("get_current_position");
-  if (current) acceptPosition(current);
-  else paintNow();
+  if (positionRevision === positionRevisionBeforeSnapshot && current) {
+    acceptPosition(current);
+  } else {
+    paintNow();
+  }
   await emit("water-guide://ready");
 }
 
