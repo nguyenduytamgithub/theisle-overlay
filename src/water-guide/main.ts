@@ -4,8 +4,8 @@ import { error } from "@tauri-apps/plugin-log";
 
 import { installGlobalErrorLog } from "../lib/errlog";
 import {
-  NavigationEstimator,
-  type NavigationSnapshot,
+  freshnessForAge,
+  type NavigationFreshness,
 } from "../lib/navigation/estimator";
 import {
   instructionFor,
@@ -22,14 +22,6 @@ installGlobalErrorLog("water-guide");
 interface PositionUpdate {
   xCm: number;
   yCm: number;
-  px: number;
-  py: number;
-  velocityXCmS: number | null;
-  velocityYCmS: number | null;
-  velocityPxXS: number | null;
-  velocityPxYS: number | null;
-  serverFacingDeg: number | null;
-  motionCourseDeg: number | null;
   confirmedAtMs: number;
   relocated: boolean;
 }
@@ -41,7 +33,6 @@ interface WaterGuideSnapshot {
 }
 
 const FRAME_MS = 1_000 / 30;
-const estimator = new NavigationEstimator();
 const root = document.getElementById("water-guide")!;
 const destinationEl = document.getElementById("destination")!;
 const instructionEl = document.getElementById("instruction")!;
@@ -55,6 +46,7 @@ let alignmentLocked = false;
 let latestConfirmedPosition: PositionUpdate | null = null;
 let movementAnchor: PositionUpdate | null = null;
 let movementCourseDeg: number | null = null;
+let positionQualityValid = true;
 
 const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   vi: {
@@ -99,7 +91,7 @@ function paintError(errorKey: string | null) {
       : "DRINKABLE WATER COULD NOT BE VERIFIED");
 }
 
-function paintView(view: NavigationSnapshot) {
+function paintView(freshness: NavigationFreshness) {
   const route = state.route;
   if (!route || !latestConfirmedPosition) {
     paintError(state.errorKey);
@@ -110,7 +102,7 @@ function paintView(view: NavigationSnapshot) {
     xCm: latestConfirmedPosition.xCm,
     yCm: latestConfirmedPosition.yCm,
     movementCourseDeg,
-    freshness: view.freshness,
+    freshness,
   });
   alignmentLocked = nextAlignmentLocked(alignmentLocked, frame);
   const prompt = steeringPromptFor(frame, alignmentLocked, language);
@@ -143,13 +135,16 @@ function paint() {
     paintError(state.errorKey);
     return;
   }
-  const view = estimator.snapshot(Date.now());
-  if (!view) {
+  if (!latestConfirmedPosition) {
     paintError("waiting_for_position");
     schedulePaint();
     return;
   }
-  paintView(view);
+  const ageS = Math.max(
+    0,
+    (Date.now() - latestConfirmedPosition.confirmedAtMs) / 1_000,
+  );
+  paintView(positionQualityValid ? freshnessForAge(ageS) : "waiting");
   schedulePaint();
 }
 
@@ -168,7 +163,7 @@ function paintNow() {
 }
 
 function acceptPosition(position: PositionUpdate) {
-  estimator.accept(position);
+  positionQualityValid = true;
   if (position.relocated || movementAnchor === null) {
     movementAnchor = position;
     movementCourseDeg = null;
@@ -196,7 +191,7 @@ async function init() {
     acceptPosition(payload);
   });
   await listen("position://quality", () => {
-    estimator.invalidatePrediction();
+    positionQualityValid = false;
     resetMovementCourse();
     paintNow();
   });

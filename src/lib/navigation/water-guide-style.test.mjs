@@ -28,7 +28,11 @@ test("the aligned green ray overrides off-route and lost colors", () => {
 });
 
 test("the Water Guide ignores head/camera direction and pins the screen ray", () => {
-  assert.doesNotMatch(main, /guidanceCourseDeg:\s*view\.guidanceCourseDeg/);
+  assert.doesNotMatch(
+    main,
+    /NavigationEstimator|guidanceCourseDeg|serverFacingDeg|motionCourseDeg/,
+  );
   assert.match(main, /movementCourseBetween/);
+  assert.match(main, /freshnessForAge/);
   assert.match(main, /--ray-angle", "0deg"/);
 });
