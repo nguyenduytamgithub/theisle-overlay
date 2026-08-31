@@ -6,6 +6,8 @@ export const WATER_GUIDE = {
   lostM: 150,
   arrivalM: 25,
   lookAheadM: 80,
+  alignEnterDeg: 8,
+  alignExitDeg: 18,
   uturnDeg: 110,
 } as const;
 
@@ -84,6 +86,49 @@ export function instructionFor(
     return language === "vi" ? "QUAY ĐẦU" : "TURN AROUND";
   }
   return INSTRUCTIONS[language][frame.state];
+}
+
+export function nextAlignmentLocked(
+  previous: boolean,
+  frame: WaterGuideFrame,
+): boolean {
+  if (!frame.rayVisible || !Number.isFinite(frame.relativeDeg)) {
+    return false;
+  }
+  const limit = previous ? WATER_GUIDE.alignExitDeg : WATER_GUIDE.alignEnterDeg;
+  return Math.abs(frame.relativeDeg) <= limit;
+}
+
+export function steeringPromptFor(
+  frame: WaterGuideFrame,
+  aligned: boolean,
+  language: WaterGuideLanguage,
+): string {
+  if (!frame.rayVisible) {
+    return instructionFor(frame, language);
+  }
+  if (aligned || Math.abs(frame.relativeDeg) <= WATER_GUIDE.alignEnterDeg) {
+    return language === "vi"
+      ? "✓ ĐÚNG HƯỚNG · GIỮ W"
+      : "✓ ON COURSE · HOLD W";
+  }
+
+  const degrees = Math.round(Math.abs(frame.relativeDeg));
+  const left = frame.relativeDeg < 0;
+  if (frame.turn === "uturn") {
+    if (language === "vi") {
+      return left ? `↶ QUAY ĐẦU ${degrees}°` : `QUAY ĐẦU ${degrees}° ↷`;
+    }
+    return left ? `↶ TURN AROUND ${degrees}°` : `TURN AROUND ${degrees}° ↷`;
+  }
+  if (language === "vi") {
+    return left
+      ? `← XOAY NHÂN VẬT TRÁI ${degrees}°`
+      : `XOAY NHÂN VẬT PHẢI ${degrees}° →`;
+  }
+  return left
+    ? `← TURN CHARACTER LEFT ${degrees}°`
+    : `TURN CHARACTER RIGHT ${degrees}° →`;
 }
 
 export function advanceScreenAngle(
@@ -202,7 +247,7 @@ export function waterGuideFrame(
     crossTrackM: projection.crossTrackM,
     desiredBearingDeg,
     relativeDeg,
-    screenAngleDeg: Math.max(-75, Math.min(75, relativeDeg)),
+    screenAngleDeg: 0,
     turn,
   };
 }

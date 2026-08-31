@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  advanceScreenAngle,
   instructionFor,
+  nextAlignmentLocked,
   projectToSegment,
+  steeringPromptFor,
   waterGuideFrame,
 } from "./water-guide.ts";
 
@@ -88,7 +89,7 @@ test("shortest turn crosses north without spinning", () => {
   assert.equal(frame.turn, "straight");
 });
 
-test("left and right signs point the screen ray away from its origin", () => {
+test("the center ray stays vertical for left and right turns", () => {
   const east = waterGuideFrame(
     route({ targetXCm: 0, targetYCm: 100_000 }),
     view({ guidanceCourseDeg: 0 }),
@@ -99,9 +100,40 @@ test("left and right signs point the screen ray away from its origin", () => {
   );
 
   assert.equal(east.turn, "right");
-  assert.equal(east.screenAngleDeg, 75);
+  assert.equal(east.screenAngleDeg, 0);
   assert.equal(west.turn, "left");
-  assert.equal(west.screenAngleDeg, -75);
+  assert.equal(west.screenAngleDeg, 0);
+});
+
+test("alignment enters at eight degrees and holds until beyond eighteen", () => {
+  const eight = waterGuideFrame(route(), view({ guidanceCourseDeg: 352 }));
+  const nine = waterGuideFrame(route(), view({ guidanceCourseDeg: 351 }));
+  const eighteen = waterGuideFrame(route(), view({ guidanceCourseDeg: 342 }));
+  const beyond = waterGuideFrame(route(), view({ guidanceCourseDeg: 341.9 }));
+
+  assert.equal(nextAlignmentLocked(false, eight), true);
+  assert.equal(nextAlignmentLocked(false, nine), false);
+  assert.equal(nextAlignmentLocked(true, eighteen), true);
+  assert.equal(nextAlignmentLocked(true, beyond), false);
+});
+
+test("steering prompt makes the stop point and turn direction explicit", () => {
+  const aligned = waterGuideFrame(route(), view({ guidanceCourseDeg: 355 }));
+  const right = waterGuideFrame(route(), view({ guidanceCourseDeg: 325 }));
+  const left = waterGuideFrame(route(), view({ guidanceCourseDeg: 35 }));
+
+  assert.equal(
+    steeringPromptFor(aligned, true, "vi"),
+    "✓ ĐÚNG HƯỚNG · GIỮ W",
+  );
+  assert.equal(
+    steeringPromptFor(right, false, "vi"),
+    "XOAY NHÂN VẬT PHẢI 35° →",
+  );
+  assert.equal(
+    steeringPromptFor(left, false, "vi"),
+    "← XOAY NHÂN VẬT TRÁI 35°",
+  );
 });
 
 test("stale or headingless evidence never emits a confident ray", () => {
@@ -143,10 +175,4 @@ test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
     "LỆCH ĐƯỜNG · XOAY NHÂN VẬT VỀ TIA",
   );
   assert.equal(instructionFor(stale, "vi"), "CHỜ SERVER");
-});
-
-test("screen ray turns at a bounded rate instead of snapping", () => {
-  assert.equal(advanceScreenAngle(0, 75, 1 / 30), 6);
-  assert.equal(advanceScreenAngle(70, 75, 1), 75);
-  assert.equal(advanceScreenAngle(-70, -75, 1), -75);
 });
