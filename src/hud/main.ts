@@ -38,6 +38,10 @@ interface NavigationTarget {
   arrived: boolean;
 }
 
+interface WaterGuideSnapshot {
+  requested: boolean;
+}
+
 const FRAME_MS = 1_000 / 30;
 const estimator = new NavigationEstimator();
 const hud = document.getElementById("hud")!;
@@ -78,6 +82,13 @@ function paintNow() {
   if (paintTimer !== null) window.clearTimeout(paintTimer);
   paintTimer = null;
   paint(Date.now());
+}
+
+function setWaterGuideRequested(requested: boolean) {
+  // The normal HUD contains heading-driven arrows. They are useful normally,
+  // but contradict the XY-only Water Guide and visibly move with the mouse.
+  hud.hidden = requested;
+  if (!requested) paintNow();
 }
 
 function paintCourse(view: NavigationSnapshot) {
@@ -208,6 +219,13 @@ async function init() {
     applySettings(event.payload);
     paintNow();
   });
+  await listen<WaterGuideSnapshot>("water-guide://changed", (event) => {
+    setWaterGuideRequested(event.payload.requested);
+  });
+
+  setWaterGuideRequested(
+    (await invoke<WaterGuideSnapshot>("get_water_guide_state")).requested,
+  );
 
   navigation = await invoke<NavigationTarget | null>("active_navigation");
   estimator.setTarget(navigation

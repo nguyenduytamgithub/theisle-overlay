@@ -48,6 +48,9 @@ interface PoiLayer {
   kind: string;
   items: { label: string; px: number; py: number; xCm: number; yCm: number }[];
 }
+interface WaterGuideSnapshot {
+  requested: boolean;
+}
 type Settings = Record<string, any>;
 
 const LAYER_COLORS: Record<string, string> = {
@@ -121,6 +124,7 @@ let lastHeadingDeg: number | null = null;
 let confirmedPosition: PositionUpdate | null = null;
 let estimator = new NavigationEstimator();
 let predictionTimer: number | null = null;
+let waterGuideRequested = false;
 
 const headingKey = (bearingDeg: number): string => {
   const keys = ["dir.N", "dir.NE", "dir.E", "dir.SE", "dir.S", "dir.SW", "dir.W", "dir.NW"];
@@ -129,6 +133,7 @@ const headingKey = (bearingDeg: number): string => {
 
 function paintPredictedPosition(nowMs: number) {
   predictionTimer = null;
+  if (waterGuideRequested) return;
   if (!confirmedPosition) return;
   const shown = estimator.snapshot(nowMs);
   if (!shown) return;
@@ -248,7 +253,21 @@ function flattenPois() {
   refreshPoiFilter();
 }
 
-const draw = () => render(canvas, state);
+const draw = () => {
+  if (!waterGuideRequested) render(canvas, state);
+};
+
+function setWaterGuideRequested(requested: boolean) {
+  waterGuideRequested = requested;
+  canvas.hidden = requested;
+  if (requested) {
+    if (predictionTimer !== null) window.clearTimeout(predictionTimer);
+    predictionTimer = null;
+    return;
+  }
+  paintPredictedNow();
+  draw();
+}
 
 let imageWidthPx = 7800;
 // Which basemap imagery this webview currently renders — compared against
@@ -466,6 +485,13 @@ async function init() {
     }
     draw();
   });
+  await listen<WaterGuideSnapshot>("water-guide://changed", (e) => {
+    setWaterGuideRequested(e.payload.requested);
+  });
+
+  setWaterGuideRequested(
+    (await invoke<WaterGuideSnapshot>("get_water_guide_state")).requested,
+  );
 
   // "Your dino" stats for the strip under the disc.
   interface DinoStatBar {

@@ -38,3 +38,4 @@ Target selection and the EAC-safe boundary do not change. Water Guide does not i
 - When the coordinate becomes stale, freeze the last XY ray visibly and label it as waiting; do not hide, rotate, or advance it locally.
 - Reset the XY course anchor on relocation, rejected position quality, route replacement, or guide deactivation.
 - Left/right copy must identify `QUỸ ĐẠO XY`; it must not claim to read the character's head.
+- While Water Guide is requested, suppress the normal heading HUD and rotating minimap canvas so no mouse-driven arrow can be mistaken for the XY ray. Restore both immediately when Water Guide is turned off.
