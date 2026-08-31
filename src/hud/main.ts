@@ -61,6 +61,7 @@ let hasPosition = false;
 let lastFreshness: NavigationSnapshot["freshness"] | null = null;
 let lastSampleSource: "motion" | "server" | "none" | null = null;
 let lastConfirmedForDiagnostics: Pick<PositionUpdate, "xCm" | "yCm"> | null = null;
+let waterGuideStateRevision = 0;
 
 function applySettings(settings: Record<string, unknown>) {
   language = settings.language === "en" ? "en" : "vi";
@@ -220,12 +221,15 @@ async function init() {
     paintNow();
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", (event) => {
+    waterGuideStateRevision += 1;
     setWaterGuideRequested(event.payload.requested);
   });
 
-  setWaterGuideRequested(
-    (await invoke<WaterGuideSnapshot>("get_water_guide_state")).requested,
-  );
+  const revisionBeforeSnapshot = waterGuideStateRevision;
+  const waterGuideSnapshot = await invoke<WaterGuideSnapshot>("get_water_guide_state");
+  if (waterGuideStateRevision === revisionBeforeSnapshot) {
+    setWaterGuideRequested(waterGuideSnapshot.requested);
+  }
 
   navigation = await invoke<NavigationTarget | null>("active_navigation");
   estimator.setTarget(navigation

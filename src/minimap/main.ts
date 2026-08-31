@@ -125,6 +125,7 @@ let confirmedPosition: PositionUpdate | null = null;
 let estimator = new NavigationEstimator();
 let predictionTimer: number | null = null;
 let waterGuideRequested = false;
+let waterGuideStateRevision = 0;
 
 const headingKey = (bearingDeg: number): string => {
   const keys = ["dir.N", "dir.NE", "dir.E", "dir.SE", "dir.S", "dir.SW", "dir.W", "dir.NW"];
@@ -260,6 +261,7 @@ const draw = () => {
 function setWaterGuideRequested(requested: boolean) {
   waterGuideRequested = requested;
   canvas.hidden = requested;
+  canvas.style.display = requested ? "none" : "block";
   if (requested) {
     if (predictionTimer !== null) window.clearTimeout(predictionTimer);
     predictionTimer = null;
@@ -486,12 +488,15 @@ async function init() {
     draw();
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", (e) => {
+    waterGuideStateRevision += 1;
     setWaterGuideRequested(e.payload.requested);
   });
 
-  setWaterGuideRequested(
-    (await invoke<WaterGuideSnapshot>("get_water_guide_state")).requested,
-  );
+  const revisionBeforeSnapshot = waterGuideStateRevision;
+  const waterGuideSnapshot = await invoke<WaterGuideSnapshot>("get_water_guide_state");
+  if (waterGuideStateRevision === revisionBeforeSnapshot) {
+    setWaterGuideRequested(waterGuideSnapshot.requested);
+  }
 
   // "Your dino" stats for the strip under the disc.
   interface DinoStatBar {
