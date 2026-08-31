@@ -33,6 +33,21 @@ pub const BUILD_FINGERPRINT: &str = concat!(env!("CARGO_PKG_VERSION"), "-gpu-vis
 const FILTER_LABEL: &str = "night-vision-filter";
 const FILTER_READY_EVENT: &str = "night-vision-filter://ready";
 const FILTER_HEARTBEAT_EVENT: &str = "night-vision-filter://heartbeat";
+const OVERLAY_STACK_LABELS: [&str; 5] = [
+    FILTER_LABEL,
+    "minimap",
+    "hud",
+    "water-guide",
+    "night-vision",
+];
+const CAPTURE_EXCLUDED_LABELS: [&str; 6] = [
+    FILTER_LABEL,
+    "main",
+    "minimap",
+    "hud",
+    "water-guide",
+    "night-vision",
+];
 const BUTTON_WIDTH: f64 = 190.0;
 const BUTTON_HEIGHT: f64 = 48.0;
 const BUTTON_MARGIN: f64 = 16.0;
@@ -762,7 +777,7 @@ fn destroy_gpu(app: &AppHandle) -> bool {
 }
 
 fn current_excluded_windows() -> Vec<isize> {
-    let mut excluded: Vec<isize> = [FILTER_LABEL, "main", "minimap", "hud", "night-vision"]
+    let mut excluded: Vec<isize> = CAPTURE_EXCLUDED_LABELS
         .into_iter()
         .filter_map(crate::win::vis::hwnd)
         .filter(|raw| *raw != 0)
@@ -887,7 +902,9 @@ fn hide_filter_window(app: &AppHandle) -> bool {
 }
 
 fn force_overlay_stack() {
-    for label in [FILTER_LABEL, "minimap", "hud", "night-vision"] {
+    // SetWindowPos(HWND_TOPMOST) lifts each window above the previous one, so
+    // keep the visual filter first and player-facing guidance last.
+    for label in OVERLAY_STACK_LABELS {
         if let Some(hwnd) = crate::win::vis::hwnd(label) {
             crate::win::overlay::force_topmost(hwnd);
         }
@@ -1679,6 +1696,21 @@ mod tests {
 
     fn controller() -> NightVisionController {
         NightVisionController::new(70)
+    }
+
+    #[test]
+    fn overlay_stack_keeps_navigation_above_the_night_filter() {
+        assert_eq!(
+            super::OVERLAY_STACK_LABELS,
+            [
+                super::FILTER_LABEL,
+                "minimap",
+                "hud",
+                "water-guide",
+                "night-vision",
+            ]
+        );
+        assert!(super::CAPTURE_EXCLUDED_LABELS.contains(&"water-guide"));
     }
 
     #[test]

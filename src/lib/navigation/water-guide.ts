@@ -57,18 +57,18 @@ export type WaterGuideLanguage = "vi" | "en";
 
 const INSTRUCTIONS: Record<WaterGuideLanguage, Record<WaterGuideState, string>> = {
   vi: {
-    "on-route": "THEO TIA XANH",
-    "off-route": "LỆCH ĐƯỜNG · QUAY LẠI TIA XANH",
-    lost: "LẠC XA · THEO TIA XANH ĐỂ TRỞ LẠI",
+    "on-route": "XOAY NHÂN VẬT ĐỂ TIA THẲNG LÊN · GIỮ W",
+    "off-route": "LỆCH ĐƯỜNG · XOAY NHÂN VẬT VỀ TIA",
+    lost: "LẠC XA · XOAY NHÂN VẬT VỀ TIA",
     waiting: "CHỜ SERVER",
     "heading-unknown": "XOAY / ĐI VÀI BƯỚC ĐỂ XÁC ĐỊNH HƯỚNG",
     arrived: "ĐÃ TỚI NGUỒN NƯỚC",
     invalid: "KHÔNG XÁC MINH ĐƯỢC NƯỚC UỐNG",
   },
   en: {
-    "on-route": "FOLLOW THE BLUE RAY",
-    "off-route": "OFF ROUTE · RETURN TO THE BLUE RAY",
-    lost: "FAR OFF ROUTE · FOLLOW THE BLUE RAY BACK",
+    "on-route": "TURN THE CHARACTER UNTIL THE RAY POINTS UP · HOLD W",
+    "off-route": "OFF ROUTE · TURN THE CHARACTER BACK TO THE RAY",
+    lost: "FAR OFF ROUTE · TURN THE CHARACTER BACK TO THE RAY",
     waiting: "WAITING FOR SERVER",
     "heading-unknown": "TURN / WALK A FEW STEPS TO FIND DIRECTION",
     arrived: "FRESH WATER REACHED",

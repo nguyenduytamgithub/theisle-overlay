@@ -128,12 +128,20 @@ test("zero-length or non-finite route fails closed", () => {
 });
 
 test("Vietnamese copy prioritizes U-turn and explains recovery states", () => {
+  const onRoute = waterGuideFrame(route(), view());
   const uturn = waterGuideFrame(route(), view({ guidanceCourseDeg: 180 }));
   const offRoute = waterGuideFrame(route(), view({ yCm: 2_000 }));
   const stale = waterGuideFrame(route(), view({ freshness: "waiting" }));
 
+  assert.equal(
+    instructionFor(onRoute, "vi"),
+    "XOAY NHÂN VẬT ĐỂ TIA THẲNG LÊN · GIỮ W",
+  );
   assert.equal(instructionFor(uturn, "vi"), "QUAY ĐẦU");
-  assert.equal(instructionFor(offRoute, "vi"), "LỆCH ĐƯỜNG · QUAY LẠI TIA XANH");
+  assert.equal(
+    instructionFor(offRoute, "vi"),
+    "LỆCH ĐƯỜNG · XOAY NHÂN VẬT VỀ TIA",
+  );
   assert.equal(instructionFor(stale, "vi"), "CHỜ SERVER");
 });
 
