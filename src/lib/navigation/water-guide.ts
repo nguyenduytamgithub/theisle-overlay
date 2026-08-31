@@ -212,11 +212,9 @@ export function waterGuideFrame(
   route: WaterGuideRoute,
   view: WaterGuideView,
 ): WaterGuideFrame {
-  const start: [number, number] = [route.startXCm, route.startYCm];
   const target: [number, number] = [route.targetXCm, route.targetYCm];
   const point: [number, number] = [view.xCm, view.yCm];
-  if (!finite(...start, ...target, ...point)
-      || distanceM(start, target) === 0) {
+  if (!finite(...target, ...point)) {
     return emptyFrame("invalid");
   }
 

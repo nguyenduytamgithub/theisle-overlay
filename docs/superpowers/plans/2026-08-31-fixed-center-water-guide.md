@@ -15,7 +15,7 @@
 - Preserve the running The Isle process; restart only the Overlay during installation.
 - Do not read game memory, inject or hook rendering, capture packets, or control character movement.
 - Keep `Ctrl+Alt+W` and `Ctrl+Alt+N` unchanged.
-- Hide the ray for waiting, stale, arrived, and invalid states.
+- Freeze the ray for waiting/stale coordinates; hide it only for arrived, invalid, deactivated, or missing-route states.
 
 ---
 

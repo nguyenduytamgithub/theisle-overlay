@@ -72,6 +72,18 @@ test("a changed XY point recalculates the direct target bearing", () => {
   assert.equal(next.state, "on-route");
 });
 
+test("an obsolete activation start cannot block a later current-to-target ray", () => {
+  const frame = waterGuideFrame(
+    route({ startXCm: -100_000, startYCm: 0 }),
+    view({ xCm: 0, yCm: 0 }),
+  );
+
+  assert.equal(frame.state, "on-route");
+  assert.equal(frame.rayVisible, true);
+  assert.equal(frame.remainingM, 1_000);
+  assert.deepEqual(frame.steeringTargetCm, [-100_000, 0]);
+});
+
 test("twenty-five-metre arrival hides the ray", () => {
   const frame = waterGuideFrame(route(), view({ xCm: -97_500 }));
 
@@ -180,14 +192,14 @@ test("stale coordinates freeze the ray while missing movement stays fixed and ho
   );
 });
 
-test("zero-length or non-finite route fails closed", () => {
+test("current position at target arrives while a non-finite target fails closed", () => {
   const zero = waterGuideFrame(
     route({ startXCm: 10, startYCm: 20, targetXCm: 10, targetYCm: 20 }),
     view(),
   );
   const invalid = waterGuideFrame(route({ targetXCm: Number.NaN }), view());
 
-  assert.equal(zero.state, "invalid");
+  assert.equal(zero.state, "arrived");
   assert.equal(zero.rayVisible, false);
   assert.equal(invalid.state, "invalid");
   assert.equal(invalid.rayVisible, false);

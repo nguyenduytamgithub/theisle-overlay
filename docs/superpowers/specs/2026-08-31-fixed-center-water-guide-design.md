@@ -7,18 +7,18 @@ The current Water Guide rotates its full-screen ray by the relative destination 
 ## Approved behavior
 
 - The main ray is always vertical and fixed at the horizontal center of the game screen.
-- A separate large maneuver prompt reports `XOAY TRÁI`, `XOAY PHẢI`, or `QUAY ĐẦU`, including the rounded angular error.
-- Alignment locks when the absolute angular error is at most 8 degrees.
-- A locked alignment remains locked until the error exceeds 18 degrees, preventing flicker from noisy server headings.
+- A separate large maneuver prompt reports the correction for the confirmed XY movement course, including the rounded angular error.
+- Alignment locks when the XY-course error is at most 8 degrees.
+- A locked alignment remains locked until the error exceeds 18 degrees, preventing flicker from noisy coordinate movement.
 - While locked, the ray and maneuver prompt turn green and display `ĐÚNG HƯỚNG · GIỮ W`.
-- Waiting, stale, arrived, and invalid states continue to hide the ray and fail closed.
+- Waiting and stale coordinates freeze the ray visibly; arrived and invalid states hide it and fail closed.
 - `Ctrl+Alt+W` continues to select and lock the nearest verified freshwater route; `Ctrl+Alt+N` and Night Vision behavior remain unchanged.
 
 ## Architecture
 
 `src/lib/navigation/water-guide.ts` owns the fixed-ray contract, alignment hysteresis, and localized maneuver text as pure functions. `src/water-guide/main.ts` keeps only the previous alignment bit between paint frames and renders the pure result. `water-guide.html` and `src/water-guide/style.css` provide a general maneuver banner and the green locked state.
 
-The route, target selection, server-position estimator, and EAC-safe boundary do not change. The fixed center ray represents the character's forward direction; the maneuver prompt tells the player how to rotate that forward direction toward the water target.
+Target selection and the EAC-safe boundary do not change. Water Guide does not instantiate the shared server-position estimator: it freezes the latest confirmed XY and derives movement course only from successive confirmed coordinate samples. The fixed center ray is a screen rail, not a claim about head or camera direction.
 
 ## Acceptance
 
