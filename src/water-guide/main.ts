@@ -117,7 +117,6 @@ function paintView(freshness: NavigationFreshness) {
     : instructionFor(frame, language);
 
   rayEl.classList.toggle("hidden", !frame.rayVisible);
-  rayEl.style.setProperty("--ray-angle", "0deg");
   maneuverEl.classList.toggle("hidden", !frame.rayVisible);
   if (frame.rayVisible) {
     maneuverEl.textContent = prompt;

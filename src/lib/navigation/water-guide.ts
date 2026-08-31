@@ -8,7 +8,7 @@ export const WATER_GUIDE = {
   alignEnterDeg: 8,
   alignExitDeg: 18,
   uturnDeg: 110,
-  movementMinCm: 100,
+  movementMinCm: 500,
 } as const;
 
 export interface WaterGuideRoute {
@@ -122,18 +122,18 @@ export function steeringPromptFor(
   const left = frame.relativeDeg < 0;
   if (frame.turn === "uturn") {
     if (language === "vi") {
-      return left ? `↶ QUAY ĐẦU ${degrees}°` : `QUAY ĐẦU ${degrees}° ↷`;
+      return `QUAY ĐẦU ${degrees}°`;
     }
-    return left ? `↶ TURN AROUND ${degrees}°` : `TURN AROUND ${degrees}° ↷`;
+    return `TURN AROUND ${degrees}°`;
   }
   if (language === "vi") {
     return left
-      ? `← QUỸ ĐẠO XY: RẼ TRÁI ${degrees}°`
-      : `QUỸ ĐẠO XY: RẼ PHẢI ${degrees}° →`;
+      ? `QUỸ ĐẠO XY: RẼ TRÁI ${degrees}°`
+      : `QUỸ ĐẠO XY: RẼ PHẢI ${degrees}°`;
   }
   return left
-    ? `← TURN CHARACTER LEFT ${degrees}°`
-    : `TURN CHARACTER RIGHT ${degrees}° →`;
+    ? `TURN CHARACTER LEFT ${degrees}°`
+    : `TURN CHARACTER RIGHT ${degrees}°`;
 }
 
 const stable = (value: number): number =>

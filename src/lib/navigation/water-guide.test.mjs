@@ -146,25 +146,25 @@ test("steering prompt makes the stop point and turn direction explicit", () => {
   );
   assert.equal(
     steeringPromptFor(right, false, "vi"),
-    "QUỸ ĐẠO XY: RẼ PHẢI 35° →",
+    "QUỸ ĐẠO XY: RẼ PHẢI 35°",
   );
   assert.equal(
     steeringPromptFor(left, false, "vi"),
-    "← QUỸ ĐẠO XY: RẼ TRÁI 35°",
+    "QUỸ ĐẠO XY: RẼ TRÁI 35°",
   );
 });
 
-test("movement course is derived only from confirmed XY displacement", () => {
+test("movement course ignores sub-five-metre XY jitter", () => {
   assert.equal(
-    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: 0, yCm: 99 }),
+    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: 0, yCm: 499 }),
     null,
   );
   assert.equal(
-    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: -100, yCm: 0 }),
+    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: -500, yCm: 0 }),
     0,
   );
   assert.equal(
-    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: 0, yCm: 100 }),
+    movementCourseBetween({ xCm: 0, yCm: 0 }, { xCm: 0, yCm: 500 }),
     90,
   );
 });

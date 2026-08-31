@@ -1,5 +1,4 @@
 :root {
-  --ray-angle: 0deg;
   font-family: "Segoe UI", system-ui, sans-serif;
   color: #f8fbff;
   background: transparent;
@@ -84,10 +83,8 @@ body {
   left: 50%;
   width: 44px;
   height: clamp(260px, 62vh, 760px);
-  transform: translateX(-50%) rotate(var(--ray-angle));
-  transform-origin: 50% 100%;
+  transform: translateX(-50%);
   filter: drop-shadow(0 0 7px rgba(37, 199, 255, 0.95));
-  will-change: transform;
 }
 
 .ray-line {
@@ -117,8 +114,7 @@ body {
   background: linear-gradient(180deg, #d8f8ff, #19c6ff 58%, rgba(0, 140, 255, 0.7));
   clip-path: polygon(50% 0, 100% 100%, 72% 100%, 50% 47%, 28% 100%, 0 100%);
   filter: drop-shadow(0 0 5px rgba(0, 197, 255, 0.95));
-  animation: guide-pulse 1.15s ease-in-out infinite;
-  animation-delay: calc(var(--i) * -90ms);
+  opacity: 0.9;
 }
 
 .maneuver {
@@ -172,18 +168,6 @@ body {
 
 .hidden {
   display: none !important;
-}
-
-@keyframes guide-pulse {
-  0%,
-  100% {
-    opacity: 0.56;
-    transform: translateX(-50%) scale(0.9);
-  }
-  50% {
-    opacity: 1;
-    transform: translateX(-50%) scale(1.08);
-  }
 }
 
 @media (max-height: 520px) {
