@@ -417,10 +417,13 @@ fn position_for_activation(
 ) -> Result<(f64, f64), WaterGuideError> {
     let position = position.ok_or(WaterGuideError::WaitingForPosition)?;
     let age_ms = now_ms.saturating_sub(position.confirmed_at_ms);
-    if !position.in_bounds
+    let stale_after_ms = position.stale_after_s * 1_000.0;
+    if !position.stale_after_s.is_finite()
+        || stale_after_ms <= 0.0
+        || !position.in_bounds
         || !position.x_cm.is_finite()
         || !position.y_cm.is_finite()
-        || age_ms > 30_000
+        || age_ms as f64 > stale_after_ms
     {
         return Err(WaterGuideError::WaitingForPosition);
     }
@@ -698,8 +701,14 @@ mod tests {
 
     #[test]
     fn activation_rejects_stale_or_out_of_bounds_position() {
+        let mut invalid_freshness = position(100_000, true);
+        invalid_freshness.stale_after_s = f64::NAN;
         assert_eq!(
-            position_for_activation(Some(&position(69_999, true)), 100_000),
+            position_for_activation(Some(&invalid_freshness), 100_000),
+            Err(WaterGuideError::WaitingForPosition),
+        );
+        assert_eq!(
+            position_for_activation(Some(&position(87_999, true)), 100_000),
             Err(WaterGuideError::WaitingForPosition),
         );
         assert_eq!(
@@ -707,7 +716,7 @@ mod tests {
             Err(WaterGuideError::WaitingForPosition),
         );
         assert_eq!(
-            position_for_activation(Some(&position(90_000, true)), 100_000),
+            position_for_activation(Some(&position(88_000, true)), 100_000),
             Ok((1_000.0, 2_000.0)),
         );
     }

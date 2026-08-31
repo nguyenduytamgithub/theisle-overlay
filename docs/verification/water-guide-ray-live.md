@@ -39,9 +39,10 @@ Hashes identify this installed snapshot; a newer valid map must be revalidated, 
 
 | Gate | Evidence | Result |
 |---|---|---|
-| Full final verification matrix | 46 Node tests; Svelte 0/0; Vite build; targeted rustfmt; Rust 203 passed/9 ignored; clippy `-D warnings`; `git diff --check` | `PASS` |
-| NSIS installer | `D:\CodexBuild\theisle-overlay-water-guide-target\release\bundle\nsis\TheIsle Overlay_1.9.0_x64-setup.exe`; 6,014,530 bytes; SHA-256 `5F5BBAAAD7B5F43EA099031D5FA9D99546F182A1128B96B209F4F49FDFCBA538` | `PASS` |
-| Installed executable | `%LOCALAPPDATA%\TheIsle Overlay\theisle-overlay.exe`; version `1.9.0`; 22,162,944 bytes; SHA-256 `A816E58FCFC1E009E2F80927D4C7BE3CD7C6E2D9591B56B7C0ACE229EC1045E7` | `PASS` |
+| Scoped final verification matrix | 46 Node tests; Svelte 0/0; Vite build; changed-file rustfmt; Rust 203 passed/9 ignored; clippy `-D warnings`; `git diff --check` | `PASS` |
+| Repository-wide rustfmt | The project-wide command exits 1 on unrelated pre-existing files; both changed Rust files pass `rustfmt --check` | `WAIVED TO CHANGED FILES` |
+| NSIS installer | `D:\CodexBuild\theisle-overlay-water-guide-target\release\bundle\nsis\TheIsle Overlay_1.9.0_x64-setup.exe`; 6,013,794 bytes; SHA-256 `9F9FB8DB42AB60C4D585BFBAB6FB3A3D41EBE1423F3BBB198173CF745B82A2C0` | `PASS` |
+| Installed executable | `%LOCALAPPDATA%\TheIsle Overlay\theisle-overlay.exe`; version `1.9.0`; 22,162,944 bytes; SHA-256 `C441CB99976A600507900CC7CEF932ADC643921FEAF5148318CD6A3C35F1F554` | `PASS` |
 | The Isle process preserved while Overlay restarts | The Isle PID `22196` before and after silent current-user installation; only Overlay was stopped/restarted | `PASS` |
 | Locked destination label/pixel/world coordinate | No activated-route log was captured. Independent replay from the real visible position `(Lat 15,740, Long -1,131)` selects `Jungle Pond`, mask `[1289,1234]`, world `[-8650.8,76497.2]` cm, `813.7` m | `PARTIAL` |
 | Independent freshwater check | Pixel `[1289,1234]` alpha `255`, 8/8 water neighbours, exact round-trip `[1289.5,1234.5]`, selected from `17,204` inset boundary candidates | `PASS FOR REPLAY; NOT LIVE ACTIVATION` |
@@ -62,7 +63,7 @@ The live session later produced fresh `source=server` position confirmations, bu
 
 ## Reproduced defect and fix
 
-If `Ctrl+Alt+W` was pressed before a fresh position existed, the request stayed in `waiting_for_position` even when the next valid server/clipboard position arrived. The pipeline now offers every accepted `PositionUpdate` to `lock_waiting_from_position`; the runtime selects exactly once only when the request is waiting, keeps the fixed start/target afterward, and publishes the resulting route. The regression test proves a later position cannot silently retarget an already locked route.
+If `Ctrl+Alt+W` was pressed before a fresh position existed, the request stayed in `waiting_for_position` even when the next valid server/clipboard position arrived. The pipeline now offers every accepted `PositionUpdate` to `lock_waiting_from_position`; the runtime selects exactly once only when the request is waiting, keeps the fixed start/target afterward, and publishes the resulting route. It uses the payload's `staleAfterS` threshold (12 seconds in the current pipeline), rejects malformed freshness values, and accepts the exact boundary without admitting an older sample. Regression tests prove a later position cannot silently retarget an already locked route.
 
 ## Data-selection acceptance rule
 
