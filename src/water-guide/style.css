@@ -30,29 +30,30 @@ body {
 .status-stack {
   position: absolute;
   z-index: 5;
-  top: clamp(48px, 6vh, 78px);
+  bottom: clamp(252px, calc(19vw + 56px), 292px);
   left: 50%;
   display: flex;
-  min-width: min(680px, 76vw);
+  width: clamp(230px, 31vw, 420px);
+  max-width: calc(100vw - 24px);
   box-sizing: border-box;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 9px 22px 10px;
+  gap: 2px;
+  padding: 6px 14px 7px;
   transform: translateX(-50%);
   border: 1px solid rgba(82, 207, 255, 0.72);
-  border-radius: 15px;
-  background: linear-gradient(180deg, rgba(5, 16, 25, 0.88), rgba(2, 9, 15, 0.7));
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5), inset 0 0 16px rgba(0, 174, 255, 0.12);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(5, 16, 25, 0.74), rgba(2, 9, 15, 0.52));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42), inset 0 0 12px rgba(0, 174, 255, 0.1);
   text-align: center;
   text-shadow: 0 2px 4px #000, 0 0 9px #000;
 }
 
 .destination {
-  max-width: 72vw;
+  max-width: 100%;
   overflow: hidden;
   color: #bdefff;
-  font-size: clamp(14px, 1.7vw, 23px);
+  font-size: clamp(12px, 1.15vw, 17px);
   letter-spacing: 0.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -60,27 +61,9 @@ body {
 
 .instruction {
   color: #ffffff;
-  font-size: clamp(12px, 1.35vw, 19px);
+  font-size: clamp(11px, 1vw, 15px);
   font-weight: 900;
   letter-spacing: 0.08em;
-}
-
-.maneuver {
-  position: absolute;
-  z-index: 5;
-  top: clamp(132px, 16vh, 184px);
-  left: 50%;
-  padding: 7px 20px 9px;
-  transform: translateX(-50%);
-  border: 2px solid rgba(255, 221, 80, 0.92);
-  border-radius: 14px;
-  color: #ffe450;
-  background: rgba(34, 24, 0, 0.84);
-  box-shadow: 0 0 24px rgba(255, 202, 20, 0.34);
-  font-size: clamp(20px, 2.35vw, 34px);
-  font-weight: 1000;
-  letter-spacing: 0.075em;
-  text-shadow: 0 2px 4px #000;
 }
 
 .nav-board {
@@ -90,23 +73,23 @@ body {
   z-index: 4;
   bottom: clamp(18px, 3.2vh, 42px);
   left: 50%;
-  width: clamp(252px, 25vw, 330px);
+  width: clamp(190px, 19vw, 230px);
   box-sizing: border-box;
-  padding: 10px 12px 8px;
+  padding: 7px 8px 6px;
   transform: translateX(-50%);
   border: 1px solid rgba(151, 227, 255, 0.62);
-  border-radius: 26px;
-  background: rgba(2, 10, 17, 0.55);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.52), inset 0 0 24px rgba(21, 177, 235, 0.09);
+  border-radius: 20px;
+  background: rgba(2, 10, 17, 0.42);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.44), inset 0 0 18px rgba(21, 177, 235, 0.08);
   backdrop-filter: blur(2px);
 }
 
 .compass-disc {
   position: relative;
-  width: min(100%, 300px);
+  width: min(100%, 210px);
   aspect-ratio: 1;
   margin: 0 auto;
-  border: 3px solid rgba(169, 232, 255, 0.88);
+  border: 2px solid rgba(169, 232, 255, 0.88);
   border-radius: 50%;
   background:
     radial-gradient(circle at center, rgba(12, 35, 49, 0.5) 0 17%, transparent 18%),
@@ -138,7 +121,7 @@ body {
   position: absolute;
   z-index: 3;
   color: #f4fbff;
-  font-size: clamp(11px, 1.05vw, 15px);
+  font-size: clamp(9px, 0.82vw, 12px);
   font-weight: 1000;
   letter-spacing: 0.08em;
   text-shadow: 0 2px 4px #000, 0 0 8px #000;
@@ -182,8 +165,8 @@ body {
 }
 
 .target-needle {
-  left: calc(50% - 9px);
-  width: 18px;
+  left: calc(50% - 7px);
+  width: 14px;
   height: 41%;
   transform: rotate(var(--target-bearing));
   background: linear-gradient(to top, rgba(0, 133, 210, 0.82), #19c6ff 64%, #d8f8ff);
@@ -191,8 +174,8 @@ body {
 }
 
 .movement-needle {
-  left: calc(50% - 6px);
-  width: 12px;
+  left: calc(50% - 5px);
+  width: 10px;
   height: 32%;
   transform: rotate(var(--movement-bearing));
   background: linear-gradient(to top, rgba(223, 239, 247, 0.72), #ffffff 62%, #ffffff);
@@ -204,8 +187,8 @@ body {
   z-index: 4;
   top: 50%;
   left: 50%;
-  width: 19px;
-  height: 19px;
+  width: 15px;
+  height: 15px;
   transform: translate(-50%, -50%);
   border: 3px solid #071018;
   border-radius: 50%;
@@ -216,9 +199,9 @@ body {
 .board-legend {
   display: flex;
   justify-content: center;
-  gap: 18px;
-  padding-top: 7px;
-  font-size: clamp(10px, 0.92vw, 13px);
+  gap: 10px;
+  padding-top: 5px;
+  font-size: clamp(8px, 0.72vw, 10px);
   font-weight: 900;
   letter-spacing: 0.055em;
   text-shadow: 0 2px 4px #000;
@@ -252,28 +235,16 @@ body {
   filter: drop-shadow(0 0 7px rgba(55, 255, 143, 0.98));
 }
 
-.water-guide[data-aligned="true"] .maneuver {
-  border-color: rgba(82, 255, 153, 0.94);
-  color: #79ffae;
-  background: rgba(0, 35, 17, 0.86);
-  box-shadow: 0 0 28px rgba(55, 255, 143, 0.42);
-}
-
 .hidden {
   display: none !important;
 }
 
 @media (max-height: 720px) {
   .status-stack {
-    top: 22px;
-  }
-
-  .maneuver {
-    top: 104px;
+    bottom: 228px;
   }
 
   .nav-board {
-    bottom: 12px;
-    width: 230px;
+    bottom: 8px;
   }
 }

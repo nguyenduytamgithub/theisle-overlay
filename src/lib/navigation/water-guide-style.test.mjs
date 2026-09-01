@@ -97,3 +97,12 @@ test("the shared XY renderer resolves selected waypoints with guarded events", (
     /navigationRevisionBeforeSnapshot === 0\s*&&\s*navigationRevision === navigationRevisionBeforeSnapshot/,
   );
 });
+
+test("the shared XY board stays compact and has only one status pill", () => {
+  assert.match(css, /width:\s*clamp\(190px,\s*19vw,\s*230px\)/);
+  assert.match(css, /\.status-stack\s*\{[\s\S]*?bottom:/);
+  assert.match(css, /\.nav-board\s*\{[\s\S]*?bottom:/);
+  assert.doesNotMatch(html, /id="maneuver"/);
+  assert.doesNotMatch(css, /\.maneuver/);
+  assert.doesNotMatch(main, /maneuverEl/);
+});

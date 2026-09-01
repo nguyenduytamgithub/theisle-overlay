@@ -10,6 +10,7 @@ import {
   NavigationEstimator,
   type NavigationSnapshot,
 } from "../lib/navigation/estimator";
+import { hasSelectedWaypoint, sharedGuideRequested } from "../lib/navigation/shared-guide";
 
 installGlobalErrorLog("hud");
 
@@ -61,6 +62,8 @@ let hasPosition = false;
 let lastFreshness: NavigationSnapshot["freshness"] | null = null;
 let lastSampleSource: "motion" | "server" | "none" | null = null;
 let lastConfirmedForDiagnostics: Pick<PositionUpdate, "xCm" | "yCm"> | null = null;
+let waterGuideRequested = false;
+let waypointGuideRequested = false;
 let waterGuideStateRevision = 0;
 
 function applySettings(settings: Record<string, unknown>) {
@@ -69,6 +72,8 @@ function applySettings(settings: Record<string, unknown>) {
   estimator.setArrivalRadiusM(Number(navigationSettings?.arrival_radius_m ?? 25));
   const opacity = Number(navigationSettings?.hud_opacity ?? 0.92);
   hud.style.opacity = String(Math.max(0.35, Math.min(1, opacity)));
+  waypointGuideRequested = hasSelectedWaypoint(settings);
+  applyGuideVisibility();
 }
 
 const fmtDistance = (metres: number) =>
@@ -85,11 +90,17 @@ function paintNow() {
   paint(Date.now());
 }
 
-function setWaterGuideRequested(requested: boolean) {
+function applyGuideVisibility() {
   // The normal HUD contains heading-driven arrows. They are useful normally,
-  // but contradict the XY-only Water Guide and visibly move with the mouse.
-  hud.hidden = requested;
-  if (!requested) paintNow();
+  // but contradict the shared north-up XY board and visibly move with the mouse.
+  const hidden = sharedGuideRequested(waterGuideRequested, waypointGuideRequested);
+  hud.hidden = hidden;
+  if (!hidden) paintNow();
+}
+
+function setWaterGuideRequested(requested: boolean) {
+  waterGuideRequested = requested;
+  applyGuideVisibility();
 }
 
 function paintCourse(view: NavigationSnapshot) {

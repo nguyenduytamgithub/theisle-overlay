@@ -52,7 +52,6 @@ const instructionEl = document.getElementById("instruction")!;
 const boardEl = document.getElementById("board")!;
 const targetNeedleEl = document.getElementById("target-needle")!;
 const movementNeedleEl = document.getElementById("movement-needle")!;
-const maneuverEl = document.getElementById("maneuver")!;
 
 let waterState: WaterGuideSnapshot = { requested: false, route: null, errorKey: null };
 let language: WaterGuideLanguage = "vi";
@@ -133,7 +132,6 @@ function hideBoard() {
   boardEl.classList.add("hidden");
   targetNeedleEl.classList.add("hidden");
   movementNeedleEl.classList.add("hidden");
-  maneuverEl.classList.add("hidden");
 }
 
 function paintError(errorKey: string | null, source: GuideSource) {
@@ -190,10 +188,6 @@ function paintView(
       "--movement-bearing",
       `${needles.movementBearingDeg}deg`,
     );
-  }
-  maneuverEl.classList.toggle("hidden", !needles.targetVisible);
-  if (needles.targetVisible) {
-    maneuverEl.textContent = prompt;
   }
 }
 

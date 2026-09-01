@@ -7,6 +7,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { error } from "@tauri-apps/plugin-log";
 import { installGlobalErrorLog } from "../lib/errlog";
 import { NavigationEstimator } from "../lib/navigation/estimator";
+import { hasSelectedWaypoint, sharedGuideRequested } from "../lib/navigation/shared-guide";
 import { ANIMAL_GLYPHS, waypointGlyph } from "../lib/theme";
 import {
   PANEL_H,
@@ -125,6 +126,8 @@ let confirmedPosition: PositionUpdate | null = null;
 let estimator = new NavigationEstimator();
 let predictionTimer: number | null = null;
 let waterGuideRequested = false;
+let waypointGuideRequested = false;
+let sharedGuideActive = false;
 let waterGuideStateRevision = 0;
 
 const headingKey = (bearingDeg: number): string => {
@@ -134,7 +137,7 @@ const headingKey = (bearingDeg: number): string => {
 
 function paintPredictedPosition(nowMs: number) {
   predictionTimer = null;
-  if (waterGuideRequested) return;
+  if (sharedGuideActive) return;
   if (!confirmedPosition) return;
   const shown = estimator.snapshot(nowMs);
   if (!shown) return;
@@ -180,6 +183,7 @@ function acceptConfirmedPosition(position: PositionUpdate) {
 
 function applySettings(s: Settings) {
   settings = s;
+  waypointGuideRequested = hasSelectedWaypoint(s);
   estimator.setArrivalRadiusM(Number(s.navigation?.arrival_radius_m ?? 25));
   const mm = s.minimap ?? {};
   state.sizePx = Number(mm.size_px ?? 260);
@@ -197,6 +201,7 @@ function applySettings(s: Settings) {
   state.headingUnknown = STRINGS[lang].unknown;
   refreshHeadingLabel(lang);
   refreshPoiFilter();
+  applyGuideVisibility();
 }
 
 /** Window height for the stats strip is Rust's job (minimap.rs panel_h reads
@@ -255,20 +260,26 @@ function flattenPois() {
 }
 
 const draw = () => {
-  if (!waterGuideRequested) render(canvas, state);
+  if (!sharedGuideActive) render(canvas, state);
 };
 
-function setWaterGuideRequested(requested: boolean) {
-  waterGuideRequested = requested;
-  canvas.hidden = requested;
-  canvas.style.display = requested ? "none" : "block";
-  if (requested) {
+function applyGuideVisibility() {
+  const hidden = sharedGuideRequested(waterGuideRequested, waypointGuideRequested);
+  sharedGuideActive = hidden;
+  canvas.hidden = hidden;
+  canvas.style.display = hidden ? "none" : "block";
+  if (hidden) {
     if (predictionTimer !== null) window.clearTimeout(predictionTimer);
     predictionTimer = null;
     return;
   }
   paintPredictedNow();
   draw();
+}
+
+function setWaterGuideRequested(requested: boolean) {
+  waterGuideRequested = requested;
+  applyGuideVisibility();
 }
 
 let imageWidthPx = 7800;
