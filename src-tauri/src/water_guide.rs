@@ -125,6 +125,16 @@ impl WaterGuideRuntime {
         }
     }
 
+    fn deactivate(&mut self) -> Option<WaterGuideSnapshot> {
+        if !self.requested {
+            return None;
+        }
+        self.requested = false;
+        self.route = None;
+        self.error_key = None;
+        Some(self.snapshot())
+    }
+
     fn toggle_with_position<F>(
         &mut self,
         position: Option<(f64, f64)>,
@@ -438,6 +448,26 @@ fn toggle_runtime(state: &AppState) -> WaterGuideSnapshot {
     runtime.toggle_with_position(position, select_freshwater_target)
 }
 
+fn clear_waypoint_if_activating(app: &AppHandle, state: &AppState) {
+    if state.water_guide.lock_safe().requested {
+        return;
+    }
+    let has_waypoint = settings::get_path(
+        &state.settings.lock_safe(),
+        &["navigation", "target_waypoint_id"],
+    )
+    .and_then(Value::as_str)
+    .is_some_and(|id| !id.trim().is_empty());
+    if !has_waypoint {
+        return;
+    }
+    crate::commands::apply_settings_patch(
+        app,
+        serde_json::json!({"navigation": {"target_waypoint_id": null}}),
+    );
+    events::emit_all(app, events::NAVIGATION_CHANGED, ());
+}
+
 fn publish(app: &AppHandle, snapshot: WaterGuideSnapshot) -> WaterGuideSnapshot {
     if let Some(route) = &snapshot.route {
         log::info!(
@@ -468,12 +498,22 @@ pub fn get_water_guide_state(state: State<'_, AppState>) -> WaterGuideSnapshot {
 
 #[tauri::command]
 pub fn toggle_water_guide(app: AppHandle, state: State<'_, AppState>) -> WaterGuideSnapshot {
+    clear_waypoint_if_activating(&app, &state);
     publish(&app, toggle_runtime(&state))
 }
 
 pub fn toggle_from_app(app: &AppHandle) -> WaterGuideSnapshot {
     let state = app.state::<AppState>();
+    clear_waypoint_if_activating(app, &state);
     publish(app, toggle_runtime(&state))
+}
+
+pub fn deactivate_for_waypoint(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let stopped = state.water_guide.lock_safe().deactivate();
+    if let Some(snapshot) = stopped {
+        publish(app, snapshot);
+    }
 }
 
 pub fn lock_waiting_from_position(
@@ -657,6 +697,27 @@ mod tests {
         let second = runtime.snapshot().route.unwrap();
         assert_eq!((second.start_x_cm, second.start_y_cm), (5_000.0, 6_000.0));
         assert_eq!((second.target_x_cm, second.target_y_cm), (9_000.0, 8_000.0));
+    }
+
+    #[test]
+    fn waypoint_activation_explicitly_deactivates_freshwater_guidance() {
+        let mut runtime = WaterGuideRuntime::default();
+        runtime.toggle_with_position(Some((1_000.0, 2_000.0)), |_, _, _| {
+            Ok(target("Lake", 9_000.0, 8_000.0))
+        });
+
+        let stopped = runtime
+            .deactivate()
+            .expect("an active freshwater request should publish one stopped state");
+        assert_eq!(
+            stopped,
+            WaterGuideSnapshot {
+                requested: false,
+                route: None,
+                error_key: None,
+            }
+        );
+        assert_eq!(runtime.deactivate(), None, "deactivation must be idempotent");
     }
 
     #[test]

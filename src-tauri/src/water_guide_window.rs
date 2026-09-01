@@ -116,17 +116,25 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
 #[derive(Clone, Copy, PartialEq)]
 struct Snapshot {
-    requested: bool,
+    water_requested: bool,
+    waypoint_requested: bool,
     game_rect_ms: u64,
     topmost_ms: u64,
 }
 
 fn snapshot(app: &AppHandle) -> Snapshot {
     let state = app.state::<AppState>();
-    let requested = state.water_guide.lock_safe().snapshot().requested;
+    let water_requested = state.water_guide.lock_safe().snapshot().requested;
     let settings = state.settings.lock_safe();
+    let waypoint_requested = settings::get_path(
+        &settings,
+        &["navigation", "target_waypoint_id"],
+    )
+    .and_then(serde_json::Value::as_str)
+    .is_some_and(|id| !id.trim().is_empty());
     Snapshot {
-        requested,
+        water_requested,
+        waypoint_requested,
         game_rect_ms: settings::get_f64(&settings, &["poll", "game_rect_ms"], 1000.0) as u64,
         topmost_ms: settings::get_f64(&settings, &["poll", "topmost_ms"], 2000.0) as u64,
     }
@@ -161,8 +169,13 @@ impl GamePresence {
     }
 }
 
-fn should_show(requested: bool, game_active: bool, main_in_front: bool) -> bool {
-    requested && game_active && !main_in_front
+fn should_show(
+    water_requested: bool,
+    waypoint_requested: bool,
+    game_active: bool,
+    main_in_front: bool,
+) -> bool {
+    (water_requested || waypoint_requested) && game_active && !main_in_front
 }
 
 fn spawn_supervisor(app: AppHandle) {
@@ -212,7 +225,12 @@ fn spawn_supervisor(app: AppHandle) {
                 unfocused_ticks = unfocused_ticks.saturating_add(1);
             }
             let game_active = game_present && unfocused_ticks < 2;
-            let effective = should_show(current.requested, game_active, vis::is_foreground("main"));
+            let effective = should_show(
+                current.water_requested,
+                current.waypoint_requested,
+                game_active,
+                vis::is_foreground("main"),
+            );
 
             if effective != effective_previous {
                 if effective {
@@ -238,7 +256,9 @@ fn spawn_supervisor(app: AppHandle) {
                 }
             }
 
-            if current.requested != previous.requested {
+            if current.water_requested != previous.water_requested
+                || current.waypoint_requested != previous.waypoint_requested
+            {
                 last_rect = None;
             }
             previous = current;
@@ -279,11 +299,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn water_guide_only_shows_for_a_requested_foreground_game() {
-        assert!(should_show(true, true, false));
-        assert!(!should_show(false, true, false));
-        assert!(!should_show(true, false, false));
-        assert!(!should_show(true, true, true));
+    fn shared_xy_board_shows_for_water_or_waypoint_in_a_foreground_game() {
+        assert!(should_show(true, false, true, false));
+        assert!(should_show(false, true, true, false));
+        assert!(!should_show(false, false, true, false));
+        assert!(!should_show(true, true, false, false));
+        assert!(!should_show(true, true, true, true));
     }
 
     #[test]

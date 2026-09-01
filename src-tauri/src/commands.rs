@@ -1108,6 +1108,9 @@ pub fn set_navigation_target(
     }) {
         return false;
     }
+    if id.is_some() {
+        crate::water_guide::deactivate_for_waypoint(&app);
+    }
     apply_settings_patch(
         &app,
         serde_json::json!({"navigation": {"target_waypoint_id": id}}),
