@@ -498,14 +498,18 @@ pub fn get_water_guide_state(state: State<'_, AppState>) -> WaterGuideSnapshot {
 
 #[tauri::command]
 pub fn toggle_water_guide(app: AppHandle, state: State<'_, AppState>) -> WaterGuideSnapshot {
-    clear_waypoint_if_activating(&app, &state);
-    publish(&app, toggle_runtime(&state))
+    state.guide_destination.run(|| {
+        clear_waypoint_if_activating(&app, &state);
+        publish(&app, toggle_runtime(&state))
+    })
 }
 
 pub fn toggle_from_app(app: &AppHandle) -> WaterGuideSnapshot {
     let state = app.state::<AppState>();
-    clear_waypoint_if_activating(app, &state);
-    publish(app, toggle_runtime(&state))
+    state.guide_destination.run(|| {
+        clear_waypoint_if_activating(app, &state);
+        publish(app, toggle_runtime(&state))
+    })
 }
 
 pub fn deactivate_for_waypoint(app: &AppHandle) {

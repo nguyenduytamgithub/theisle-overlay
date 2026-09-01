@@ -124,20 +124,22 @@ struct Snapshot {
 
 fn snapshot(app: &AppHandle) -> Snapshot {
     let state = app.state::<AppState>();
-    let water_requested = state.water_guide.lock_safe().snapshot().requested;
-    let settings = state.settings.lock_safe();
-    let waypoint_requested = settings::get_path(
-        &settings,
-        &["navigation", "target_waypoint_id"],
-    )
-    .and_then(serde_json::Value::as_str)
-    .is_some_and(|id| !id.trim().is_empty());
-    Snapshot {
-        water_requested,
-        waypoint_requested,
-        game_rect_ms: settings::get_f64(&settings, &["poll", "game_rect_ms"], 1000.0) as u64,
-        topmost_ms: settings::get_f64(&settings, &["poll", "topmost_ms"], 2000.0) as u64,
-    }
+    state.guide_destination.run(|| {
+        let water_requested = state.water_guide.lock_safe().snapshot().requested;
+        let settings = state.settings.lock_safe();
+        let waypoint_requested = settings::get_path(
+            &settings,
+            &["navigation", "target_waypoint_id"],
+        )
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|id| !id.trim().is_empty());
+        Snapshot {
+            water_requested,
+            waypoint_requested,
+            game_rect_ms: settings::get_f64(&settings, &["poll", "game_rect_ms"], 1000.0) as u64,
+            topmost_ms: settings::get_f64(&settings, &["poll", "topmost_ms"], 2000.0) as u64,
+        }
+    })
 }
 
 struct GamePresence {

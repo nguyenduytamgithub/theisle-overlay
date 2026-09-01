@@ -27,6 +27,18 @@ impl<T> LockExt<T> for std::sync::Mutex<T> {
     }
 }
 
+#[derive(Default)]
+pub struct GuideDestinationCoordinator {
+    gate: Mutex<()>,
+}
+
+impl GuideDestinationCoordinator {
+    pub fn run<R>(&self, operation: impl FnOnce() -> R) -> R {
+        let _guard = self.gate.lock_safe();
+        operation()
+    }
+}
+
 pub struct AppState {
     pub hotkeys: HotkeyManager,
     pub settings: Mutex<Value>,
@@ -42,6 +54,7 @@ pub struct AppState {
     /// Last `get_pois_render` result; see the cache's own doc for the key.
     pub pois_cache: Mutex<Option<crate::commands::PoisCache>>,
     pub water_guide: Mutex<crate::water_guide::WaterGuideRuntime>,
+    pub guide_destination: GuideDestinationCoordinator,
     started: Instant,
     save_debouncer: SettingsDebouncer,
 }
@@ -81,6 +94,7 @@ impl AppState {
             previous_trail_path: Mutex::new(store::latest_trail_path()),
             pois_cache: Mutex::new(None),
             water_guide: Mutex::new(crate::water_guide::WaterGuideRuntime::default()),
+            guide_destination: GuideDestinationCoordinator::default(),
             settings: Mutex::new(settings),
             started: Instant::now(),
             save_debouncer: SettingsDebouncer::new(),
@@ -153,5 +167,52 @@ impl SettingsDebouncer {
 
     fn request(&self, snapshot: Value) {
         let _ = self.tx.send(snapshot);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::sync::{Arc, Barrier};
+    use std::time::Duration;
+
+    use super::GuideDestinationCoordinator;
+
+    #[test]
+    fn destination_switches_do_not_interleave() {
+        let coordinator = Arc::new(GuideDestinationCoordinator::default());
+        let first_entered = Arc::new(Barrier::new(2));
+        let release_first = Arc::new(Barrier::new(2));
+        let second_started = Arc::new(Barrier::new(2));
+        let (tx, rx) = mpsc::channel();
+
+        let first = {
+            let coordinator = Arc::clone(&coordinator);
+            let first_entered = Arc::clone(&first_entered);
+            let release_first = Arc::clone(&release_first);
+            std::thread::spawn(move || {
+                coordinator.run(|| {
+                    first_entered.wait();
+                    release_first.wait();
+                });
+            })
+        };
+        first_entered.wait();
+
+        let second = {
+            let coordinator = Arc::clone(&coordinator);
+            let second_started = Arc::clone(&second_started);
+            std::thread::spawn(move || {
+                second_started.wait();
+                coordinator.run(|| tx.send(()).unwrap());
+            })
+        };
+        second_started.wait();
+        assert!(rx.recv_timeout(Duration::from_millis(50)).is_err());
+
+        release_first.wait();
+        rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        first.join().unwrap();
+        second.join().unwrap();
     }
 }
