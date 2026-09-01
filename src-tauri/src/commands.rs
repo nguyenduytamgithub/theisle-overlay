@@ -1003,6 +1003,67 @@ mod tests {
 
         assert!(navigation_target_for(Some("deleted"), &[], &tracker, cal()).is_none());
     }
+
+    #[test]
+    fn persisted_navigation_selection_distinguishes_valid_and_orphaned_ids() {
+        let waypoints = vec![waypoint("camp", "Trại", 1_000.0, 2_000.0)];
+
+        assert_eq!(
+            navigation_selection(
+                &json!({"navigation": {"target_waypoint_id": "camp"}}),
+                &waypoints,
+            ),
+            NavigationSelection::Valid("camp".to_string()),
+        );
+        assert_eq!(
+            navigation_selection(
+                &json!({"navigation": {"target_waypoint_id": "deleted"}}),
+                &waypoints,
+            ),
+            NavigationSelection::Orphaned("deleted".to_string()),
+        );
+        assert_eq!(
+            navigation_selection(&json!({"navigation": {"target_waypoint_id": "  "}}), &waypoints),
+            NavigationSelection::None,
+        );
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NavigationSelection {
+    None,
+    Valid(String),
+    Orphaned(String),
+}
+
+pub(crate) fn navigation_selection(
+    settings_value: &Value,
+    waypoints: &[Waypoint],
+) -> NavigationSelection {
+    let Some(id) = settings::get_path(
+        settings_value,
+        &["navigation", "target_waypoint_id"],
+    )
+    .and_then(Value::as_str)
+    .map(str::trim)
+    .filter(|id| !id.is_empty())
+    else {
+        return NavigationSelection::None;
+    };
+    if waypoints.iter().any(|waypoint| waypoint.id == id) {
+        NavigationSelection::Valid(id.to_string())
+    } else {
+        NavigationSelection::Orphaned(id.to_string())
+    }
+}
+
+pub(crate) fn has_valid_navigation_target(state: &AppState) -> bool {
+    let settings_value = state.settings.lock_safe();
+    let waypoints = state.waypoints.lock_safe();
+    matches!(
+        navigation_selection(&settings_value, &waypoints),
+        NavigationSelection::Valid(_)
+    )
 }
 
 const DEFAULT_ARRIVAL_RADIUS_M: f64 = 25.0;
@@ -1067,30 +1128,44 @@ fn navigation_target_for(
 }
 
 #[tauri::command]
-pub fn active_navigation(state: State<AppState>) -> Option<NavigationTarget> {
-    let cal = state.active_calibration();
-    let (target_id, arrival_radius_m) = {
-        let settings = state.settings.lock_safe();
-        (
-            settings::get_path(&settings, &["navigation", "target_waypoint_id"])
-                .and_then(Value::as_str)
-                .map(str::to_owned),
-            settings::get_f64(
-                &settings,
-                &["navigation", "arrival_radius_m"],
-                DEFAULT_ARRIVAL_RADIUS_M,
-            ),
+pub fn active_navigation(app: AppHandle, state: State<AppState>) -> Option<NavigationTarget> {
+    state.guide_destination.run(|| {
+        let (selection, arrival_radius_m) = {
+            let settings_value = state.settings.lock_safe();
+            let waypoints = state.waypoints.lock_safe();
+            (
+                navigation_selection(&settings_value, &waypoints),
+                settings::get_f64(
+                    &settings_value,
+                    &["navigation", "arrival_radius_m"],
+                    DEFAULT_ARRIVAL_RADIUS_M,
+                ),
+            )
+        };
+        let target_id = match selection {
+            NavigationSelection::None => return None,
+            NavigationSelection::Valid(id) => id,
+            NavigationSelection::Orphaned(id) => {
+                log::warn!("clearing orphaned navigation target {id:?}");
+                apply_settings_patch(
+                    &app,
+                    serde_json::json!({"navigation": {"target_waypoint_id": null}}),
+                );
+                crate::events::emit_all(&app, NAVIGATION_CHANGED, ());
+                return None;
+            }
+        };
+        let cal = state.active_calibration();
+        let waypoints = state.waypoints.lock_safe();
+        let tracker = state.tracker.lock_safe();
+        navigation_target_for_radius(
+            Some(&target_id),
+            &waypoints,
+            &tracker,
+            cal,
+            arrival_radius_m,
         )
-    };
-    let waypoints = state.waypoints.lock_safe();
-    let tracker = state.tracker.lock_safe();
-    navigation_target_for_radius(
-        target_id.as_deref(),
-        &waypoints,
-        &tracker,
-        cal,
-        arrival_radius_m,
-    )
+    })
 }
 
 #[tauri::command]

@@ -126,13 +126,8 @@ fn snapshot(app: &AppHandle) -> Snapshot {
     let state = app.state::<AppState>();
     state.guide_destination.run(|| {
         let water_requested = state.water_guide.lock_safe().snapshot().requested;
+        let waypoint_requested = crate::commands::has_valid_navigation_target(&state);
         let settings = state.settings.lock_safe();
-        let waypoint_requested = settings::get_path(
-            &settings,
-            &["navigation", "target_waypoint_id"],
-        )
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|id| !id.trim().is_empty());
         Snapshot {
             water_requested,
             waypoint_requested,
