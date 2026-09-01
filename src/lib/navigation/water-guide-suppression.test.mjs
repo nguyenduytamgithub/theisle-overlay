@@ -30,3 +30,22 @@ test("the shared XY board suppresses the rotating minimap for water or a waypoin
   assert.match(minimap, /waterGuideStateRevision \+= 1/);
   assert.match(minimap, /waterGuideStateRevision === revisionBeforeSnapshot/);
 });
+
+test("HUD and minimap register settings listeners before guarded snapshots", () => {
+  const hud = source("../../hud/main.ts");
+  const minimap = source("../../minimap/main.ts");
+
+  for (const [label, appSource] of [["HUD", hud], ["minimap", minimap]]) {
+    const listener = appSource.indexOf('"settings://changed"');
+    const snapshot = appSource.indexOf('"get_settings"');
+    assert.ok(listener >= 0, `${label} settings listener is missing`);
+    assert.ok(snapshot >= 0, `${label} settings snapshot is missing`);
+    assert.ok(listener < snapshot, `${label} listens too late for settings changes`);
+    assert.match(appSource, /let settingsRevision = 0/);
+    assert.match(appSource, /settingsRevision \+= 1/);
+    assert.match(
+      appSource,
+      /settingsRevisionBeforeSnapshot === 0\s*&&\s*settingsRevision === settingsRevisionBeforeSnapshot/,
+    );
+  }
+});

@@ -65,6 +65,7 @@ let lastConfirmedForDiagnostics: Pick<PositionUpdate, "xCm" | "yCm"> | null = nu
 let waterGuideRequested = false;
 let waypointGuideRequested = false;
 let waterGuideStateRevision = 0;
+let settingsRevision = 0;
 
 function applySettings(settings: Record<string, unknown>) {
   language = settings.language === "en" ? "en" : "vi";
@@ -210,8 +211,20 @@ async function refreshNavigation() {
 }
 
 async function init() {
+  await listen<Record<string, unknown>>("settings://changed", (event) => {
+    settingsRevision += 1;
+    applySettings(event.payload);
+    paintNow();
+  });
+
+  const settingsRevisionBeforeSnapshot = settingsRevision;
   const settings = await invoke<Record<string, unknown>>("get_settings");
-  applySettings(settings);
+  if (
+    settingsRevisionBeforeSnapshot === 0
+    && settingsRevision === settingsRevisionBeforeSnapshot
+  ) {
+    applySettings(settings);
+  }
 
   await listen<PositionUpdate>("position://update", (event) => {
     acceptPosition(event.payload);
@@ -227,10 +240,6 @@ async function init() {
   });
   await listen("navigation://changed", () => void refreshNavigation());
   await listen("waypoints://changed", () => void refreshNavigation());
-  await listen<Record<string, unknown>>("settings://changed", (event) => {
-    applySettings(event.payload);
-    paintNow();
-  });
   await listen<WaterGuideSnapshot>("water-guide://changed", (event) => {
     waterGuideStateRevision += 1;
     setWaterGuideRequested(event.payload.requested);

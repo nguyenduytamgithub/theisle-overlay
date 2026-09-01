@@ -129,6 +129,8 @@ let waterGuideRequested = false;
 let waypointGuideRequested = false;
 let sharedGuideActive = false;
 let waterGuideStateRevision = 0;
+let settingsRevision = 0;
+let mapInfoReady = false;
 
 const headingKey = (bearingDeg: number): string => {
   const keys = ["dir.N", "dir.NE", "dir.E", "dir.SE", "dir.S", "dir.SW", "dir.W", "dir.NW"];
@@ -469,10 +471,29 @@ async function reloadMapSource() {
 }
 
 async function init() {
-  settings = await invoke<Settings>("get_settings");
-  applySettings(settings);
+  await listen<Settings>("settings://changed", (e) => {
+    settingsRevision += 1;
+    applySettings(e.payload);
+    if (!mapInfoReady) return;
+    const src = (e.payload.map?.basemap as string) ?? "vulnona";
+    if (src !== currentSource) {
+      void reloadMapSource();
+      return; // reloadMapSource draws when the new frame is ready
+    }
+    draw();
+  });
+
+  const settingsRevisionBeforeSnapshot = settingsRevision;
+  const initialSettings = await invoke<Settings>("get_settings");
+  if (
+    settingsRevisionBeforeSnapshot === 0
+    && settingsRevision === settingsRevisionBeforeSnapshot
+  ) {
+    applySettings(initialSettings);
+  }
 
   applyMapInfo(await invoke<MapInfoPayload>("get_map_info"));
+  mapInfoReady = true;
 
   await listen<PositionUpdate>("position://update", (e) => {
     const p = e.payload;
@@ -487,15 +508,6 @@ async function init() {
   await listen("navigation://changed", () => void refreshNavigation().then(draw));
   await listen<{ segmentsPx: [number, number][][] }>("trail://changed", (e) => {
     state.trailPx = e.payload.segmentsPx;
-    draw();
-  });
-  await listen<Settings>("settings://changed", (e) => {
-    applySettings(e.payload);
-    const src = (e.payload.map?.basemap as string) ?? "vulnona";
-    if (src !== currentSource) {
-      void reloadMapSource();
-      return; // reloadMapSource draws when the new frame is ready
-    }
     draw();
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", (e) => {
