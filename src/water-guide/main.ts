@@ -12,6 +12,7 @@ import {
   movementCourseBetween,
   nextAlignmentLocked,
   steeringPromptFor,
+  waypointGuideRoute,
   waterGuideBoardNeedles,
   waterGuideFrame,
   type WaterGuideLanguage,
@@ -33,6 +34,17 @@ interface WaterGuideSnapshot {
   errorKey: string | null;
 }
 
+interface NavigationTarget {
+  id: string;
+  name: string;
+  xCm: number;
+  yCm: number;
+  distanceM: number;
+  arrived: boolean;
+}
+
+type GuideSource = "water" | "waypoint";
+
 const FRAME_MS = 1_000 / 30;
 const root = document.getElementById("water-guide")!;
 const destinationEl = document.getElementById("destination")!;
@@ -42,7 +54,7 @@ const targetNeedleEl = document.getElementById("target-needle")!;
 const movementNeedleEl = document.getElementById("movement-needle")!;
 const maneuverEl = document.getElementById("maneuver")!;
 
-let state: WaterGuideSnapshot = { requested: false, route: null, errorKey: null };
+let waterState: WaterGuideSnapshot = { requested: false, route: null, errorKey: null };
 let language: WaterGuideLanguage = "vi";
 let paintTimer: number | null = null;
 let alignmentLocked = false;
@@ -52,10 +64,17 @@ let movementCourseDeg: number | null = null;
 let positionQualityValid = true;
 let waterGuideStateRevision = 0;
 let positionRevision = 0;
+let settingsRevision = 0;
+let navigationRevision = 0;
+let selectedWaypointId: string | null = null;
+let navigationTarget: NavigationTarget | null = null;
+let waypointRoute: WaterGuideRoute | null = null;
+let waypointRouteId: string | null = null;
 
 const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   vi: {
     waiting_for_position: "CHỜ VỊ TRÍ · CHỜ SERVER CẬP NHẬT",
+    waypoint_waiting: "ĐIỂM GHIM · CHỜ VỊ TRÍ",
     missing_freshwater: "THIẾU DỮ LIỆU NƯỚC NGỌT",
     invalid_freshwater: "DỮ LIỆU NƯỚC NGỌT KHÔNG HỢP LỆ",
     unsupported_map: "BẢN ĐỒ CHƯA ĐƯỢC HỖ TRỢ",
@@ -65,6 +84,7 @@ const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   },
   en: {
     waiting_for_position: "WAITING FOR A FRESH SERVER POSITION",
+    waypoint_waiting: "WAYPOINT · WAITING FOR POSITION",
     missing_freshwater: "FRESHWATER DATA IS MISSING",
     invalid_freshwater: "FRESHWATER DATA IS INVALID",
     unsupported_map: "THIS MAP VERSION IS NOT SUPPORTED",
@@ -74,9 +94,37 @@ const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   },
 };
 
-function applySettings(settings: Record<string, unknown>) {
+function applySettings(settings: Record<string, unknown>): boolean {
   language = settings.language === "en" ? "en" : "vi";
   document.documentElement.lang = language;
+  const navigation = settings.navigation as Record<string, unknown> | undefined;
+  const rawWaypointId = navigation?.target_waypoint_id;
+  const nextWaypointId = typeof rawWaypointId === "string" && rawWaypointId.trim()
+    ? rawWaypointId
+    : null;
+  const waypointChanged = nextWaypointId !== selectedWaypointId;
+  if (waypointChanged) {
+    selectedWaypointId = nextWaypointId;
+    navigationTarget = null;
+    waypointRoute = null;
+    waypointRouteId = null;
+    resetMovementCourse();
+  }
+  return waypointChanged;
+}
+
+function activeGuide(): {
+  source: GuideSource;
+  route: WaterGuideRoute | null;
+  errorKey: string | null;
+} | null {
+  if (waterState.requested) {
+    return { source: "water", route: waterState.route, errorKey: waterState.errorKey };
+  }
+  if (selectedWaypointId) {
+    return { source: "waypoint", route: waypointRoute, errorKey: "waypoint_waiting" };
+  }
+  return null;
 }
 
 function hideBoard() {
@@ -88,26 +136,27 @@ function hideBoard() {
   maneuverEl.classList.add("hidden");
 }
 
-function paintError(errorKey: string | null) {
+function paintError(errorKey: string | null, source: GuideSource) {
   hideBoard();
   root.dataset.state = "error";
-  destinationEl.textContent = "WATER GUIDE";
+  destinationEl.textContent = source === "waypoint" ? "ĐIỂM GHIM" : "WATER GUIDE";
   instructionEl.textContent = ERROR_COPY[language][errorKey ?? ""]
     ?? (language === "vi"
       ? "KHÔNG XÁC MINH ĐƯỢC NƯỚC UỐNG"
       : "DRINKABLE WATER COULD NOT BE VERIFIED");
 }
 
-function paintView(freshness: NavigationFreshness) {
-  const route = state.route;
-  if (!route || !latestConfirmedPosition) {
-    paintError(state.errorKey);
-    return;
-  }
+function paintView(
+  route: WaterGuideRoute,
+  source: GuideSource,
+  freshness: NavigationFreshness,
+) {
+  const position = latestConfirmedPosition;
+  if (!position) return;
 
   const frame = waterGuideFrame(route, {
-    xCm: latestConfirmedPosition.xCm,
-    yCm: latestConfirmedPosition.yCm,
+    xCm: position.xCm,
+    yCm: position.yCm,
     movementCourseDeg,
     freshness,
   });
@@ -118,7 +167,10 @@ function paintView(freshness: NavigationFreshness) {
   root.dataset.state = frame.state;
   root.dataset.turn = frame.turn;
   root.dataset.aligned = String(alignmentLocked);
-  destinationEl.textContent = (language === "vi" ? "NƯỚC: " : "WATER: ")
+  const prefix = source === "waypoint"
+    ? (language === "vi" ? "ĐIỂM: " : "WAYPOINT: ")
+    : (language === "vi" ? "NƯỚC: " : "WATER: ");
+  destinationEl.textContent = prefix
     + route.label + " · " + Math.round(frame.remainingM) + " m";
   instructionEl.textContent = alignmentLocked
     ? prompt
@@ -147,17 +199,30 @@ function paintView(freshness: NavigationFreshness) {
 
 function paint() {
   paintTimer = null;
-  root.classList.toggle("requested", state.requested);
-  if (!state.requested) {
+  const guide = activeGuide();
+  root.classList.toggle("requested", guide !== null);
+  if (!guide) {
     hideBoard();
     return;
   }
-  if (!state.route) {
-    paintError(state.errorKey);
+  if (!guide.route) {
+    paintError(guide.errorKey, guide.source);
     return;
   }
   if (!latestConfirmedPosition) {
-    paintError("waiting_for_position");
+    paintError(
+      guide.source === "waypoint" ? "waypoint_waiting" : "waiting_for_position",
+      guide.source,
+    );
+    schedulePaint();
+    return;
+  }
+  if (guide.source === "waypoint" && navigationTarget?.arrived) {
+    hideBoard();
+    root.dataset.state = "arrived";
+    destinationEl.textContent = (language === "vi" ? "ĐIỂM: " : "WAYPOINT: ")
+      + navigationTarget.name + " · " + Math.round(navigationTarget.distanceM) + " m";
+    instructionEl.textContent = language === "vi" ? "ĐÃ TỚI ĐIỂM GHIM" : "WAYPOINT REACHED";
     schedulePaint();
     return;
   }
@@ -165,7 +230,11 @@ function paint() {
     0,
     (Date.now() - latestConfirmedPosition.confirmedAtMs) / 1_000,
   );
-  paintView(positionQualityValid ? freshnessForAge(ageS) : "waiting");
+  paintView(
+    guide.route,
+    guide.source,
+    positionQualityValid ? freshnessForAge(ageS) : "waiting",
+  );
   schedulePaint();
 }
 
@@ -202,7 +271,11 @@ function acceptPosition(position: PositionUpdate) {
     }
   }
   latestConfirmedPosition = position;
+  ensureWaypointRoute();
   paintNow();
+  if (selectedWaypointId && !navigationTarget) {
+    void refreshNavigation();
+  }
 }
 
 function resetMovementCourse() {
@@ -211,9 +284,54 @@ function resetMovementCourse() {
   alignmentLocked = false;
 }
 
-async function init() {
-  applySettings(await invoke<Record<string, unknown>>("get_settings"));
+function ensureWaypointRoute() {
+  if (!navigationTarget || !latestConfirmedPosition || !selectedWaypointId) {
+    return;
+  }
+  if (navigationTarget.id !== selectedWaypointId) {
+    return;
+  }
+  if (!waypointRoute || waypointRouteId !== navigationTarget.id) {
+    waypointRoute = waypointGuideRoute(navigationTarget, latestConfirmedPosition);
+    waypointRouteId = navigationTarget.id;
+    return;
+  }
+  waypointRoute = {
+    ...waypointRoute,
+    targetXCm: navigationTarget.xCm,
+    targetYCm: navigationTarget.yCm,
+    label: navigationTarget.name,
+    initialDistanceM: navigationTarget.distanceM,
+  };
+}
 
+function applyNavigationTarget(target: NavigationTarget | null) {
+  const accepted = target && target.id === selectedWaypointId ? target : null;
+  const targetChanged = navigationTarget?.id !== accepted?.id;
+  navigationTarget = accepted;
+  if (targetChanged) {
+    waypointRoute = null;
+    waypointRouteId = null;
+    resetMovementCourse();
+  }
+  ensureWaypointRoute();
+  paintNow();
+}
+
+async function refreshNavigation() {
+  const revisionBeforeRequest = navigationRevision;
+  const waypointIdBeforeRequest = selectedWaypointId;
+  const target = await invoke<NavigationTarget | null>("active_navigation");
+  if (
+    navigationRevision !== revisionBeforeRequest
+    || selectedWaypointId !== waypointIdBeforeRequest
+  ) {
+    return;
+  }
+  applyNavigationTarget(target);
+}
+
+async function init() {
   await listen<PositionUpdate>("position://update", ({ payload }) => {
     positionRevision += 1;
     acceptPosition(payload);
@@ -226,14 +344,35 @@ async function init() {
   });
   await listen<WaterGuideSnapshot>("water-guide://changed", ({ payload }) => {
     waterGuideStateRevision += 1;
-    state = payload;
+    waterState = payload;
     resetMovementCourse();
     paintNow();
   });
+  await listen("navigation://changed", () => {
+    navigationRevision += 1;
+    void refreshNavigation();
+  });
+  await listen("waypoints://changed", () => {
+    navigationRevision += 1;
+    void refreshNavigation();
+  });
   await listen<Record<string, unknown>>("settings://changed", ({ payload }) => {
-    applySettings(payload);
+    settingsRevision += 1;
+    if (applySettings(payload)) {
+      navigationRevision += 1;
+      void refreshNavigation();
+    }
     paintNow();
   });
+
+  const settingsRevisionBeforeSnapshot = settingsRevision;
+  const initialSettings = await invoke<Record<string, unknown>>("get_settings");
+  if (
+    settingsRevisionBeforeSnapshot === 0
+    && settingsRevision === settingsRevisionBeforeSnapshot
+  ) {
+    applySettings(initialSettings);
+  }
 
   const stateRevisionBeforeSnapshot = waterGuideStateRevision;
   const initialState = await invoke<WaterGuideSnapshot>("get_water_guide_state");
@@ -241,7 +380,16 @@ async function init() {
     stateRevisionBeforeSnapshot === 0
     && waterGuideStateRevision === stateRevisionBeforeSnapshot
   ) {
-    state = initialState;
+    waterState = initialState;
+  }
+
+  const navigationRevisionBeforeSnapshot = navigationRevision;
+  const initialNavigation = await invoke<NavigationTarget | null>("active_navigation");
+  if (
+    navigationRevisionBeforeSnapshot === 0
+    && navigationRevision === navigationRevisionBeforeSnapshot
+  ) {
+    applyNavigationTarget(initialNavigation);
   }
 
   const positionRevisionBeforeSnapshot = positionRevision;

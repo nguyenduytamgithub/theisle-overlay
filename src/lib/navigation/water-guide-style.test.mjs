@@ -84,3 +84,16 @@ test("initial snapshots cannot overwrite newer Water Guide or XY events", () => 
     /position\.confirmedAtMs < latestConfirmedPosition\.confirmedAtMs/,
   );
 });
+
+test("the shared XY renderer resolves selected waypoints with guarded events", () => {
+  assert.match(main, /invoke<NavigationTarget \| null>\("active_navigation"\)/);
+  assert.match(main, /listen\("navigation:\/\/changed"/);
+  assert.match(main, /listen\("waypoints:\/\/changed"/);
+  assert.match(main, /waypointGuideRoute/);
+  assert.match(main, /ĐIỂM:/);
+  assert.match(main, /let navigationRevision = 0/);
+  assert.match(
+    main,
+    /navigationRevisionBeforeSnapshot === 0\s*&&\s*navigationRevision === navigationRevisionBeforeSnapshot/,
+  );
+});

@@ -7,9 +7,34 @@ import {
   nextAlignmentLocked,
   projectToSegment,
   steeringPromptFor,
+  waypointGuideRoute,
   waterGuideBoardNeedles,
   waterGuideFrame,
 } from "./water-guide.ts";
+
+test("a selected waypoint becomes a route anchored at the current XY", () => {
+  const converted = waypointGuideRoute(
+    {
+      id: "home",
+      name: "Nhà",
+      xCm: 12_000,
+      yCm: -4_000,
+      distanceM: 125,
+    },
+    { xCm: 1_000, yCm: 2_000 },
+  );
+
+  assert.equal(converted.label, "Nhà");
+  assert.deepEqual(
+    [converted.startXCm, converted.startYCm],
+    [1_000, 2_000],
+  );
+  assert.deepEqual(
+    [converted.targetXCm, converted.targetYCm],
+    [12_000, -4_000],
+  );
+  assert.equal(converted.initialDistanceM, 125);
+});
 
 const route = (overrides = {}) => ({
   startXCm: 0,

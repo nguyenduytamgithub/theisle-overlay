@@ -21,6 +21,29 @@ export interface WaterGuideRoute {
   initialDistanceM: number;
 }
 
+export interface WaypointGuideTarget {
+  id: string;
+  name: string;
+  xCm: number;
+  yCm: number;
+  distanceM: number;
+}
+
+export function waypointGuideRoute(
+  target: WaypointGuideTarget,
+  anchor: { xCm: number; yCm: number },
+): WaterGuideRoute {
+  return {
+    startXCm: anchor.xCm,
+    startYCm: anchor.yCm,
+    targetXCm: target.xCm,
+    targetYCm: target.yCm,
+    targetMaskPx: [0, 0],
+    label: target.name,
+    initialDistanceM: target.distanceM,
+  };
+}
+
 export interface WaterGuideView {
   xCm: number;
   yCm: number;
