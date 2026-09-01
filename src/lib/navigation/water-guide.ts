@@ -19,6 +19,7 @@ export interface WaterGuideRoute {
   targetMaskPx: [number, number];
   label: string;
   initialDistanceM: number;
+  arrivalM?: number;
 }
 
 export interface WaypointGuideTarget {
@@ -32,6 +33,7 @@ export interface WaypointGuideTarget {
 export function waypointGuideRoute(
   target: WaypointGuideTarget,
   anchor: { xCm: number; yCm: number },
+  arrivalM: number = WATER_GUIDE.arrivalM,
 ): WaterGuideRoute {
   return {
     startXCm: anchor.xCm,
@@ -41,6 +43,9 @@ export function waypointGuideRoute(
     targetMaskPx: [0, 0],
     label: target.name,
     initialDistanceM: target.distanceM,
+    arrivalM: Number.isFinite(arrivalM)
+      ? Math.max(0, arrivalM)
+      : WATER_GUIDE.arrivalM,
   };
 }
 
@@ -267,12 +272,13 @@ export function waterGuideFrame(
 ): WaterGuideFrame {
   const target: [number, number] = [route.targetXCm, route.targetYCm];
   const point: [number, number] = [view.xCm, view.yCm];
-  if (!finite(...target, ...point)) {
+  const arrivalM = route.arrivalM ?? WATER_GUIDE.arrivalM;
+  if (!finite(...target, ...point, arrivalM)) {
     return emptyFrame("invalid");
   }
 
   const remainingM = stable(distanceM(point, target));
-  if (remainingM <= WATER_GUIDE.arrivalM) {
+  if (remainingM <= Math.max(0, arrivalM)) {
     return emptyFrame("arrived", remainingM);
   }
   // Owner decision: never pull the ray toward the old route. Every accepted

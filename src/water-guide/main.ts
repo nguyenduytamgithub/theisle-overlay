@@ -8,6 +8,7 @@ import {
   type NavigationFreshness,
 } from "../lib/navigation/estimator";
 import {
+  WATER_GUIDE,
   instructionFor,
   movementCourseBetween,
   nextAlignmentLocked,
@@ -69,6 +70,7 @@ let selectedWaypointId: string | null = null;
 let navigationTarget: NavigationTarget | null = null;
 let waypointRoute: WaterGuideRoute | null = null;
 let waypointRouteId: string | null = null;
+let waypointArrivalM: number = WATER_GUIDE.arrivalM;
 
 const ERROR_COPY: Record<WaterGuideLanguage, Record<string, string>> = {
   vi: {
@@ -101,13 +103,21 @@ function applySettings(settings: Record<string, unknown>): boolean {
   const nextWaypointId = typeof rawWaypointId === "string" && rawWaypointId.trim()
     ? rawWaypointId
     : null;
+  const rawArrivalM = Number(navigation?.arrival_radius_m ?? WATER_GUIDE.arrivalM);
+  const nextArrivalM = Number.isFinite(rawArrivalM)
+    ? Math.max(0, rawArrivalM)
+    : WATER_GUIDE.arrivalM;
   const waypointChanged = nextWaypointId !== selectedWaypointId;
+  const arrivalChanged = nextArrivalM !== waypointArrivalM;
+  waypointArrivalM = nextArrivalM;
   if (waypointChanged) {
     selectedWaypointId = nextWaypointId;
     navigationTarget = null;
     waypointRoute = null;
     waypointRouteId = null;
     resetMovementCourse();
+  } else if (arrivalChanged && waypointRoute) {
+    waypointRoute = { ...waypointRoute, arrivalM: waypointArrivalM };
   }
   return waypointChanged;
 }
@@ -170,9 +180,11 @@ function paintView(
     : (language === "vi" ? "NƯỚC: " : "WATER: ");
   destinationEl.textContent = prefix
     + route.label + " · " + Math.round(frame.remainingM) + " m";
-  instructionEl.textContent = alignmentLocked
-    ? prompt
-    : instructionFor(frame, language);
+  instructionEl.textContent = frame.state === "arrived" && source === "waypoint"
+    ? (language === "vi" ? "ĐÃ TỚI ĐIỂM GHIM" : "WAYPOINT REACHED")
+    : alignmentLocked
+      ? prompt
+      : instructionFor(frame, language);
 
   boardEl.classList.toggle("hidden", !needles.targetVisible);
   targetNeedleEl.classList.toggle("hidden", !needles.targetVisible);
@@ -208,15 +220,6 @@ function paint() {
       guide.source === "waypoint" ? "waypoint_waiting" : "waiting_for_position",
       guide.source,
     );
-    schedulePaint();
-    return;
-  }
-  if (guide.source === "waypoint" && navigationTarget?.arrived) {
-    hideBoard();
-    root.dataset.state = "arrived";
-    destinationEl.textContent = (language === "vi" ? "ĐIỂM: " : "WAYPOINT: ")
-      + navigationTarget.name + " · " + Math.round(navigationTarget.distanceM) + " m";
-    instructionEl.textContent = language === "vi" ? "ĐÃ TỚI ĐIỂM GHIM" : "WAYPOINT REACHED";
     schedulePaint();
     return;
   }
@@ -286,7 +289,11 @@ function ensureWaypointRoute() {
     return;
   }
   if (!waypointRoute || waypointRouteId !== navigationTarget.id) {
-    waypointRoute = waypointGuideRoute(navigationTarget, latestConfirmedPosition);
+    waypointRoute = waypointGuideRoute(
+      navigationTarget,
+      latestConfirmedPosition,
+      waypointArrivalM,
+    );
     waypointRouteId = navigationTarget.id;
     return;
   }
@@ -296,6 +303,7 @@ function ensureWaypointRoute() {
     targetYCm: navigationTarget.yCm,
     label: navigationTarget.name,
     initialDistanceM: navigationTarget.distanceM,
+    arrivalM: waypointArrivalM,
   };
 }
 

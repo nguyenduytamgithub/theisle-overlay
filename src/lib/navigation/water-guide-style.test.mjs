@@ -92,6 +92,9 @@ test("the shared XY renderer resolves selected waypoints with guarded events", (
   assert.match(main, /waypointGuideRoute/);
   assert.match(main, /ĐIỂM:/);
   assert.match(main, /let navigationRevision = 0/);
+  assert.match(main, /arrival_radius_m/);
+  assert.match(main, /waypointArrivalM/);
+  assert.doesNotMatch(main, /navigationTarget\?\.arrived/);
   assert.match(
     main,
     /navigationRevisionBeforeSnapshot === 0\s*&&\s*navigationRevision === navigationRevisionBeforeSnapshot/,

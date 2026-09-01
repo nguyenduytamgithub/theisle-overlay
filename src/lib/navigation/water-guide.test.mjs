@@ -36,6 +36,24 @@ test("a selected waypoint becomes a route anchored at the current XY", () => {
   assert.equal(converted.initialDistanceM, 125);
 });
 
+test("waypoint arrival uses the configured navigation radius", () => {
+  const route = waypointGuideRoute(
+    { id: "camp", name: "Trại", xCm: 3_500, yCm: 0, distanceM: 35 },
+    { xCm: 0, yCm: 0 },
+    40,
+  );
+
+  const frame = waterGuideFrame(route, {
+    xCm: 0,
+    yCm: 0,
+    movementCourseDeg: 0,
+    freshness: "fresh",
+  });
+
+  assert.equal(route.arrivalM, 40);
+  assert.equal(frame.state, "arrived");
+});
+
 const route = (overrides = {}) => ({
   startXCm: 0,
   startYCm: 0,
