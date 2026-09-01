@@ -32,9 +32,9 @@ Việt/Anh · bộ cài Windows gọn, cập nhật thủ công từ Releases c�
 | Chuyển động giữa hai mẫu server | Chấm vị trí nhảy theo từng lần trả về | Chạy thẳng 4 giây, giảm dần tới 12 giây rồi giữ; hiệu chỉnh **300/650 ms** theo độ lệch |
 | Tọa độ lỗi/nhảy xa | Có thể kéo đường mòn lệch hàng kilomet | Mẫu bất khả thi bị cách ly và cắt dự đoán cũ; chỉ xác nhận đổi chỗ xa khi có **hai mẫu nhất quán** |
 | Hướng đi | Chủ yếu suy ra từ quãng đường đã đi | Tách riêng yaw server và hướng chuyển động; đổi nguồn sau 1 giây ổn định, chống xoay vòng qua 0° |
-| Waypoint | Mũi tên tới điểm gần nhất | Chọn đúng một điểm làm đích; bản đồ lớn, minimap và HUD dùng **cùng một đích** |
-| Dẫn đường trên màn hình game | Không có HUD riêng | Mũi tên đích Bắc-lên ổn định + câu lệnh **ĐI THẲNG / CHẾCH / RẼ / QUAY LẠI** và chữ hướng Đông Tây Nam Bắc |
-| Sắp hết nước, không biết đi đâu | Phải tự dò bản đồ | `Ctrl+Alt+W` khóa nguồn nước ngọt gần bờ gần nhất; tia xanh + mũi tên lặp dẫn trên màn hình, báo **QUAY ĐẦU / LỆCH ĐƯỜNG / CHỜ SERVER** |
+| Waypoint | Mũi tên tới điểm gần nhất | Chọn đúng một điểm làm đích; bấm `➤` để hiện bảng XY Bắc-lên ngay trên game, dùng chung đích với bản đồ |
+| Dẫn đường trên màn hình game | Không có HUD riêng | Bảng tròn trong suốt tối đa **230 px**: kim xanh chỉ đích, kim trắng chỉ hướng đang đi, có BẮC/ĐÔNG/NAM/TÂY và câu lệnh dễ hiểu |
+| Sắp hết nước, không biết đi đâu | Phải tự dò bản đồ | `Ctrl+Alt+W` dùng cùng bảng XY để chỉ nguồn nước ngọt gần bờ gần nhất; hai chế độ loại trừ nhau, thao tác cuối cùng được ưu tiên |
 | Khi dữ liệu chậm/mất | Khó biết chấm đang mới hay cũ | Ghi rõ **ĐANG BÁM / ĐANG ƯỚC LƯỢNG / CHỜ SERVER** |
 | Khi Alt-Tab | Minimap tự ẩn theo game | HUD cũng tự ẩn, tự bám lại cửa sổ game và tự phục hồi nếu WebView chết |
 | Cảnh đêm quá tối | Không có nút chỉnh sáng chuyên dụng | Windows Graphics Capture lấy đúng cửa sổ game và shader GPU nâng vùng tối/bảo vệ vùng sáng; nút **NHÌN ĐÊM** + `Ctrl+Alt+N`, Ultra/Auto/Ép sáng, Magnifier dự phòng |
@@ -57,14 +57,15 @@ có live map thì dùng `Tab` → **Asset Location** như trước.
 
 - **Minimap tròn** bám góc cửa sổ game, chuột bấm xuyên qua, không cản trở lúc chơi.
   Hướng Bắc luôn ở trên; mũi tên rìa bản đồ chỉ tới đúng waypoint bạn chọn.
-- **Navigation HUD trên game**: mũi tên lớn luôn chỉ **hướng tuyệt đối tới đích**
-  với Bắc ở trên, chữ hướng đi BẮC–ĐÔNG–NAM–TÂY, lệnh rẽ dễ hiểu, tên đích,
-  khoảng cách và trạng thái dữ liệu; tự ẩn khi Alt-Tab và bật/tắt bằng
-  `Ctrl+Alt+H`.
+- **Dẫn đường waypoint trực tiếp trên game**: bấm `➤` ở điểm ghim để hiện bảng
+  XY Bắc-lên nhỏ, trong suốt ở giữa phía dưới. Kim xanh là hướng tuyệt đối tới
+  đích; kim trắng là hướng đang di chuyển và chuyển xanh lá khi đi đúng. Bảng
+  không dùng góc camera/đầu nhân vật, tự tính lại từ XY mới và tôn trọng bán kính
+  tới đích trong Cài đặt. Bấm `■` để dừng.
 - **Water Guide cho newbie**: nhấn `Ctrl+Alt+W` để khóa tuyến thẳng từ vị trí
-  đã xác nhận tới pixel nước ngọt gần bờ gần nhất. Tia xanh phủ trực tiếp lên
-  game, các mũi tên luôn hướng ra phía cần đi; báo vàng **QUAY ĐẦU** khi đi
-  ngược và dẫn trở lại tuyến cũ khi lệch. Đích không tự nhảy trong một lần bật;
+  đã xác nhận tới pixel nước ngọt gần bờ gần nhất và dùng chính bảng XY gọn ở
+  trên. Chọn waypoint sẽ tắt Water Guide; bật Water Guide sẽ bỏ waypoint, nên
+  không có hai mũi tên mâu thuẫn. Đích nước không tự nhảy trong một lần bật;
   tắt/bật lại để chọn tuyến mới. Không dùng nước biển, không lấy tâm hồ, không
   tự lái và không giả vờ né địa hình.
 - **Nhìn đêm trực tiếp trên màn hình**: nút **NHÌN ĐÊM** góc trên bên phải và
@@ -132,10 +133,13 @@ giữ Navigation HUD; hãy cài bản mới từ Releases của fork khi có th�
    **Asset Location** khi cần lấy mẫu mới.
 2. Mở bản đồ lớn bằng `Ctrl+Alt+F`.
 3. Bấm chuột phải tại nơi muốn tới để tạo waypoint, hoặc chọn waypoint đã lưu.
-4. Trong menu waypoint, chọn **Dẫn đường tới điểm này**.
-5. Quay lại game. Giữ Bắc ở phía trên để đối chiếu: mũi tên xanh lớn chỉ hướng
-   tuyệt đối tới đích; dòng **HƯỚNG ĐI** và câu lệnh ĐI THẲNG/CHẾCH/RẼ giúp
-   chỉnh đường. Minimap dùng cùng đích. Chọn **Dừng dẫn đường** khi xong.
+4. Trong menu waypoint, bấm nút `➤` **Chỉ hướng**.
+5. Quay lại game: bảng XY nhỏ hiện ở giữa phía dưới. Xoay/chạy sao cho kim trắng
+   trùng kim xanh; khi hai kim trùng, kim trắng chuyển xanh lá. Bảng không xoay
+   theo chuột. Bấm `■` **Dừng chỉ hướng** khi xong.
+
+`Ctrl+Alt+W` chuyển sang nguồn nước ngọt gần nhất; bấm `➤` waypoint sẽ chuyển
+ngược lại. Chế độ được bấm sau cùng luôn thắng.
 
 | Phím | Tác dụng |
 |---|---|

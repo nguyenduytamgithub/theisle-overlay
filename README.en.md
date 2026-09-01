@@ -33,9 +33,9 @@ installer with manual fork updates.
 | Motion between server samples | Position jumps on every response | Linear for 4 seconds, decays through 12 seconds, then holds; **300/650 ms** correction based on distance |
 | Bad coordinate spikes | Can draw a trail kilometres away | Impossible samples are quarantined and stop old prediction; a far relocation needs **two consistent samples** |
 | Travel course | Mainly inferred from travelled path | Separates server facing from motion course, switches source after 1 stable second, and crosses 0° without full spins |
-| Waypoints | Rim arrow points to the nearest waypoint | Pick one explicit destination shared by the full map, minimap, and HUD |
-| In-game guidance | No dedicated navigation HUD | Stable north-up target arrow plus **GO STRAIGHT / BEAR / TURN / TURN AROUND** and cardinal course text |
-| Low on water and unsure where to go | Manually inspect the map | `Ctrl+Alt+W` locks the nearest verified shallow fresh water; a blue ray and repeated arrows show **TURN AROUND / OFF ROUTE / WAITING FOR SERVER** directly over the game |
+| Waypoints | Rim arrow points to the nearest waypoint | Pick one explicit destination and press `➤` for the same north-up XY board directly over the game |
+| In-game guidance | No dedicated navigation HUD | A translucent board capped at **230 px**: cyan destination needle, white movement needle, N/E/S/W, and plain steering text |
+| Low on water and unsure where to go | Manually inspect the map | `Ctrl+Alt+W` uses the same XY board for the nearest verified shallow fresh water; water and waypoint modes are exclusive and the last action wins |
 | Delayed data | Freshness is unclear | Explicit **TRACKING / ESTIMATING / WAITING FOR SERVER** state |
 | Alt-Tab and WebView failure | Minimap follows game focus | HUD also auto-hides, re-anchors, and self-heals |
 | Scenes too dark to read | No dedicated visibility control | Windows Graphics Capture targets only the game window and a GPU shader lifts shadows/protects highlights; **NIGHT VISION** + `Ctrl+Alt+N`, Ultra/Auto/Force, truthful Magnifier fallback |
@@ -58,16 +58,18 @@ support, use `Tab` → **Asset Location** as before.
 
 - **Circular minimap** pinned to a corner of the game window, click-through so it
   never blocks play. North stays up; its rim arrow points to the waypoint you selected.
-- **In-game Navigation HUD**: a large **absolute destination arrow** with north
-  up, N/E/S/W travel-course text, plain maneuver instructions, target name,
-  distance, and data freshness; auto-hides on Alt-Tab and toggles with
-  `Ctrl+Alt+H`.
+- **On-screen waypoint guidance**: press `➤` on a waypoint to show a small,
+  translucent north-up XY board at lower centre. Cyan is the absolute target
+  bearing; white is confirmed travel course and turns green when aligned. It
+  does not use camera/head direction, recalculates from each accepted XY update,
+  honors the configured arrival radius, and stops with `■`.
 - **Beginner Water Guide**: press `Ctrl+Alt+W` to lock a straight route from the
   latest confirmed position to the nearest verified shallow freshwater pixel.
-  A blue in-game ray uses outward arrows, shows a yellow **TURN AROUND** when
-  reversed, and guides back to the original line when off route. The target
-  never silently changes during one activation; toggle off/on for a new route.
-  It excludes ocean/deep-centre targets and never drives or avoids terrain.
+  It uses the same compact XY board. Selecting a waypoint turns Water Guide off;
+  activating Water Guide clears the waypoint, avoiding conflicting guidance.
+  The water target never silently changes during one activation; toggle off/on
+  for a new route. It excludes ocean/deep-centre targets and never drives or
+  avoids terrain.
 - **Display Night Vision**: a top-right **NIGHT VISION** button plus
   `Ctrl+Alt+N`, with strength 0–100, Balanced/Clear/Ultra, and Auto/Force in
   Settings. v1.8.0 uses Windows Graphics Capture on the exact The Isle HWND;
@@ -135,11 +137,14 @@ want to keep Navigation HUD; install future builds from this fork's Releases.
    position every five seconds; otherwise press `Tab` → **Asset Location** in game.
 2. Open the full map with `Ctrl+Alt+F`.
 3. Right-click the destination to create a waypoint, or select a saved waypoint.
-4. Choose **Navigate to this waypoint** from its menu.
-5. Return to the game. Keep north at the top: the large blue arrow is the
-   absolute bearing to the destination; **COURSE** and the plain maneuver text
-   tell you how to adjust. The minimap uses the same target. Choose **Stop
-   navigation** when finished.
+4. Press the waypoint's `➤` **Guide** action.
+5. Return to the game: the compact XY board appears at lower centre. Turn/walk
+   until the white movement needle overlaps the cyan destination needle; white
+   becomes green when aligned. The board does not rotate with the mouse. Press
+   `■` **Stop guidance** when finished.
+
+`Ctrl+Alt+W` switches to the nearest verified freshwater target; pressing a
+waypoint `➤` switches back. The most recent action always wins.
 
 | Key | Action |
 |---|---|

@@ -1,5 +1,49 @@
 # Water Guide Ray v1.9.0 — Verification Record
 
+## Compact waypoint XY board closeout — 2026-09-01
+
+- Final reviewed source: `codex/waypoint-xy-board-v1` at `39b2f78` before documentation closeout.
+- Delivery status: `PASS` for source, automated verification, packaging, installation, rollback, and Overlay runtime. `NOT EXECUTED` for a live in-game waypoint screenshot because the user requested delivery without opening the game.
+- Controls: open the full map with `Ctrl+Alt+F`, create/select a waypoint, press `➤ Chỉ hướng`, and press `■ Dừng chỉ hướng` to stop. `Ctrl+Alt+W` switches exclusively to freshwater guidance; the last action wins.
+
+### What changed
+
+The saved-waypoint action now reuses the full-game north-up XY board instead of the ordinary heading HUD/minimap. The compact click-through board is capped at 230 px and placed at lower centre. Its cyan needle points from the latest accepted XY coordinate to the locked waypoint, while the white needle shows confirmed XY movement and turns green when aligned. Mouse, camera, character head/facing, memory, packets, hooks, capture, and synthetic input are not inputs.
+
+Water and waypoint destinations share one serialized backend coordinator. Selecting a waypoint deactivates Water Guide; activating Water Guide clears the waypoint. Waypoint arrival uses the configured `navigation.arrival_radius_m` against current XY, orphaned persisted waypoint IDs are cleared fail-closed, and HUD/minimap settings snapshots cannot overwrite newer events.
+
+### Review and automated evidence
+
+| Gate | Evidence | Result |
+|---|---|---|
+| TDD | New regressions first failed for missing shared source state, waypoint route, compact layout, custom arrival radius, orphan IDs, destination serialization, and listener ordering | `RED CONFIRMED` |
+| Navigation/frontend tests | `67 passed, 0 failed` | `PASS` |
+| Svelte/TypeScript | `0 errors, 0 warnings` | `PASS` |
+| Vite production build | 180 modules transformed; dedicated Water Guide/HUD/minimap assets emitted | `PASS` |
+| Rust | `149 passed, 9 ignored, 0 failed`; integration suites `10 passed` | `PASS` |
+| Clippy | `--all-targets -- -D warnings` | `PASS` |
+| Source boundary scan | No added game memory, hooks, packet capture, synthetic input, camera/view/head source, or character control | `PASS` |
+| CodeGraph | Final index current at 110 files / 2,467 nodes / 7,447 edges | `PASS` |
+| Independent review | Four Important findings fixed; re-review found no Critical/Important issues and returned `Ready to merge: Yes` | `READY` |
+
+Repository-wide `rustfmt --check` remains waived because it reports pre-existing formatting differences in unrelated portions of already tracked Rust files. Changed behavior is covered by Clippy, Rust tests, and `git diff --check`.
+
+### Package, installation, and rollback
+
+| Artifact/evidence | Value | Result |
+|---|---|---|
+| NSIS installer | `D:\CodexBuild\theisle-overlay-waypoint-board-target\release\bundle\nsis\TheIsle Overlay_1.9.0_x64-setup.exe`; 6,017,631 bytes; SHA-256 `00062238D386D11325A30402560F997716856CF157C1C576023435D63D06E760` | `PASS` |
+| Installed executable | `%LOCALAPPDATA%\TheIsle Overlay\theisle-overlay.exe`; 22,148,096 bytes; SHA-256 `F5AC44FFF6EFBD020F27BCBD981427D002191CA073BE0CE063E024F309D8A249` | `PASS` |
+| Build executable | `D:\CodexBuild\theisle-overlay-waypoint-board-target\release\theisle-overlay.exe`; SHA-256 `1AAE901B67827583D75339C2211929FB8FB24223ED1BFB4E2954D3251E2FA3AC` | `PASS` |
+| NSIS payload comparison | Installed/build files have equal length and differ only at three bytes changing Tauri marker `VAR_UNK` to `VAR_NSS` | `PASS` |
+| Recoverable previous executable | `D:\CodexBuild\theisle-overlay-pre-waypoint-board-20260901-111714\theisle-overlay.exe`; SHA-256 `95CA7618258E0BDC946D139DB04DE8D0A17D70F098C430A1D1AD8CF288095D1C` | `PASS` |
+| Silent installation | Installer exit `0`; Overlay running from installed path as PID `2800` (start `2026-09-01T11:17:18+07:00`) | `PASS` |
+| Game preservation | Game process count was `0` before and after; no game was opened or controlled | `PASS` |
+
+### Manual visual acceptance left open
+
+No live-game session was available by instruction. Therefore `➤` showing the compact board, `■` hiding it, rapid switching with `Ctrl+Alt+W`, and Night Vision coexistence in this exact installed build remain `PENDING USER-VISIBLE CHECK`, not claimed as live proof. The installed app, deterministic renderer tests, window-policy tests, and runtime process check are complete.
+
 ## North-up XY board closeout — 2026-09-01 (supersedes the camera-glued ray)
 
 - Final reviewed source: `codex/water-guide-ray-v1` at `123c072`.
