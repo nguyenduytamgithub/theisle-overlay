@@ -28,10 +28,7 @@ pub(crate) struct MagnifierProfile {
     pub(crate) cross_channel_luma: f32,
 }
 
-pub(crate) fn fallback_profile(
-    preset: VisibilityPreset,
-    strength: u8,
-) -> MagnifierProfile {
+pub(crate) fn fallback_profile(preset: VisibilityPreset, strength: u8) -> MagnifierProfile {
     let amount = f32::from(strength.min(100)) / 100.0;
     let (gain_range, black_translation, cross_channel_luma) = match preset {
         VisibilityPreset::Balanced => (3.0, 0.010, 0.020),

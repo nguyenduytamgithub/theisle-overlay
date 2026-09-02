@@ -2,6 +2,11 @@
 
 **Tiếng Việt** · [English](README.en.md)
 
+> **Bản community Night Vision v1.8.0:** dựng trực tiếp trên `origin/main`
+> `5c49bfc` mới nhất của [dự án gốc](https://github.com/toantranct/theisle-overlay).
+> Phần tùy biến duy nhất được giữ là **Nhìn đêm** (nút trong game hoặc
+> `Ctrl+Alt+N`); toàn bộ HUD/dẫn đường tùy biến cũ đã được loại bỏ.
+
 Bản đồ hiện đè lên màn hình khi chơi **The Isle: Evrima** (map Gateway).
 Minimap tròn bám theo cửa sổ game · bản đồ lớn với POI, tên địa danh, waypoint,
 vết đường đi · chỉ số khủng long + Garage (Gacha) với **xem 3D** · **Skin

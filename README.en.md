@@ -2,6 +2,12 @@
 
 [Tiếng Việt](README.md) · **English**
 
+> **Night Vision v1.8.0 community build:** based directly on the latest
+> `origin/main` commit `5c49bfc` from the
+> [original project](https://github.com/toantranct/theisle-overlay). The only
+> retained customization is **Night Vision** (in-game button or `Ctrl+Alt+N`);
+> all former custom navigation/HUD code has been removed.
+
 Map overlay for **The Isle: Evrima** (Gateway). Circular minimap pinned to the
 game window · full map with POIs, place names, waypoints and travel trails ·
 dino stats + Garage (Gacha) with **3D preview** · a **skin editor** for all ten
